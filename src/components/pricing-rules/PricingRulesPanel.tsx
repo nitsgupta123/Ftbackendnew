@@ -1,0 +1,341 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Icon } from "@/components/ui/icons";
+import { useAuth } from "@/components/auth/AuthProvider";
+import PricingRulesListTable from "@/components/pricing-rules/PricingRulesListTable";
+import PricingRuleForm from "@/components/pricing-rules/PricingRuleForm";
+import PricingRuleDetailsModal from "@/components/pricing-rules/PricingRuleDetailsModal";
+import PricingRulesStatsGrid from "@/components/pricing-rules/PricingRulesStatsGrid";
+import {
+  createPricingRule,
+  getPricingRulesStats,
+  listPricingRules,
+  updatePricingRule,
+} from "@/lib/pricing-rules-api";
+import {
+  PRICING_RULE_SCOPE_FILTER_OPTIONS,
+  PRICING_RULE_SORT_OPTIONS,
+  PRICING_RULE_STATUS_FILTER_OPTIONS,
+  type PricingRuleRecord,
+  type PricingRuleScopeFilter,
+  type PricingRuleStatusFilter,
+  type PricingRulesStats,
+} from "@/lib/pricing-rules-types";
+import type { CreatePricingRuleFormValues } from "@/lib/validation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+
+type FormMode = "create" | "edit" | null;
+
+export default function PricingRulesPanel() {
+  const { user } = useAuth();
+  const canDelete = user?.role === "super_admin";
+
+  const [rules, setRules] = useState<PricingRuleRecord[]>([]);
+  const [stats, setStats] = useState<PricingRulesStats | null>(null);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PricingRuleStatusFilter>("all");
+  const [scopeFilter, setScopeFilter] = useState<PricingRuleScopeFilter>("all");
+  const [sort, setSort] = useState<"display_order" | "created_at" | "name">("display_order");
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
+  const [formMode, setFormMode] = useState<FormMode>(null);
+  const [editingRule, setEditingRule] = useState<PricingRuleRecord | null>(null);
+  const [viewingRule, setViewingRule] = useState<PricingRuleRecord | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const result = await getPricingRulesStats();
+      setStats(result);
+    } catch {
+      setStats(null);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  const loadRules = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await listPricingRules({
+        search: search.trim() || undefined,
+        status: statusFilter,
+        scope_type: scopeFilter,
+        sort,
+        order,
+        page,
+        limit,
+      });
+      setRules(result.rules);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load pricing rules");
+    } finally {
+      setLoading(false);
+    }
+  }, [search, statusFilter, scopeFilter, sort, order, page]);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadStats();
+      void loadRules();
+    });
+  }, [loadStats, loadRules]);
+
+  const emptyMessage = useMemo(() => {
+    if (search.trim()) return `No pricing rules match "${search.trim()}".`;
+    if (statusFilter !== "all" || scopeFilter !== "all") {
+      return "No pricing rules match the selected filters.";
+    }
+    return "No pricing rules found. Create your first rule to set global markup and exchange defaults.";
+  }, [search, statusFilter, scopeFilter]);
+
+  async function handleFormSubmit(data: CreatePricingRuleFormValues) {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        ...data,
+        description: data.description || null,
+        scope_value: data.scope_value || null,
+        supplier_currency: data.supplier_currency || null,
+        display_currency: data.display_currency || null,
+        default_markup_value: data.default_markup_value || null,
+        default_exchange_rate: Number.isNaN(data.default_exchange_rate)
+          ? null
+          : data.default_exchange_rate,
+        rate_lock_days: Number.isNaN(data.rate_lock_days) ? null : data.rate_lock_days,
+        minimum_margin_percent: Number.isNaN(data.minimum_margin_percent)
+          ? null
+          : data.minimum_margin_percent,
+        finance_approval_threshold: Number.isNaN(data.finance_approval_threshold)
+          ? null
+          : data.finance_approval_threshold,
+        display_order: data.display_order ?? 0,
+      };
+
+      if (formMode === "edit" && editingRule) {
+        const { rule } = await updatePricingRule(editingRule.id, payload);
+        setRules((prev) => prev.map((r) => (r.id === rule.id ? rule : r)));
+      } else {
+        await createPricingRule(payload);
+        await loadRules();
+        setPage(1);
+      }
+
+      await loadStats();
+      setFormMode(null);
+      setEditingRule(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save pricing rule");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function openCreate() {
+    setEditingRule(null);
+    setFormMode("create");
+    setViewingRule(null);
+  }
+
+  function openEdit(rule: PricingRuleRecord) {
+    setEditingRule(rule);
+    setFormMode("edit");
+    setViewingRule(null);
+  }
+
+  return (
+    <>
+      <PricingRulesStatsGrid stats={stats} loading={statsLoading} />
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div />
+        <Button
+          type="button"
+          onClick={openCreate}
+          className="inline-flex h-11 px-5 items-center text-sm font-semibold text-white bg-[#B48A2C] rounded-xl hover:bg-[#B48A2C]/90 shadow-sm"
+        >
+          + Add Pricing Rule
+        </Button>
+      </div>
+
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-4">
+        <div className="relative flex-1 max-w-md">
+          <Icon
+            name="Search"
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search by rule name or scope..."
+            className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <NativeSelect
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as PricingRuleStatusFilter);
+              setPage(1);
+            }}
+            className="h-10 min-w-[140px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+          >
+            {PRICING_RULE_STATUS_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+
+          <NativeSelect
+            value={scopeFilter}
+            onChange={(e) => {
+              setScopeFilter(e.target.value as PricingRuleScopeFilter);
+              setPage(1);
+            }}
+            className="h-10 min-w-[150px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+          >
+            {PRICING_RULE_SCOPE_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+
+          <NativeSelect
+            value={sort}
+            onChange={(e) => setSort(e.target.value as "display_order" | "created_at" | "name")}
+            className="h-10 min-w-[140px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+          >
+            {PRICING_RULE_SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                Sort: {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+
+          <NativeSelect
+            value={order}
+            onChange={(e) => setOrder(e.target.value as "asc" | "desc")}
+            className="h-10 min-w-[120px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+          >
+            <option value="asc">Ascending</option>
+            <option value="desc">Descending</option>
+          </NativeSelect>
+        </div>
+
+        {!loading && total > 0 && (
+          <p className="text-xs text-gray-400 lg:ml-auto">
+            {rules.length} of {total} rules
+          </p>
+        )}
+      </div>
+
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-100 text-sm">
+          {error}
+        </div>
+      )}
+
+      <PricingRulesListTable
+        rules={rules}
+        loading={loading}
+        emptyMessage={emptyMessage}
+        canDelete={canDelete}
+        onView={setViewingRule}
+        onEdit={openEdit}
+        onRuleRemoved={(id) => {
+          setRules((prev) => prev.filter((r) => r.id !== id));
+          setTotal((t) => Math.max(0, t - 1));
+          void loadStats();
+        }}
+      />
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <Button
+            type="button"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => p - 1)}
+            className="h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm disabled:opacity-40"
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-gray-500">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            type="button"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => p + 1)}
+            className="h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm disabled:opacity-40"
+          >
+            Next
+          </Button>
+        </div>
+      )}
+
+      {formMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <Button
+            type="button"
+            className="absolute inset-0 bg-[#B48A2C]/40"
+            aria-label="Close"
+            onClick={() => {
+              if (!isSaving) {
+                setFormMode(null);
+                setEditingRule(null);
+              }
+            }}
+          />
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-[#E5E7EB] p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-5">
+              {formMode === "edit" ? "Edit Pricing Rule" : "Create Pricing Rule"}
+            </h2>
+            <PricingRuleForm
+              initialData={editingRule}
+              isSaving={isSaving}
+              onSubmit={handleFormSubmit}
+              onCancel={() => {
+                if (!isSaving) {
+                  setFormMode(null);
+                  setEditingRule(null);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <PricingRuleDetailsModal
+        rule={viewingRule}
+        onClose={() => setViewingRule(null)}
+        onEdit={(rule) => {
+          setViewingRule(null);
+          openEdit(rule);
+        }}
+      />
+    </>
+  );
+}

@@ -1,0 +1,60 @@
+-- Default pricing rules seed (idempotent via INSERT IGNORE)
+USE fz;
+
+INSERT IGNORE INTO pricing_rules (
+  name,
+  description,
+  scope_type,
+  supplier_currency,
+  display_currency,
+  exchange_rate_type,
+  default_exchange_rate,
+  rate_lock_days,
+  markup_type,
+  default_markup_value,
+  minimum_margin_percent,
+  finance_approval_threshold,
+  requires_finance_approval,
+  status,
+  is_default,
+  display_order,
+  created_by
+) VALUES
+(
+  'Default Global Rule',
+  'Standard markup and exchange rate defaults for all packages unless overridden.',
+  'global',
+  'ZAR',
+  'SGD',
+  'manual',
+  0.072500,
+  30,
+  'percentage',
+  '18',
+  12.00,
+  10.00,
+  1,
+  'active',
+  1,
+  0,
+  'system'
+),
+(
+  'UAE Destination Rule',
+  'Higher markup for UAE destination packages with stricter finance approval.',
+  'destination',
+  'AED',
+  'SGD',
+  'auto',
+  NULL,
+  14,
+  'percentage',
+  '22',
+  15.00,
+  12.00,
+  1,
+  'active',
+  0,
+  10,
+  'system'
+);

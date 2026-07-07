@@ -1,0 +1,125 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import AuthLayout from "@/components/auth/AuthLayout";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { signupSchema, type SignupFormValues } from "@/lib/auth-validation";import { Label } from "@/components/ui/label";import { Input } from "@/components/ui/input";import { Button } from "@/components/ui/button";
+
+export default function SignupPage() {
+  const { signup } = useAuth();
+  const router = useRouter();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      fullName: "",
+      email: "",
+      password: ""
+    }
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    setSubmitError(null);
+    try {
+      await signup({
+        fullName: values.fullName,
+        email: values.email,
+        password: values.password
+      });
+      router.replace("/");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Signup failed");
+    }
+  });
+
+  return (
+    <AuthLayout
+      title="Create admin account"
+      subtitle="Open registration — anyone can create an admin account"
+      footer={
+      <>
+          Already have an account?{" "}
+          <Link href="/login" className="text-[#1F2A44] font-medium hover:underline">
+            Sign in
+          </Link>
+        </>
+      }>
+      
+      <form onSubmit={onSubmit} className="space-y-5">
+        {submitError &&
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {submitError}
+          </div>
+        }
+
+        <div>
+          <Label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Full name
+          </Label>
+          <Input
+            id="fullName"
+            type="text"
+            autoComplete="name"
+            className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm outline-none focus:border-[#1F2A44] focus:ring-2 focus:ring-[#1F2A44]/10"
+            {...register("fullName")} />
+          
+          {errors.fullName &&
+          <p className="mt-1.5 text-sm text-red-600">{errors.fullName.message}</p>
+          }
+        </div>
+
+        <div>
+          <Label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Email
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm outline-none focus:border-[#1F2A44] focus:ring-2 focus:ring-[#1F2A44]/10"
+            {...register("email")} />
+          
+          {errors.email &&
+          <p className="mt-1.5 text-sm text-red-600">{errors.email.message}</p>
+          }
+        </div>
+
+        <div>
+          <Label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Password
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm outline-none focus:border-[#1F2A44] focus:ring-2 focus:ring-[#1F2A44]/10"
+            {...register("password")} />
+          
+          {errors.password &&
+          <p className="mt-1.5 text-sm text-red-600">{errors.password.message}</p>
+          }
+          <p className="mt-1.5 text-xs text-gray-500">
+            At least 8 characters with letters and numbers.
+          </p>
+        </div>
+
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-xl bg-[#1F2A44] text-white py-2.5 text-sm font-medium hover:bg-[#172033] disabled:opacity-60 transition-colors">
+          
+          {isSubmitting ? "Creating account..." : "Create account"}
+        </Button>
+      </form>
+    </AuthLayout>);
+
+}

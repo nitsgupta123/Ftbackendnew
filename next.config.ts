@@ -1,7 +1,96 @@
 import type { NextConfig } from "next";
 
+const apiUrl = process.env.API_URL ?? "http://localhost:4000";
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    return [
+      {
+        source: "/api/auth",
+        destination: `${apiUrl}/api/auth`,
+      },
+      {
+        source: "/api/auth/:path*",
+        destination: `${apiUrl}/api/auth/:path*`,
+      },
+      {
+        source: "/api/packages",
+        destination: `${apiUrl}/api/packages`,
+      },
+      {
+        source: "/api/packages/:path*",
+        destination: `${apiUrl}/api/packages/:path*`,
+      },
+      {
+        source: "/api/categories",
+        destination: `${apiUrl}/api/categories`,
+      },
+      {
+        source: "/api/categories/:path*",
+        destination: `${apiUrl}/api/categories/:path*`,
+      },
+      {
+        source: "/api/users",
+        destination: `${apiUrl}/api/users`,
+      },
+      {
+        source: "/api/users/:path*",
+        destination: `${apiUrl}/api/users/:path*`,
+      },
+      {
+        source: "/api/pricing-rules",
+        destination: `${apiUrl}/api/pricing-rules`,
+      },
+      {
+        source: "/api/pricing-rules/:path*",
+        destination: `${apiUrl}/api/pricing-rules/:path*`,
+      },
+      {
+        source: "/api/package-templates",
+        destination: `${apiUrl}/api/package-templates`,
+      },
+      {
+        source: "/api/package-templates/:path*",
+        destination: `${apiUrl}/api/package-templates/:path*`,
+      },
+      {
+        source: "/api/blogs",
+        destination: `${apiUrl}/api/blogs`,
+      },
+      {
+        source: "/api/blogs/:path*",
+        destination: `${apiUrl}/api/blogs/:path*`,
+      },
+      {
+        source: "/api/blog-categories",
+        destination: `${apiUrl}/api/blog-categories`,
+      },
+      {
+        source: "/api/blog-categories/:path*",
+        destination: `${apiUrl}/api/blog-categories/:path*`,
+      },
+      {
+        source: "/api/pages",
+        destination: `${apiUrl}/api/pages`,
+      },
+      {
+        source: "/api/pages/:path*",
+        destination: `${apiUrl}/api/pages/:path*`,
+      },
+      {
+        source: "/api/dashboard",
+        destination: `${apiUrl}/api/dashboard`,
+      },
+      {
+        source: "/api/dashboard/:path*",
+        destination: `${apiUrl}/api/dashboard/:path*`,
+      },
+      {
+        source: "/api/legacy-assets/:path*",
+        destination: `${apiUrl}/api/legacy-assets/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
