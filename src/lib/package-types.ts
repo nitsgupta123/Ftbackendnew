@@ -71,6 +71,27 @@ export interface MediaFrontendData {
   clientFacingNotes?: string;
 }
 
+export type PackagePricingType = "general" | "fixed_departure";
+
+export type HotelCategoryKey = "3star" | "4star" | "5star";
+
+export type DepartureStatus =
+  | "active"
+  | "guaranteed"
+  | "limited"
+  | "sold_out"
+  | "cancelled";
+
+export type DiscountType = "percentage" | "fixed";
+
+export type ChildPriceType =
+  | "child_with_bed"
+  | "child_without_bed"
+  | "infant";
+
+export type BlackoutKind = "single" | "range";
+
+/** @deprecated Prefer PricingAdultTier */
 export interface PricingPaxRow {
   id: string;
   tier: string;
@@ -79,6 +100,7 @@ export interface PricingPaxRow {
   childWithBedNet: string;
 }
 
+/** @deprecated Prefer PricingBlackout */
 export interface BlackoutRow {
   id: string;
   startDate: string;
@@ -86,7 +108,79 @@ export interface BlackoutRow {
   appliesTo: string;
 }
 
+export interface PricingAdultTier {
+  id: string;
+  pax: string;
+  netPrice: string;
+  margin: string;
+  retailPrice: string;
+}
+
+export interface PricingChildRow {
+  id: string;
+  type: ChildPriceType;
+  netPrice: string;
+  margin: string;
+  retailPrice: string;
+}
+
+export interface PricingPromotion {
+  id: string;
+  title: string;
+  validFrom: string;
+  validTo: string;
+  discountType: DiscountType;
+  value: string;
+  active: boolean;
+}
+
+export interface PricingBlackout {
+  id: string;
+  kind: BlackoutKind;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+}
+
+export interface PricingDetailsBlock {
+  adultTiers: PricingAdultTier[];
+  childRows: PricingChildRow[];
+  promotions: PricingPromotion[];
+}
+
+export interface BookingRange {
+  id: string;
+  name: string;
+  fromDate: string;
+  toDate: string;
+  blackouts: PricingBlackout[];
+  pricing: PricingDetailsBlock;
+}
+
+export interface DepartureDateEntry {
+  id: string;
+  date: string;
+  status: DepartureStatus;
+  pricing: PricingDetailsBlock;
+}
+
+export interface DepartureMonth {
+  id: string;
+  /** YYYY-MM */
+  month: string;
+  dates: DepartureDateEntry[];
+}
+
+export interface HotelCategoryPricing {
+  category: HotelCategoryKey;
+  bookingRanges: BookingRange[];
+  departureMonths: DepartureMonth[];
+}
+
 export interface PricingData {
+  pricingType?: PackagePricingType;
+  hotelCategories?: HotelCategoryPricing[];
+  /** @deprecated Kept for older drafts */
   supplierCurrency?: string;
   displayCurrency?: string;
   pricingCalculation?: string;

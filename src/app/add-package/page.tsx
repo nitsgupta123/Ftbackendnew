@@ -23,10 +23,23 @@ import SeoForm from "@/components/package/SeoForm";
 import ReviewPublishForm from "@/components/package/ReviewPublishForm";
 import PackageAuditCard from "@/components/package/PackageAuditCard";
 import UseTemplateModal from "@/components/templates/UseTemplateModal";
-import { createPackage, getPackage, updatePackage } from "@/lib/package-api";
+import DuplicatePackageModal from "@/components/package/DuplicatePackageModal";
+import PackageDetailsModal from "@/components/packages/PackageDetailsModal";
+import { PACKAGE_STEP_SAVE_SELECTOR } from "@/components/package/step-form-props";
+import {
+  createPackage,
+  duplicatePackage,
+  getPackage,
+  updatePackage,
+} from "@/lib/package-api";
 import { applyPackageTemplate } from "@/lib/package-template-api";
 import { PACKAGE_STEP_FIELDS } from "@/lib/package-types";
-import type { PackageRecord, ReviewPublishData, UpdatePackageInput } from "@/lib/package-types";
+import type {
+  PackageRecord,
+  PackageStatus,
+  ReviewPublishData,
+  UpdatePackageInput,
+} from "@/lib/package-types";
 import type { SupplierFormValues, PackageBasicsValues } from "@/lib/validation";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import { PACKAGE_STEP_PERMISSION_KEYS } from "@/lib/permission-types";
@@ -42,9 +55,13 @@ export default function AddPackagePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
   const [appliedTemplateName, setAppliedTemplateName] = useState<string | null>(null);
   const templateAppliedRef = useRef(false);
+  const saveDraftOnlyRef = useRef(false);
 
   const breadcrumbs = [
     { label: "Dashboard", href: "/" },
@@ -148,8 +165,13 @@ export default function AddPackagePage() {
   ) => {
     if (!canEditStep(step)) {
       setSaveError("You do not have permission to edit this module.");
+      saveDraftOnlyRef.current = false;
       return;
     }
+    const draftOnly = saveDraftOnlyRef.current;
+    saveDraftOnlyRef.current = false;
+    const effectiveNextStep = draftOnly ? undefined : nextStep;
+
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
@@ -157,7 +179,8 @@ export default function AddPackagePage() {
     try {
       const updatePayload: UpdatePackageInput = {
         ...payload,
-        current_step: nextStep ?? step,
+        ...(draftOnly ? { status: "draft" } : {}),
+        current_step: effectiveNextStep ?? step,
       };
 
       const result = packageId
@@ -176,10 +199,14 @@ export default function AddPackagePage() {
         window.history.replaceState(null, "", `/add-package?id=${saved.id}`);
       }
 
-      setSaveSuccess(`Step ${step} saved to fz.add_package`);
+      setSaveSuccess(
+        draftOnly
+          ? `Draft saved at step ${step}`
+          : `Step ${step} saved to fz.add_package`
+      );
 
-      if (nextStep) {
-        goToStep(nextStep);
+      if (effectiveNextStep) {
+        goToStep(effectiveNextStep);
       }
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Failed to save package");
@@ -196,6 +223,92 @@ export default function AddPackagePage() {
 
   const handleStepClick = (step: number) => {
     goToStep(step);
+  };
+
+  const handleStatusChange = async (status: PackageStatus) => {
+    if (!packageId) {
+      setSaveError("Save the package once before changing status.");
+      return;
+    }
+    if (!canEditStep(currentStep)) {
+      setSaveError("You do not have permission to edit this module.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      const result = await updatePackage(packageId, { status });
+      if (!result.package) {
+        throw new Error("No package returned from API");
+      }
+      setPackageData(result.package);
+      setSaveSuccess(`Status updated to ${status.replaceAll("_", " ")}`);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Failed to update status");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!canEditStep(currentStep)) {
+      setSaveError("You do not have permission to edit this module.");
+      return;
+    }
+
+    saveDraftOnlyRef.current = true;
+    const saveButton = document.querySelector<HTMLButtonElement>(
+      PACKAGE_STEP_SAVE_SELECTOR
+    );
+
+    if (saveButton && !saveButton.disabled) {
+      saveButton.click();
+      window.setTimeout(() => {
+        if (saveDraftOnlyRef.current) {
+          saveDraftOnlyRef.current = false;
+        }
+      }, 800);
+      return;
+    }
+
+    saveDraftOnlyRef.current = false;
+    await persistPackage(currentStep, { status: "draft" });
+  };
+
+  const handlePreview = () => {
+    if (!packageData) {
+      setSaveError("Save at least one step before preview.");
+      return;
+    }
+    setSaveError(null);
+    setPreviewOpen(true);
+  };
+
+  const handleDuplicateExisting = async (source: PackageRecord) => {
+    setIsDuplicating(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      const result = await duplicatePackage(source);
+      const saved = result.package;
+      if (!saved) {
+        throw new Error("No package returned from API");
+      }
+      setDuplicateModalOpen(false);
+      setPackageId(saved.id);
+      setPackageData(saved);
+      setCurrentStep(saved.current_step || 1);
+      setAppliedTemplateName(null);
+      setSaveSuccess(`Duplicated "${source.package_title || "package"}" as a new draft`);
+      window.history.replaceState(null, "", `/add-package?id=${saved.id}`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Failed to duplicate package");
+    } finally {
+      setIsDuplicating(false);
+    }
   };
 
   const handleSupplierNext = async (data: SupplierFormValues) => {
@@ -371,6 +484,7 @@ export default function AddPackagePage() {
             initialData={packageData?.review_publish ?? undefined}
             onNext={handleReviewPublish}
             onPrevious={handlePrevious}
+            onPreview={handlePreview}
             isSaving={isSaving}
           />
         );
@@ -386,7 +500,13 @@ export default function AddPackagePage() {
             currentStep={currentStep}
             packageTitle={packageData?.package_title}
             isEditing={Boolean(packageId)}
+            status={packageData?.status ?? "draft"}
+            isSaving={isSaving || isDuplicating || isApplyingTemplate}
             onUseTemplate={() => setTemplateModalOpen(true)}
+            onDuplicate={() => setDuplicateModalOpen(true)}
+            onPreview={handlePreview}
+            onSaveDraft={() => void handleSaveDraft()}
+            onStatusChange={(status) => void handleStatusChange(status)}
           />
 
           {(saveError || saveSuccess || packageId || isSaving || isLoading || isApplyingTemplate || appliedTemplateName) && (
@@ -454,6 +574,20 @@ export default function AddPackagePage() {
           await applyTemplateToNewPackage(templateId);
         }}
       />
+
+      <DuplicatePackageModal
+        open={duplicateModalOpen}
+        onClose={() => setDuplicateModalOpen(false)}
+        duplicating={isDuplicating}
+        onDuplicate={handleDuplicateExisting}
+      />
+
+      {previewOpen && packageData && (
+        <PackageDetailsModal
+          pkg={packageData}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </>
   );
 }

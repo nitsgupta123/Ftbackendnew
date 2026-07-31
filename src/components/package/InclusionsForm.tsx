@@ -463,7 +463,7 @@ export default function InclusionsForm({
             })
           }
           disabled={isSaving}
-          className={stepSaveButtonClass}
+          data-package-step-save="" className={stepSaveButtonClass}
         >
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />

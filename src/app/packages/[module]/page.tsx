@@ -67,6 +67,7 @@ export default function PackageModulePage({
     if (config?.endpoint !== "tbl-list") return;
     queueMicrotask(() => {
       setStatusFilter(parsePackageStatusFilter(searchParams.get("status")));
+      setSearch(searchParams.get("search") ?? "");
     });
   }, [searchParams, config?.endpoint]);
   useEffect(() => {

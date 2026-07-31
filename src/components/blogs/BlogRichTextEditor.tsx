@@ -20,7 +20,6 @@ import { Youtube } from "@tiptap/extension-youtube";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
-import FontFamily from "@tiptap/extension-font-family";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Placeholder } from "@tiptap/extensions";
@@ -59,15 +58,6 @@ interface BlogRichTextEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
 }
-
-const FONT_FAMILIES = [
-  { label: "Arial", value: "Arial, sans-serif" },
-  { label: "Georgia", value: "Georgia, serif" },
-  { label: "Times New Roman", value: "'Times New Roman', serif" },
-  { label: "Verdana", value: "Verdana, sans-serif" },
-  { label: "Courier New", value: "'Courier New', monospace" },
-  { label: "Helvetica", value: "Helvetica, Arial, sans-serif" },
-];
 
 const TEXT_STYLES = [
   { label: "Normal text", value: "p", previewClassName: "text-sm text-[#3C4043]" },
@@ -312,13 +302,6 @@ function getNearestFontSizeIndex(size: number) {
     }
   }
   return nearestIndex;
-}
-
-function getCurrentFontFamily(editor: Editor) {
-  const family = editor.getAttributes("textStyle").fontFamily as string | undefined;
-  if (!family) return FONT_FAMILIES[0].value;
-  const match = FONT_FAMILIES.find((item) => item.value === family);
-  return match?.value ?? FONT_FAMILIES[0].value;
 }
 
 function useCloseOnOutsideClick(
@@ -674,17 +657,6 @@ function GoogleDocsToolbar({
           options={TEXT_STYLES}
           showCheck
         />
-        <ToolbarSelect
-          ariaLabel="Font family"
-          className="min-w-[88px]"
-          value={getCurrentFontFamily(editor)}
-          onChange={(value) => editor.chain().focus().setFontFamily(value).run()}
-          options={FONT_FAMILIES.map((font) => ({
-            ...font,
-            previewStyle: { fontFamily: font.value },
-          }))}
-          showCheck
-        />
 
         <div className="flex shrink-0 items-center rounded-md border border-[#DADCE0] bg-white">
           <button
@@ -1037,7 +1009,6 @@ export default function BlogRichTextEditor({
         multicolor: true,
         HTMLAttributes: { class: "blog-editor-highlight" },
       }),
-      FontFamily,
       FontSize,
       ParagraphLineHeight,
       TaskList,

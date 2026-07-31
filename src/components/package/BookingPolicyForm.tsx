@@ -197,7 +197,7 @@ export default function BookingPolicyForm({
         exceptionApproval,
         refundableComponents,
         nonRefundableComponents
-      })} disabled={isSaving} className={stepSaveButtonClass}>
+      })} disabled={isSaving} data-package-step-save="" className={stepSaveButtonClass}>
           
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />

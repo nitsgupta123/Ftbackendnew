@@ -165,6 +165,51 @@ export async function archivePackage(id: number) {
   return updatePackage(id, { status: "archived" });
 }
 
+export async function duplicatePackage(source: PackageRecord) {
+  const baseTitle = source.package_title?.trim() || "Draft Package";
+  const title = baseTitle.toLowerCase().startsWith("copy of ")
+    ? baseTitle
+    : `Copy of ${baseTitle}`;
+  const slugSeed = source.slug?.trim() || "draft";
+  const slug = `${slugSeed}-copy-${Date.now()}`;
+
+  const packageBasics = source.package_basics
+    ? {
+        ...source.package_basics,
+        packageTitle: title,
+        slug,
+      }
+    : null;
+
+  return createPackage({
+    status: "draft",
+    current_step: source.current_step || 1,
+    package_title: title,
+    slug,
+    supplier_name: source.supplier_name,
+    supplier_source: source.supplier_source,
+    package_basics: packageBasics,
+    media_frontend: source.media_frontend,
+    pricing: source.pricing,
+    itinerary: source.itinerary,
+    hotels: source.hotels,
+    inclusions: source.inclusions,
+    booking_policy: source.booking_policy,
+    consultant_view: source.consultant_view,
+    supplier_quote_tool: source.supplier_quote_tool,
+    frontend_faqs: source.frontend_faqs,
+    sales_ads_assets: source.sales_ads_assets,
+    seo: source.seo,
+    review_publish: source.review_publish
+      ? {
+          ...source.review_publish,
+          submitAction: "save",
+          publishedAt: null,
+        }
+      : null,
+  });
+}
+
 export async function archivePackageRecord(pkg: PackageRecord) {
   if (pkg.source === "legacy") {
     const response = await fetch(

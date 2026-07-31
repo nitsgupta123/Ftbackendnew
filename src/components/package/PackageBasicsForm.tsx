@@ -780,7 +780,7 @@ export default function PackageBasicsForm({
             <Button
               type="submit"
               disabled={isSaving}
-              className={stepSaveButtonClass}
+              data-package-step-save="" className={stepSaveButtonClass}
             >
               {saveButtonLabel(isSaving)}
               <Icon name="ChevronRight" size={16} />

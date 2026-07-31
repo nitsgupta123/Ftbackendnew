@@ -199,7 +199,7 @@ export default function ConsultantViewForm({
           type="button"
           onClick={() => onNext(formValues as ConsultantViewData)}
           disabled={isSaving}
-          className={stepSaveButtonClass}>
+          data-package-step-save="" className={stepSaveButtonClass}>
           
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />

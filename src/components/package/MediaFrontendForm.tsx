@@ -623,7 +623,7 @@ export default function MediaFrontendForm({
             Save as you go. Incomplete sections stay as draft.
           </p>
 
-          <Button type="submit" disabled={isSaving} className={stepSaveButtonClass}>
+          <Button type="submit" disabled={isSaving} data-package-step-save="" className={stepSaveButtonClass}>
             {saveButtonLabel(isSaving)}
             <Icon name="ChevronRight" size={16} />
           </Button>

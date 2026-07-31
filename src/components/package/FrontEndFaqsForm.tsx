@@ -119,7 +119,7 @@ export default function FrontEndFaqsForm({
           Incomplete sections stay as draft.
         </p>
 
-        <Button type="button" onClick={() => onNext(faqs)} disabled={isSaving} className={stepSaveButtonClass}>
+        <Button type="button" onClick={() => onNext(faqs)} disabled={isSaving} data-package-step-save="" className={stepSaveButtonClass}>
           
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />

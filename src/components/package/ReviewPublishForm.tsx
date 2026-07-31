@@ -9,6 +9,7 @@ import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type Ste
 interface ReviewPublishFormProps extends StepFormBaseProps {
   onNext: (data: ReviewPublishData) => void;
   onPrevious: () => void;
+  onPreview?: () => void;
   initialData?: ReviewPublishData | null;
 }
 
@@ -45,7 +46,7 @@ const HEALTH_CHECKS: HealthCheckItem[] = [
 {
   title: "Pricing",
   description:
-  "Check supplier net, exchange rate, markup, promo and pax tier pricing",
+  "Check hotel category pricing, booking ranges or departures, adult/child tiers and promotions",
   status: "warning"
 },
 {
@@ -254,6 +255,7 @@ function SectionStatusCard({ card }: {card: SectionCard;}) {
 export default function ReviewPublishForm({
   onNext,
   onPrevious,
+  onPreview,
   initialData,
   isSaving = false
 }: ReviewPublishFormProps) {
@@ -503,7 +505,9 @@ export default function ReviewPublishForm({
         <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
-            className="h-11 px-5 text-sm font-medium text-[#1F2A44] border border-[#E5E7EB] rounded-[12px] hover:bg-gray-50 transition-colors">
+            onClick={onPreview}
+            disabled={!onPreview || isSaving}
+            className="h-11 px-5 text-sm font-medium text-[#1F2A44] border border-[#E5E7EB] rounded-[12px] hover:bg-gray-50 transition-colors disabled:opacity-60">
             
             Preview package
           </Button>
@@ -544,7 +548,7 @@ export default function ReviewPublishForm({
           type="button"
           onClick={handleSave}
           disabled={isSaving}
-          className={stepSaveButtonClass}>
+          data-package-step-save="" className={stepSaveButtonClass}>
           
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />

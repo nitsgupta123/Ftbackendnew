@@ -314,7 +314,7 @@ export default function SupplierForm({
             type="button"
             onClick={handleSubmit(handleNext)}
             disabled={isSaving}
-            className={stepSaveButtonClass}
+            data-package-step-save="" className={stepSaveButtonClass}
           >
             {saveButtonLabel(isSaving)} →
           </Button>

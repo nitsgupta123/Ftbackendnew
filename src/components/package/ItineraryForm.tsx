@@ -374,7 +374,7 @@ export default function ItineraryForm({
           type="button"
           onClick={() => onNext({ days })}
           disabled={isSaving}
-          className={stepSaveButtonClass}
+          data-package-step-save="" className={stepSaveButtonClass}
         >
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />

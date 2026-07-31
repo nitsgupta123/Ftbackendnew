@@ -11,3 +11,6 @@ const stepNavButtonClass =
 
 export const stepPreviousButtonClass = stepNavButtonClass;
 export const stepSaveButtonClass = stepNavButtonClass;
+
+/** Header "Save Draft" clicks the current step's primary save control. */
+export const PACKAGE_STEP_SAVE_SELECTOR = "[data-package-step-save]";

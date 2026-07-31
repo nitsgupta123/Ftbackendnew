@@ -24,7 +24,7 @@ export default function Stepper({
         return (
           <div
             key={step.number}
-            className={`flex gap-3 ${locked ? "opacity-45" : ""}`}
+            className={`flex gap-4 ${locked ? "opacity-45" : ""}`}
           >
             <div className="flex flex-col items-center">
               <div
@@ -70,7 +70,7 @@ export default function Stepper({
             </div>
 
             <div
-              className={`pb-4 flex-1 ${
+              className={`pb-4 flex-1 min-w-0 ${
                 index === STEPS.length - 1 ? "pb-0" : ""
               }`}
             >
@@ -80,7 +80,7 @@ export default function Stepper({
                   onStepClick?.(step.number);
                 }}
                 className={`
-                  flex items-start justify-between rounded-[10px] px-3 py-2 -mx-3
+                  flex items-start justify-between rounded-[10px] px-3 py-2
                   transition-all duration-200
                   ${
                     locked
@@ -105,17 +105,9 @@ export default function Stepper({
                   >
                     {step.title}
                   </p>
-                  <p
-                    className={`text-xs mt-0.5 ${
-                      locked
-                        ? "text-[#9CA3AF]"
-                        : isCurrent
-                        ? "text-white/70"
-                        : "text-[#9CA3AF]"
-                    }`}
-                  >
-                    {locked ? "No access" : step.department}
-                  </p>
+                  {locked && (
+                    <p className="text-xs mt-0.5 text-[#9CA3AF]">No access</p>
+                  )}
                 </div>
                 {isCurrent && !locked && (
                   <span className="px-2 py-0.5 text-[10px] font-semibold bg-white/20 text-white rounded-full whitespace-nowrap ml-2">

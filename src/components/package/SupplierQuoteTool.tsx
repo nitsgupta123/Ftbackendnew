@@ -789,7 +789,7 @@ export default function SupplierQuoteTool({
             type="button"
             onClick={handleSubmit}
             disabled={isSaving}
-            className={stepSaveButtonClass}
+            data-package-step-save="" className={stepSaveButtonClass}
           >
             {saveButtonLabel(isSaving)}
             <span className="text-base leading-none">→</span>

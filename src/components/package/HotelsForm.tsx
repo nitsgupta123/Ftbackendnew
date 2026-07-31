@@ -427,7 +427,7 @@ export default function HotelsForm({
           type="button"
           onClick={() => onNext(toHotelEntries(hotels))}
           disabled={isSaving}
-          className={stepSaveButtonClass}
+          data-package-step-save="" className={stepSaveButtonClass}
         >
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />
