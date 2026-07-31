@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { packageAllPackagesHref, type PackageRecord } from "@/lib/package-types";
+import { formatPackageDate, SGT_TIME_ZONE } from "@/lib/format-date";
 
 interface PackageOverviewSectionProps {
   packages: PackageRecord[];
@@ -31,27 +32,40 @@ function getPackageDate(pkg: PackageRecord): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function getDayKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+function getSgtDayKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SGT_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+}
+
+function parseDayKeyAsUtcDate(dayKey: string): Date {
+  return new Date(`${dayKey}T00:00:00Z`);
 }
 
 function formatChartDay(date: Date): string {
   return new Intl.DateTimeFormat("en", {
+    timeZone: SGT_TIME_ZONE,
     month: "short",
     day: "numeric",
   }).format(date);
 }
 
 function buildChartPoints(packages: PackageRecord[]): ChartPoint[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const sgtToday = parseDayKeyAsUtcDate(getSgtDayKey(new Date()));
 
   const points = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (6 - index));
+    const date = new Date(sgtToday);
+    date.setUTCDate(sgtToday.getUTCDate() - (6 - index));
     return {
       day: formatChartDay(date),
-      key: getDayKey(date),
+      key: getSgtDayKey(date),
       published: 0,
       draft: 0,
     };
@@ -63,23 +77,13 @@ function buildChartPoints(packages: PackageRecord[]): ChartPoint[] {
     if (pkg.status !== "published" && pkg.status !== "draft") continue;
     const date = getPackageDate(pkg);
     if (!date) continue;
-    const point = pointByKey.get(getDayKey(date));
+    const point = pointByKey.get(getSgtDayKey(date));
     if (point) {
       point[pkg.status] += 1;
     }
   }
 
   return points;
-}
-
-function formatPackageDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
 }
 
 function getPublishedAt(pkg: PackageRecord): string | null {
@@ -129,8 +133,8 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
 
   return (
     <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-      <div className="xl:col-span-2 rounded-2xl border border-[#E8ECF4] bg-white shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="xl:col-span-2 rounded-2xl border border-[#E8ECF4] bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-[#111827]">Package Overview</h2>
             <p className="text-xs text-gray-500 mt-1">Updated packages by current status.</p>
@@ -143,7 +147,7 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
           </Button>
         </div>
 
-        <div className="flex items-center gap-5 mb-3 text-xs text-gray-500">
+        <div className="mb-3 flex flex-wrap items-center gap-3 sm:gap-5 text-xs text-gray-500">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-[#22C55E]" />
             Published
@@ -154,7 +158,8 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
           </span>
         </div>
 
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+        <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-auto min-w-[520px] w-full">
           {ticks.map((tick) =>
           <g key={tick}>
               <line x1={padding.left} y1={toY(tick)} x2={width - padding.right} y2={toY(tick)} stroke="#EEF2F7" />
@@ -164,23 +169,41 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
             </g>
           )}
 
-          <path d={makePath("published")} fill="none" stroke="#22C55E" strokeWidth={2.5} />
+          {/* Draft under Published so equal values still show the green series */}
           <path d={makePath("draft")} fill="none" stroke="#2563EB" strokeWidth={2.5} />
+          <path d={makePath("published")} fill="none" stroke="#22C55E" strokeWidth={2.5} />
 
-          {chartPoints.map((point, index) =>
-          <g key={point.day}>
-              <circle cx={toX(index)} cy={toY(point.published)} r={3.5} fill="#22C55E" />
-              <circle cx={toX(index)} cy={toY(point.draft)} r={3.5} fill="#2563EB" />
-              <text x={toX(index)} y={height - 10} textAnchor="middle" className="fill-[#9CA3AF] text-[10px]">
-                {point.day}
-              </text>
-            </g>
-          )}
+          {chartPoints.map((point, index) => {
+            const x = toX(index);
+            const publishedY = toY(point.published);
+            const draftY = toY(point.draft);
+            const overlapping = point.published === point.draft;
+
+            return (
+              <g key={point.key}>
+                {overlapping ?
+                <>
+                    <circle cx={x} cy={publishedY} r={5} fill="#22C55E" />
+                    <circle cx={x} cy={draftY} r={2.75} fill="#2563EB" />
+                  </> :
+
+                <>
+                    <circle cx={x} cy={draftY} r={3.5} fill="#2563EB" />
+                    <circle cx={x} cy={publishedY} r={3.5} fill="#22C55E" />
+                  </>
+                }
+                <text x={x} y={height - 10} textAnchor="middle" className="fill-[#9CA3AF] text-[10px]">
+                  {point.day}
+                </text>
+              </g>
+            );
+          })}
         </svg>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-[#E8ECF4] bg-white shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="rounded-2xl border border-[#E8ECF4] bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-[#111827]">Recently Published Packages</h2>
           <Link
             href={packageAllPackagesHref("published")}
@@ -193,7 +216,7 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
         <div className="space-y-4">
           {recentPublishedItems.length ?
           recentPublishedItems.map((item) =>
-          <div key={item.key} className="flex items-center gap-3">
+          <div key={item.key} className="flex items-start gap-2 sm:items-center sm:gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-[#111827] truncate">{item.title}</p>
                   <p className="text-xs text-[#6B7280] truncate">{item.subtitle}</p>
@@ -202,7 +225,7 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
                   <p className="text-xs text-[#6B7280]">Source</p>
                   <p className="text-xs font-semibold text-[#111827]">{item.source}</p>
                 </div>
-                <div className="text-right w-20">
+                <div className="w-16 text-right sm:w-20">
                   <p className="text-xs text-[#6B7280]">Published</p>
                   <p className="text-xs font-semibold text-[#111827]">{item.publishedAt}</p>
                 </div>

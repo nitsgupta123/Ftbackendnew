@@ -9,6 +9,17 @@ import type {
   PackageStatus,
   UpdatePackageInput,
 } from "./package-types";
+import { normalizeSupplierFormValues, serializeSupplierFormValues } from "./validation";
+
+function stringifySupplierSource(value: unknown): string {
+  return JSON.stringify(
+    serializeSupplierFormValues(
+      normalizeSupplierFormValues(
+        value as Parameters<typeof normalizeSupplierFormValues>[0]
+      )
+    )
+  );
+}
 
 const LEGACY_DB = process.env.LEGACY_DB_NAME ?? "fz";
 const TBL_PACKAGES = `${LEGACY_DB}.tbl_packages`;
@@ -262,7 +273,7 @@ export async function createPackage(
   audit?: PackageAuditContext
 ): Promise<PackageRecord> {
   const supplierSource = input.supplier_source
-    ? JSON.stringify(input.supplier_source)
+    ? stringifySupplierSource(input.supplier_source)
     : null;
   const currentStep = input.current_step ?? 1;
   const packageTitle = input.package_title ?? input.package_basics?.packageTitle ?? "Draft Package";
@@ -341,7 +352,13 @@ export async function updatePackage(
     if (column in input) {
       fields.push(`${column} = ?`);
       const value = input[column];
-      values.push(value === null || value === undefined ? null : JSON.stringify(value));
+      if (value === null || value === undefined) {
+        values.push(null);
+      } else if (column === "supplier_source") {
+        values.push(stringifySupplierSource(value));
+      } else {
+        values.push(JSON.stringify(value));
+      }
     }
   }
 

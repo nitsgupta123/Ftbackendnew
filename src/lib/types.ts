@@ -17,16 +17,9 @@ export interface SupplierFormData {
   supplierName: string;
   supplierPackageName: string;
   supplierCountry: string;
-  supplierCurrency: string;
   contactPerson: string;
-  supplierEmail: string;
+  supplierEmails: string[];
   supplierWhatsapp: string;
-  supplierQuotedNetPrice: string;
-  validityFrom: string;
-  validityTo: string;
-  supplierBookingDeadline: string;
   supplierQuotationFile?: FileList;
-  paymentTerms: string;
-  cancellationTerms: string;
   internalSupplierNotes: string;
 }

@@ -10,10 +10,19 @@ import { formatPackageDateTime } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 
-const STATUS_STYLES: Record<string, string> = {
-  draft: "bg-amber-50 text-amber-700",
-  published: "bg-emerald-50 text-emerald-700",
-  archived: "bg-gray-100 text-gray-600",
+const STATUS_STYLES: Record<string, { badge: string; dot: string }> = {
+  draft: {
+    badge: "bg-amber-50 text-amber-700 ring-amber-600/20",
+    dot: "bg-amber-500",
+  },
+  published: {
+    badge: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+    dot: "bg-emerald-500",
+  },
+  archived: {
+    badge: "bg-gray-100 text-gray-600 ring-gray-500/10",
+    dot: "bg-gray-400",
+  },
 };
 
 interface PageListTableProps {
@@ -26,7 +35,7 @@ interface PageListTableProps {
 }
 
 const actionIconClass =
-  "inline-flex items-center justify-center size-8 rounded-lg border border-[#E5E7EB] bg-white text-[#B48A2C] hover:bg-gray-50 hover:text-[#9A7424] disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+  "inline-flex items-center justify-center size-8 rounded-lg border border-[#E5E7EB] bg-white text-[#A68231] hover:bg-[#FFFCF7] hover:border-[#A68231]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
 
 function PageThumbnail({ page }: { page: CmsPageRecord }) {
   const [hasError, setHasError] = useState(false);
@@ -117,9 +126,13 @@ export default function PageListTable({
   onView,
   onPageRemoved,
 }: PageListTableProps) {
+  const resolvePublishedByName = (page: CmsPageRecord) => page.created_by ?? "—";
+  const resolveUpdatedByName = (page: CmsPageRecord) =>
+    page.updated_by ?? page.created_by ?? "—";
+
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center text-sm text-gray-500">
+      <div className="p-12 text-center text-sm text-gray-500">
         Loading pages…
       </div>
     );
@@ -127,68 +140,73 @@ export default function PageListTable({
 
   if (!pages.length) {
     return (
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center text-sm text-gray-500">
+      <div className="p-12 text-center text-sm text-gray-500">
         {emptyMessage}
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-      <div className="overflow-x-auto">
-        <Table className="w-full text-sm">
-          <TableHeader>
-            <TableRow className="border-b border-[#E5E7EB] bg-gray-50/80">
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+    <div className="overflow-x-auto">
+      <Table className="w-full text-sm">
+        <TableHeader>
+          <TableRow className="border-b border-[#E8ECF0] bg-[#FAFBFC] hover:bg-[#FAFBFC]">
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Image
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Title
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Type
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Status
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Nav
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Order
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Published
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Updated
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
                 Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="divide-y divide-[#E5E7EB]">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="divide-y divide-[#F1F5F9]">
             {pages.map((page) => (
-              <TableRow key={page.id} className="hover:bg-gray-50/50 transition-colors">
+              <TableRow key={page.id} className="group hover:bg-[#FFFCF7]/60 transition-colors">
                 <TableCell className="px-4 py-3">
                   <PageThumbnail page={page} />
                 </TableCell>
                 <TableCell className="px-4 py-3">
-                  <div className="font-medium text-gray-900 max-w-xs truncate">{page.title}</div>
+                  <div className="font-medium text-[#1F2A44] max-w-xs truncate group-hover:text-[#A68231] transition-colors">
+                    {page.title}
+                  </div>
                   <div className="text-xs text-gray-400 font-mono mt-0.5">{page.slug}</div>
                 </TableCell>
                 <TableCell className="px-4 py-3 text-gray-600 capitalize">
                   {page.page_type ?? "—"}
                 </TableCell>
                 <TableCell className="px-4 py-3">
+                  {(() => {
+                    const statusStyle = STATUS_STYLES[page.status] ?? STATUS_STYLES.draft;
+                    return (
                   <span
-                    className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      STATUS_STYLES[page.status] ?? STATUS_STYLES.draft
-                    }`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium capitalize ring-1 ring-inset ${statusStyle.badge}`}
                   >
+                    <span className={`size-1.5 rounded-full ${statusStyle.dot}`} />
                     {page.status}
                   </span>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="px-4 py-3 text-gray-600">
                   {page.show_in_nav ? (
@@ -199,10 +217,16 @@ export default function PageListTable({
                 </TableCell>
                 <TableCell className="px-4 py-3 text-gray-600">{page.display_order}</TableCell>
                 <TableCell className="px-4 py-3 text-gray-600 text-xs">
-                  {page.published_at ? formatPackageDateTime(page.published_at) : "—"}
+                  <div className="space-y-0.5">
+                    <p>{page.published_at ? formatPackageDateTime(page.published_at) : "—"}</p>
+                    <p className="text-[11px] text-gray-400">By {resolvePublishedByName(page)}</p>
+                  </div>
                 </TableCell>
                 <TableCell className="px-4 py-3 text-gray-600 text-xs">
-                  {formatPackageDateTime(page.updated_at)}
+                  <div className="space-y-0.5">
+                    <p>{formatPackageDateTime(page.updated_at)}</p>
+                    <p className="text-[11px] text-gray-400">By {resolveUpdatedByName(page)}</p>
+                  </div>
                 </TableCell>
                 <TableCell className="px-4 py-3">
                   <PageRowActions
@@ -214,9 +238,8 @@ export default function PageListTable({
                 </TableCell>
               </TableRow>
             ))}
-          </TableBody>
-        </Table>
-      </div>
+        </TableBody>
+      </Table>
     </div>
   );
 }

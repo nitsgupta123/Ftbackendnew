@@ -15,8 +15,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: #e7d3a0;
-  --primary-foreground: #1f2a44;
+  --primary: #b48a2c;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -44,11 +44,11 @@
 
 body {
   font-family: "Inter", system-ui, -apple-system, sans-serif;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 html {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 /* Custom scrollbar */
@@ -121,21 +121,21 @@ select {
   pointer-events: none;
 }
 
-/* Global white button treatment for hardcoded button-like links/buttons */
+/* Keep gold CTA buttons gold (hardcoded bg-[#B48A2C] utilities) */
 button[class*="bg-[#B48A2C]"],
 a[class*="bg-[#B48A2C]"] {
-  background-color: #ffffff !important;
-  color: #1f2a44 !important;
-  border: 1px solid #e5e7eb !important;
+  background-color: #b48a2c !important;
+  color: #ffffff !important;
+  border: 1px solid #b48a2c !important;
 }
 
 button[class*="hover:bg-[#B48A2C]"]:hover,
 a[class*="hover:bg-[#B48A2C]"]:hover,
 button[class*="bg-[#B48A2C]"]:hover,
 a[class*="bg-[#B48A2C]"]:hover {
-  background-color: #f9fafb !important;
-  color: #1f2a44 !important;
-  border-color: #e5e7eb !important;
+  background-color: #a8832a !important;
+  border-color: #a8832a !important;
+  color: #ffffff !important;
 }
 
 @theme inline {
@@ -188,8 +188,8 @@ a[class*="bg-[#B48A2C]"]:hover {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: #e7d3a0;
-  --primary-foreground: #1f2a44;
+  --primary: #b48a2c;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -225,4 +225,243 @@ a[class*="bg-[#B48A2C]"]:hover {
   html {
     @apply font-sans;
   }
+}
+
+/* Blog / page rich text editor media & tables */
+.blog-editor-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.blog-editor-content td,
+.blog-editor-content th {
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 0.75rem;
+  min-width: 80px;
+  vertical-align: top;
+  position: relative;
+}
+
+.blog-editor-content th {
+  background: #f3f4f6;
+  font-weight: 600;
+  text-align: left;
+}
+
+.blog-editor-content .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(59, 130, 246, 0.12);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.blog-editor-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  display: block;
+  margin: 0.75rem 0;
+}
+
+.blog-editor-content video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  display: block;
+  margin: 0.75rem 0;
+}
+
+.blog-editor-content .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #93c5fd;
+  pointer-events: none;
+}
+
+.blog-editor-content.resize-cursor {
+  cursor: col-resize;
+}
+
+.blog-editor-content[data-placeholder]:empty::before,
+.blog-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #9aa0a6;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+.blog-rich-text-editor .ProseMirror:focus {
+  outline: none;
+}
+
+.blog-editor-content mark,
+.blog-editor-content .blog-editor-highlight {
+  border-radius: 2px;
+  padding: 0 1px;
+  color: inherit;
+}
+
+/* Restore list markers removed by Tailwind preflight */
+.blog-editor-content ul:not([data-type="taskList"]) {
+  list-style-type: disc;
+  list-style-position: outside;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.blog-editor-content ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.blog-editor-content ul:not([data-type="taskList"]) ul {
+  list-style-type: circle;
+}
+
+.blog-editor-content ul:not([data-type="taskList"]) ul ul {
+  list-style-type: square;
+}
+
+.blog-editor-content li {
+  display: list-item;
+  margin: 0.2rem 0;
+}
+
+.blog-editor-content li p {
+  margin: 0;
+}
+
+.blog-editor-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+  margin: 0.5rem 0;
+}
+
+.blog-editor-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+
+.blog-editor-content ul[data-type="taskList"] li > label {
+  margin-top: 0.15rem;
+}
+
+.blog-editor-content ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.blog-editor-content blockquote {
+  border-left: 4px solid #dadce0;
+  margin: 0.75rem 0;
+  padding: 0.35rem 0 0.35rem 1rem;
+  color: #5f6368;
+  font-style: italic;
+}
+
+.blog-editor-content pre {
+  background: #f1f3f4;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  color: #202124;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.875rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap;
+}
+
+.blog-editor-content pre code {
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+}
+
+.blog-editor-content code {
+  background: #f1f3f4;
+  border-radius: 0.25rem;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.875em;
+  padding: 0.1rem 0.3rem;
+}
+
+.blog-editor-content div[data-youtube-video] {
+  max-width: 100%;
+  margin: 0.75rem 0;
+  aspect-ratio: 16 / 9;
+}
+
+.blog-editor-content div[data-youtube-video] iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  border: 0;
+  border-radius: 0.5rem;
+}
+
+/* Package Media & Front-End rich text list styles */
+.pkg-editor-content {
+  outline: none;
+}
+
+.pkg-editor-content p {
+  margin: 0.25rem 0;
+}
+
+.pkg-editor-content ul.pkg-list {
+  margin: 0.35rem 0;
+  padding-left: 1.25rem;
+}
+
+.pkg-editor-content ul.pkg-list--main {
+  list-style-type: disc;
+}
+
+.pkg-editor-content ul.pkg-list--divider,
+.pkg-editor-content ul.pkg-list--detail {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+
+.pkg-editor-content ul.pkg-list--divider > li {
+  position: relative;
+  padding-left: 1.1rem;
+}
+
+.pkg-editor-content ul.pkg-list--divider > li::before {
+  content: "/";
+  position: absolute;
+  left: 0;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.pkg-editor-content ul.pkg-list--detail > li {
+  position: relative;
+  padding-left: 1.1rem;
+}
+
+.pkg-editor-content ul.pkg-list--detail > li::before {
+  content: "–";
+  position: absolute;
+  left: 0;
+  color: #6b7280;
+}
+
+.pkg-editor-content .pkg-brand-gold {
+  color: #b48a2c;
 }

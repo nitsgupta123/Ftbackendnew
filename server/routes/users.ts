@@ -8,15 +8,14 @@ import {
   listAdminUsers,
   updateAdminUser,
 } from "../../src/lib/auth-repository";
-import type { AdminRole } from "../../src/lib/auth-types";
 import { createUserSchema, updateUserSchema } from "../../src/lib/auth-validation";
 import { requireSuperAdmin } from "../lib/audit";
 
-const VALID_ROLES: AdminRole[] = ["admin", "super_admin"];
-
-function parseRole(value?: string): AdminRole | "all" | undefined {
+function parseRole(value?: string): string | "all" | undefined {
   if (!value || value === "all") return value === "all" ? "all" : undefined;
-  return VALID_ROLES.includes(value as AdminRole) ? (value as AdminRole) : undefined;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return /^[a-z][a-z0-9_]*$/.test(normalized) ? normalized : undefined;
 }
 
 function parseStatus(value?: string): "active" | "inactive" | "all" | undefined {

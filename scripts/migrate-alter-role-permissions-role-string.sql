@@ -1,0 +1,4 @@
+USE fz;
+
+ALTER TABLE role_permissions
+  MODIFY COLUMN role VARCHAR(60) NOT NULL;

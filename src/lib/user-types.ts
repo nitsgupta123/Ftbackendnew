@@ -1,7 +1,7 @@
 import type { AdminRole, AdminUser } from "./auth-types";
 
 export type UserStatusFilter = "all" | "active" | "inactive";
-export type UserRoleFilter = "all" | AdminRole;
+export type UserRoleFilter = "all" | string;
 export type UserSortField = "created_at" | "full_name" | "last_login_at";
 
 export interface ListUsersParams {
@@ -48,7 +48,20 @@ export const USER_SORT_OPTIONS: { value: UserSortField; label: string }[] = [
   { value: "last_login_at", label: "Last login" },
 ];
 
-export const ROLE_LABELS: Record<AdminRole, string> = {
+export const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   super_admin: "Super Admin",
 };
+
+export function formatRoleLabel(role: AdminRole): string {
+  const safeRole = String(role ?? "").trim();
+  if (!safeRole) return "Unknown Role";
+  return (
+    ROLE_LABELS[safeRole] ??
+    safeRole
+      .split("_")
+      .filter(Boolean)
+      .map((chunk) => chunk[0]?.toUpperCase() + chunk.slice(1))
+      .join(" ")
+  );
+}

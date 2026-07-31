@@ -6,7 +6,7 @@ export default function StatCard({ label, value, change, icon, iconBg, iconColor
   const isNeutral = change === 0;
 
   return (
-    <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm hover:shadow-md transition-shadow w-full min-h-[140px]">
+    <div className="w-full min-h-[120px] rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:min-h-[140px] sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className={`w-12 h-12 rounded-full ${iconBg} flex items-center justify-center flex-shrink-0`}>
           <Icon name={icon} size={24} className={iconColor} />

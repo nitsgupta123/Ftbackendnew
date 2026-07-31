@@ -484,13 +484,17 @@ function sanitizeAppliedSupplier(
   supplier: PackageTemplateRecord["supplier_source"]
 ): PackageTemplateRecord["supplier_source"] {
   if (!supplier) return null;
+  const emails = Array.isArray(supplier.supplierEmails)
+    ? supplier.supplierEmails.filter((email): email is string => typeof email === "string" && email.trim().length > 0)
+    : [];
   return {
-    ...supplier,
     supplierName: supplier.supplierName ?? "",
     supplierPackageName: supplier.supplierPackageName ?? "",
-    supplierQuotedNetPrice: "",
-    validityFrom: "",
-    validityTo: "",
+    supplierCountry: supplier.supplierCountry ?? "",
+    contactPerson: supplier.contactPerson ?? "",
+    supplierEmails: emails,
+    supplierWhatsapp: supplier.supplierWhatsapp ?? "",
+    internalSupplierNotes: supplier.internalSupplierNotes ?? "",
   };
 }
 

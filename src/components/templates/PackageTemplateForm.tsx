@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 const inputClass =
   "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
@@ -32,7 +33,7 @@ interface PackageTemplateFormProps {
   onCancel: () => void;
 }
 
-function ToggleSwitch({
+function TemplateToggleField({
   label,
   enabled,
   onChange,
@@ -44,21 +45,7 @@ function ToggleSwitch({
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-4 py-3">
       <span className="text-sm font-medium text-[#334155]">{label}</span>
-      <Button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        onClick={() => onChange(!enabled)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          enabled ? "bg-[#27AE60]" : "bg-[#CBD5E1]"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition ${
-            enabled ? "translate-x-6" : "translate-x-1"
-          }`}
-        />
-      </Button>
+      <ToggleSwitch checked={enabled} onCheckedChange={onChange} />
     </div>
   );
 }
@@ -250,7 +237,7 @@ export default function PackageTemplateForm({
         control={control}
         name="is_default"
         render={({ field }) => (
-          <ToggleSwitch
+          <TemplateToggleField
             label="Set as default template"
             enabled={field.value ?? false}
             onChange={field.onChange}

@@ -18,39 +18,32 @@ const addButtonClass = "mt-3 w-fit h-10 px-5 text-sm font-medium rounded-[10px] 
 const addButtonDarkClass = `${addButtonClass} text-white bg-[#1F2A44] hover:bg-[#1F2A44]/90`;
 const addButtonGoldClass = `${addButtonClass} text-white bg-[#B48A2C] hover:bg-[#B48A2C]/90`;
 
-/* -------------------------------------------------------------------------- */
-/*  Reusable ToggleSwitch                                                     */
-/* -------------------------------------------------------------------------- */
-function ToggleSwitch({
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+
+function PricingToggleField({
   label,
   subtext,
   enabled,
-  onChange
+  onChange,
 }: {
   label: string;
   subtext?: string;
   enabled: boolean;
   onChange: (value: boolean) => void;
 }) {
-  return <div className="flex items-start justify-between gap-4 py-3">
+  return (
+    <div className="flex items-start justify-between gap-4 py-3">
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium text-gray-700">{label}</span>
         {subtext && <p className="text-xs text-gray-400 mt-0.5">{subtext}</p>}
       </div>
-      <Button type="button" role="switch" aria-checked={enabled} onClick={() => onChange(!enabled)} className={`
-          relative inline-flex h-6 w-11 items-center rounded-full flex-shrink-0
-          transition-colors duration-200 ease-in-out
-          ${enabled ? "bg-[#A8832A]" : "bg-gray-300"}
-        `}>
-        
-        <span className={`
-            inline-block h-4 w-4 transform rounded-full bg-white shadow-sm
-            ring-0 transition duration-200 ease-in-out
-            ${enabled ? "translate-x-6" : "translate-x-1"}
-          `} />
-        
-      </Button>
-    </div>;
+      <ToggleSwitch
+        checked={enabled}
+        onCheckedChange={onChange}
+        color="gold"
+      />
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -439,7 +432,7 @@ export default function PricingForm({
           {/* Left – Toggle card */}
           <div className="w-full lg:w-[300px] flex-shrink-0">
             <div className="bg-[#F8F9FB] rounded-[12px] border border-[#E5E7EB] p-4">
-              <ToggleSwitch label="Show slashed rate on front-end" subtext="Use only for genuine promotion or campaign pricing." enabled={showSlashedRate} onChange={setShowSlashedRate} />
+              <PricingToggleField label="Show slashed rate on front-end" subtext="Use only for genuine promotion or campaign pricing." enabled={showSlashedRate} onChange={setShowSlashedRate} />
               
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-xs font-medium text-gray-500">

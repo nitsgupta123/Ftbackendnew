@@ -1,23 +1,60 @@
 import { z } from "zod";
 
+const optionalEmail = z
+  .string()
+  .trim()
+  .email("Invalid email address")
+  .or(z.literal(""));
+
 export const supplierFormSchema = z.object({
   supplierName: z.string().min(1, "Supplier name is required"),
   supplierPackageName: z.string().min(1, "Supplier package name is required"),
   supplierCountry: z.string().optional(),
-  supplierCurrency: z.string().optional(),
   contactPerson: z.string().optional(),
-  supplierEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
+  supplierEmails: z.array(optionalEmail).min(1),
   supplierWhatsapp: z.string().optional(),
-  supplierQuotedNetPrice: z.string().optional(),
-  validityFrom: z.string().optional(),
-  validityTo: z.string().optional(),
-  supplierBookingDeadline: z.string().optional(),
-  paymentTerms: z.string().optional(),
-  cancellationTerms: z.string().optional(),
   internalSupplierNotes: z.string().optional(),
 });
 
 export type SupplierFormValues = z.infer<typeof supplierFormSchema>;
+
+/** Normalize legacy single-email payloads and strip removed fields on save/load. */
+export function normalizeSupplierFormValues(
+  data?: Partial<SupplierFormValues> & { supplierEmail?: string } | null
+): SupplierFormValues {
+  const emailsFromArray = Array.isArray(data?.supplierEmails)
+    ? data.supplierEmails.map((email) => (typeof email === "string" ? email.trim() : ""))
+    : [];
+  const legacyEmail =
+    typeof data?.supplierEmail === "string" && data.supplierEmail.trim()
+      ? [data.supplierEmail.trim()]
+      : [];
+  const emails = (emailsFromArray.length > 0 ? emailsFromArray : legacyEmail).filter(Boolean);
+
+  return {
+    supplierName: data?.supplierName ?? "",
+    supplierPackageName: data?.supplierPackageName ?? "",
+    supplierCountry: data?.supplierCountry ?? "",
+    contactPerson: data?.contactPerson ?? "",
+    supplierEmails: emails.length > 0 ? emails : [""],
+    supplierWhatsapp: data?.supplierWhatsapp ?? "",
+    internalSupplierNotes: data?.internalSupplierNotes ?? "",
+  };
+}
+
+/** Prepare values for persistence (drop empty email slots). */
+export function serializeSupplierFormValues(data: SupplierFormValues): SupplierFormValues {
+  const emails = data.supplierEmails.map((e) => e.trim()).filter(Boolean);
+  return {
+    supplierName: data.supplierName.trim(),
+    supplierPackageName: data.supplierPackageName.trim(),
+    supplierCountry: data.supplierCountry?.trim() || undefined,
+    contactPerson: data.contactPerson?.trim() || undefined,
+    supplierEmails: emails,
+    supplierWhatsapp: data.supplierWhatsapp?.trim() || undefined,
+    internalSupplierNotes: data.internalSupplierNotes?.trim() || undefined,
+  };
+}
 
 export const packageBasicsSchema = z.object({
   packageTitle: z.string().min(1, "Package title is required"),
@@ -26,6 +63,7 @@ export const packageBasicsSchema = z.object({
   packageMode: z.string().min(1, "Package mode is required"),
   tourType: z.string().min(1, "Tour type is required"),
   runs: z.string().min(1, "Runs is required"),
+  runsCustom: z.string().optional(),
   countriesCovered: z.string().optional(),
   citiesOrRegions: z.string().optional(),
   startingPoint: z.string().optional(),
@@ -35,10 +73,15 @@ export const packageBasicsSchema = z.object({
   categories: z.array(z.string()).optional(),
   categoryIds: z.array(z.number().int().positive()).optional(),
   landingPages: z.array(z.string()).optional(),
-  domesticFlightsIncluded: z.boolean(),
-  trainIncluded: z.boolean(),
-  transfersIncluded: z.boolean(),
+  /** @deprecated Managed in Inclusions; kept optional for existing package data */
+  domesticFlightsIncluded: z.boolean().optional(),
+  /** @deprecated Managed in Inclusions; kept optional for existing package data */
+  trainIncluded: z.boolean().optional(),
+  /** @deprecated Managed in Inclusions; kept optional for existing package data */
+  transfersIncluded: z.boolean().optional(),
   isSeasonalPackage: z.boolean(),
+  importantInfo: z.string().optional(),
+  frontendNotes: z.string().optional(),
 });
 
 export type PackageBasicsValues = z.infer<typeof packageBasicsSchema>;
@@ -113,6 +156,48 @@ export const updatePricingRuleSchema = createPricingRuleSchema.partial();
 
 export type CreatePricingRuleFormValues = z.infer<typeof createPricingRuleSchema>;
 export type UpdatePricingRuleFormValues = z.infer<typeof updatePricingRuleSchema>;
+
+export const supplierStatusSchema = z.enum([
+  "active",
+  "inactive",
+  "do_not_use",
+]);
+export const supplierRelationshipStatusSchema = z.enum([
+  "new",
+  "under_review",
+  "with_issues",
+  "on_probation",
+  "inactive",
+  "blacklisted",
+  "poor",
+  "average",
+  "good",
+  "excellent",
+]);
+
+export const createSupplierSchema = z.object({
+  company_name: z.string().min(1, "Company name is required"),
+  country: z.string().min(1, "Country is required"),
+  city_tour_area: z.string().optional().nullable(),
+  status: supplierStatusSchema.optional(),
+  relationship_status: supplierRelationshipStatusSchema.optional(),
+  services_offered: z.string().optional().nullable(),
+  contact_person: z.string().optional().nullable(),
+  email_address: z.string().optional().nullable(),
+  contact_number: z.string().optional().nullable(),
+  website: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  problems_with_services: z.string().optional().nullable(),
+  account_details: z.string().optional().nullable(),
+  tc_poc_fixed_departure: z.string().optional().nullable(),
+  relationship_owner: z.string().optional().nullable(),
+  date_added_updated: z.string().optional().nullable(),
+});
+
+export const updateSupplierSchema = createSupplierSchema.partial();
+
+export type CreateSupplierFormValues = z.infer<typeof createSupplierSchema>;
+export type UpdateSupplierFormValues = z.infer<typeof updateSupplierSchema>;
 
 export const templateStatusSchema = z.enum(["active", "inactive"]);
 export const templateTypeSchema = z.enum(["full", "partial"]);

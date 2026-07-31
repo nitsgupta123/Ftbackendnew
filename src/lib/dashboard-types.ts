@@ -25,6 +25,8 @@ export interface DashboardActivity {
   id: string;
   title: string;
   occurredAt: string;
+  createdBy: string | null;
+  updatedBy: string | null;
   icon: string;
   iconBg: string;
   iconColor: string;

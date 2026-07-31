@@ -15,9 +15,15 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-const STATUS_STYLES: Record<string, string> = {
-  active: "bg-emerald-50 text-emerald-700",
-  inactive: "bg-gray-100 text-gray-600",
+const STATUS_STYLES: Record<string, { badge: string; dot: string }> = {
+  active: {
+    badge: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+    dot: "bg-emerald-500",
+  },
+  inactive: {
+    badge: "bg-gray-100 text-gray-600 ring-gray-500/10",
+    dot: "bg-gray-400",
+  },
 };
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -38,7 +44,7 @@ interface PricingRulesListTableProps {
 }
 
 const actionIconClass =
-  "inline-flex items-center justify-center size-8 rounded-lg border border-[#E5E7EB] bg-white text-[#B48A2C] hover:bg-gray-50 hover:text-[#9A7424] disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+  "inline-flex items-center justify-center size-8 rounded-lg border border-[#E5E7EB] bg-white text-[#A68231] hover:bg-[#FFFCF7] hover:border-[#A68231]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
 
 function formatMarkup(rule: PricingRuleRecord): string {
   if (!rule.default_markup_value) return "—";
@@ -129,7 +135,7 @@ export default function PricingRulesListTable({
 }: PricingRulesListTableProps) {
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center text-sm text-gray-500">
+      <div className="p-12 text-center text-sm text-gray-500">
         Loading pricing rules…
       </div>
     );
@@ -137,60 +143,68 @@ export default function PricingRulesListTable({
 
   if (!rules.length) {
     return (
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center text-sm text-gray-500">
+      <div className="p-12 text-center text-sm text-gray-500">
         {emptyMessage}
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-      <div className="overflow-x-auto">
-        <Table className="w-full text-sm">
-          <TableHeader>
-            <TableRow className="border-b border-[#E5E7EB] bg-gray-50/80">
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Rule Name
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Scope
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Currencies
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Exchange Rate
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Markup
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Finance Approval
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Status
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Updated
-              </TableHead>
-              <TableHead className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="divide-y divide-[#E5E7EB]">
-            {rules.map((rule) => (
-              <TableRow key={rule.id} className="hover:bg-gray-50/50 transition-colors">
+    <div className="overflow-x-auto">
+      <Table className="w-full text-sm">
+        <TableHeader>
+          <TableRow className="border-b border-[#E8ECF0] bg-[#FAFBFC] hover:bg-[#FAFBFC]">
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Rule Name
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Scope
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Currencies
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Exchange Rate
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Markup
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Finance Approval
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Status
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Updated
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+              Actions
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="divide-y divide-[#F1F5F9]">
+          {rules.map((rule) => {
+            const statusStyle = STATUS_STYLES[rule.status] ?? STATUS_STYLES.inactive;
+            return (
+              <TableRow
+                key={rule.id}
+                className="group hover:bg-[#FFFCF7]/60 transition-colors"
+              >
                 <TableCell className="px-4 py-3">
-                  <div className="font-medium text-gray-900">{rule.name}</div>
+                  <div className="font-medium text-[#1F2A44] max-w-xs truncate group-hover:text-[#A68231] transition-colors">
+                    {rule.name}
+                  </div>
                   {rule.is_default && (
-                    <span className="inline-flex mt-1 text-xs font-medium text-[#B48A2C]">
+                    <span className="inline-flex mt-0.5 text-xs font-medium text-[#A68231]">
                       Default
                     </span>
                   )}
                 </TableCell>
                 <TableCell className="px-4 py-3 text-gray-600">
-                  <span className="capitalize">{SCOPE_LABELS[rule.scope_type] ?? rule.scope_type}</span>
+                  <span className="capitalize">
+                    {SCOPE_LABELS[rule.scope_type] ?? rule.scope_type}
+                  </span>
                   {rule.scope_value && (
                     <span className="block text-xs text-gray-400 mt-0.5">{rule.scope_value}</span>
                   )}
@@ -200,29 +214,28 @@ export default function PricingRulesListTable({
                     ? `${rule.supplier_currency} → ${rule.display_currency}`
                     : "—"}
                 </TableCell>
-                <TableCell className="px-4 py-3 text-gray-700">
-                  <span className="capitalize text-xs">{rule.exchange_rate_type}</span>
-                  <span className="block text-xs text-gray-500">{formatExchangeRate(rule)}</span>
-                </TableCell>
-                <TableCell className="px-4 py-3 text-gray-700">
-                  <span className="capitalize text-xs">{rule.markup_type}</span>
-                  <span className="block text-xs text-gray-500">{formatMarkup(rule)}</span>
+                <TableCell className="px-4 py-3 text-gray-600 text-xs">
+                  <div className="space-y-0.5">
+                    <p className="capitalize">{rule.exchange_rate_type}</p>
+                    <p className="text-[11px] text-gray-400">{formatExchangeRate(rule)}</p>
+                  </div>
                 </TableCell>
                 <TableCell className="px-4 py-3 text-gray-600 text-xs">
-                  {rule.requires_finance_approval ? (
-                    <>
-                      Below {rule.finance_approval_threshold ?? "—"}%
-                    </>
-                  ) : (
-                    "Not required"
-                  )}
+                  <div className="space-y-0.5">
+                    <p className="capitalize">{rule.markup_type}</p>
+                    <p className="text-[11px] text-gray-400">{formatMarkup(rule)}</p>
+                  </div>
+                </TableCell>
+                <TableCell className="px-4 py-3 text-gray-600 text-xs">
+                  {rule.requires_finance_approval
+                    ? `Below ${rule.finance_approval_threshold ?? "—"}%`
+                    : "Not required"}
                 </TableCell>
                 <TableCell className="px-4 py-3">
                   <span
-                    className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      STATUS_STYLES[rule.status] ?? STATUS_STYLES.inactive
-                    }`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium capitalize ring-1 ring-inset ${statusStyle.badge}`}
                   >
+                    <span className={`size-1.5 rounded-full ${statusStyle.dot}`} />
                     {rule.status}
                   </span>
                 </TableCell>
@@ -239,10 +252,10 @@ export default function PricingRulesListTable({
                   />
                 </TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }

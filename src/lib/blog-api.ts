@@ -37,6 +37,7 @@ function buildQuery(params: ListBlogPostsParams): string {
   if (params.search) search.set("search", params.search);
   if (params.status) search.set("status", params.status);
   if (params.category_id) search.set("category_id", String(params.category_id));
+  if (params.author_name) search.set("author_name", params.author_name);
   if (params.sort) search.set("sort", params.sort);
   if (params.order) search.set("order", params.order);
   if (params.page) search.set("page", String(params.page));
@@ -62,6 +63,15 @@ export async function getBlogStats(): Promise<BlogStats> {
     headers: requestHeaders(),
   });
   return parseApiResponse<BlogStats>(response);
+}
+
+export async function listBlogAuthors(): Promise<string[]> {
+  const response = await fetch(apiUrl("/api/blogs/authors"), {
+    cache: "no-store",
+    headers: requestHeaders(),
+  });
+  const result = await parseApiResponse<{ authors: string[] }>(response);
+  return result.authors;
 }
 
 export async function getBlogPost(id: number) {

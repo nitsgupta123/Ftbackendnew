@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Sidebar from "@/components/layout/Sidebar";
-import Header from "@/components/layout/Header";
+import AdminShell from "@/components/layout/AdminShell";
 import StatCard from "@/components/dashboard/StatCard";
 import OverviewChart from "@/components/dashboard/OverviewChart";
 import RecentActivities from "@/components/dashboard/RecentActivities";
@@ -30,7 +29,6 @@ type ChartPeriodLabel = keyof typeof CHART_PERIODS;
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [statCards, setStatCards] = useState<StatCardData[]>([]);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [activities, setActivities] = useState<ReturnType<typeof mapActivities>>([]);
@@ -65,7 +63,9 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    loadDashboard(CHART_PERIODS[chartPeriod]);
+    queueMicrotask(() => {
+      void loadDashboard(CHART_PERIODS[chartPeriod]);
+    });
   }, [chartPeriod, loadDashboard]);
 
   const handleChartPeriodChange = (period: ChartPeriodLabel) => {
@@ -78,23 +78,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB]">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
-
-      <div
-        className={`transition-all duration-300 ${
-          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[280px]"
-        }`}
-      >
-        <Header
-          breadcrumbs={breadcrumbs}
-          onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-
-        <main className="p-4 lg:p-8 max-w-[1600px] mx-auto">
+    <AdminShell breadcrumbs={breadcrumbs}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
@@ -129,7 +113,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
             {(loading && !statCards.length
               ? STAT_CARD_CONFIG.map((config) => ({
                   label: config.label,
@@ -145,8 +129,8 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6">
-            <div className="lg:col-span-5">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-6">
+            <div className="xl:col-span-5">
               <OverviewChart
                 data={chartData}
                 period={chartPeriod}
@@ -154,17 +138,15 @@ export default function DashboardPage() {
                 loading={chartLoading}
               />
             </div>
-            <div className="lg:col-span-4">
+            <div className="xl:col-span-4">
               <RecentActivities activities={activities} loading={loading} />
             </div>
-            <div className="lg:col-span-3">
+            <div className="xl:col-span-3">
               <QuickActions actions={QUICK_ACTIONS} />
             </div>
           </div>
 
           <ContentSummary items={contentSummary} loading={loading} />
-        </main>
-      </div>
-    </div>
+    </AdminShell>
   );
 }

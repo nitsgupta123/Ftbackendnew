@@ -86,8 +86,52 @@ const nextConfig: NextConfig = {
         destination: `${apiUrl}/api/dashboard/:path*`,
       },
       {
+        source: "/api/enquiries",
+        destination: `${apiUrl}/api/enquiries`,
+      },
+      {
+        source: "/api/enquiries/:path*",
+        destination: `${apiUrl}/api/enquiries/:path*`,
+      },
+      {
+        source: "/api/settings",
+        destination: `${apiUrl}/api/settings`,
+      },
+      {
+        source: "/api/settings/:path*",
+        destination: `${apiUrl}/api/settings/:path*`,
+      },
+      {
+        source: "/api/permissions",
+        destination: `${apiUrl}/api/permissions`,
+      },
+      {
+        source: "/api/permissions/:path*",
+        destination: `${apiUrl}/api/permissions/:path*`,
+      },
+      {
+        source: "/api/suppliers",
+        destination: `${apiUrl}/api/suppliers`,
+      },
+      {
+        source: "/api/suppliers/:path*",
+        destination: `${apiUrl}/api/suppliers/:path*`,
+      },
+      {
         source: "/api/legacy-assets/:path*",
         destination: `${apiUrl}/api/legacy-assets/:path*`,
+      },
+      {
+        source: "/api/media",
+        destination: `${apiUrl}/api/media`,
+      },
+      {
+        source: "/api/media/:path*",
+        destination: `${apiUrl}/api/media/:path*`,
+      },
+      {
+        source: "/uploads/:path*",
+        destination: `${apiUrl}/uploads/:path*`,
       },
     ];
   },

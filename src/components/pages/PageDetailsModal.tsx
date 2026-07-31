@@ -12,6 +12,12 @@ interface PageDetailsModalProps {
   onClose: () => void;
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  draft: "bg-amber-50 text-amber-700 ring-amber-600/20",
+  published: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+  archived: "bg-gray-100 text-gray-600 ring-gray-500/10",
+};
+
 export default function PageDetailsModal({ page, onClose }: PageDetailsModalProps) {
   if (!page) return null;
 
@@ -64,15 +70,39 @@ export default function PageDetailsModal({ page, onClose }: PageDetailsModalProp
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase">Status</dt>
-              <dd className="mt-0.5 capitalize text-gray-900">{page.status}</dd>
+              <dd className="mt-0.5">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize ring-1 ring-inset ${
+                    STATUS_STYLES[page.status] ?? STATUS_STYLES.draft
+                  }`}
+                >
+                  {page.status}
+                </span>
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase">Page Type</dt>
-              <dd className="mt-0.5 capitalize text-gray-900">{page.page_type ?? "—"}</dd>
+              <dd className="mt-0.5 text-gray-900">
+                {page.page_type ? (
+                  <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium capitalize text-gray-700">
+                    {page.page_type}
+                  </span>
+                ) : (
+                  "—"
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase">Show in Nav</dt>
-              <dd className="mt-0.5 text-gray-900">{page.show_in_nav ? "Yes" : "No"}</dd>
+              <dd className="mt-0.5 text-gray-900">
+                {page.show_in_nav ? (
+                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    Yes
+                  </span>
+                ) : (
+                  "No"
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase">Display Order</dt>

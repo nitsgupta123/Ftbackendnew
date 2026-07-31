@@ -25,6 +25,7 @@ import {
   Search,
   CheckCheck,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   ChevronLeft,
   Menu,
@@ -54,6 +55,11 @@ import {
   Trash2,
   Archive,
   Loader2,
+  Tags,
+  FolderTree,
+  XCircle,
+  Plus,
+  Power,
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
@@ -83,6 +89,7 @@ const iconMap: Record<string, LucideIcon> = {
   Search,
   CheckCheck,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   ChevronLeft,
   Menu,
@@ -112,6 +119,11 @@ const iconMap: Record<string, LucideIcon> = {
   Trash2,
   Archive,
   Loader2,
+  Tags,
+  FolderTree,
+  XCircle,
+  Plus,
+  Power,
 };
 
 interface IconProps {

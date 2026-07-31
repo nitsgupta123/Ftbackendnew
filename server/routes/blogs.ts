@@ -4,6 +4,7 @@ import {
   deleteBlogPost,
   getBlogPostById,
   getBlogStats,
+  listBlogAuthors,
   listBlogPosts,
   updateBlogPost,
 } from "../../src/lib/blog-repository";
@@ -33,6 +34,18 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  app.get("/authors", async (_request, reply) => {
+    try {
+      const authors = await listBlogAuthors();
+      return reply.send({ authors });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: error instanceof Error ? error.message : "Failed to load blog authors",
+      });
+    }
+  });
+
   app.get("/", async (request, reply) => {
     try {
       const query = request.query as Record<string, string | undefined>;
@@ -40,12 +53,15 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
         search: query.search,
         status: parseStatus(query.status) ?? "all",
         category_id: query.category_id ? Number(query.category_id) : undefined,
+        author_name: query.author_name?.trim() || undefined,
         sort:
           query.sort === "title"
             ? "title"
             : query.sort === "created_at"
               ? "created_at"
-              : "published_at",
+              : query.sort === "author_name"
+                ? "author_name"
+                : "published_at",
         order: query.order === "asc" ? "asc" : "desc",
         page: query.page ? Number(query.page) : 1,
         limit: query.limit ? Number(query.limit) : 20,

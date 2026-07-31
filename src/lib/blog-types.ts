@@ -58,7 +58,8 @@ export interface ListBlogPostsParams {
   search?: string;
   status?: BlogPostStatus | "all";
   category_id?: number;
-  sort?: "published_at" | "created_at" | "title";
+  author_name?: string;
+  sort?: "published_at" | "created_at" | "title" | "author_name";
   order?: "asc" | "desc";
   page?: number;
   limit?: number;
@@ -94,4 +95,5 @@ export const BLOG_SORT_OPTIONS = [
   { value: "published_at", label: "Published date" },
   { value: "created_at", label: "Created date" },
   { value: "title", label: "Title" },
+  { value: "author_name", label: "Author" },
 ] as const;

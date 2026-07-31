@@ -2,8 +2,12 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 config();
+import path from "node:path";
+import { mkdirSync } from "node:fs";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { registerAuthPlugin } from "./plugins/auth";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerPackageRoutes } from "./routes/packages";
@@ -16,12 +20,20 @@ import { registerBlogRoutes } from "./routes/blogs";
 import { registerBlogCategoryRoutes } from "./routes/blog-categories";
 import { registerPageRoutes } from "./routes/pages";
 import { registerDashboardRoutes } from "./routes/dashboard";
+import { registerEnquiryRoutes } from "./routes/enquiries";
+import { registerSettingsRoutes } from "./routes/settings";
+import { registerMediaRoutes } from "./routes/media";
+import { registerPermissionRoutes } from "./routes/permissions";
+import { registerSupplierRoutes } from "./routes/suppliers";
 import { isDbConnectionError, verifyDbConnection } from "../src/lib/db";
 
 const PORT = Number(process.env.API_PORT ?? 4000);
 const HOST = process.env.API_HOST ?? "0.0.0.0";
+const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 
 async function buildServer() {
+  mkdirSync(UPLOAD_ROOT, { recursive: true });
+
   const app = Fastify({
     logger: {
       level: process.env.API_LOG_LEVEL ?? "info",
@@ -34,6 +46,19 @@ async function buildServer() {
       "http://127.0.0.1:3000",
     ],
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  });
+
+  await app.register(multipart, {
+    limits: {
+      fileSize: 80 * 1024 * 1024,
+      files: 1,
+    },
+  });
+
+  await app.register(fastifyStatic, {
+    root: UPLOAD_ROOT,
+    prefix: "/uploads/",
+    decorateReply: false,
   });
 
   app.get("/health", async () => ({
@@ -53,6 +78,11 @@ async function buildServer() {
   await app.register(registerBlogCategoryRoutes, { prefix: "/api/blog-categories" });
   await app.register(registerPageRoutes, { prefix: "/api/pages" });
   await app.register(registerDashboardRoutes, { prefix: "/api/dashboard" });
+  await app.register(registerEnquiryRoutes, { prefix: "/api/enquiries" });
+  await app.register(registerSettingsRoutes, { prefix: "/api/settings" });
+  await app.register(registerMediaRoutes, { prefix: "/api/media" });
+  await app.register(registerPermissionRoutes, { prefix: "/api/permissions" });
+  await app.register(registerSupplierRoutes, { prefix: "/api/suppliers" });
   await app.register(registerLegacyAssetRoutes, { prefix: "/api/legacy-assets" });
 
   app.setErrorHandler((error, _request, reply) => {

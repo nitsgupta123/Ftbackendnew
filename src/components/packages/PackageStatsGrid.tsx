@@ -96,7 +96,7 @@ function matchesStat(item: StatItem, pkg: PackageRecord): boolean {
     return item.filter === "all" ? pkg.status !== "deleted" : pkg.status === item.filter;
   }
 
-  const validityTo = pkg.supplier_source?.validityTo;
+  const validityTo = (pkg.supplier_source as { validityTo?: string } | null)?.validityTo;
   if (!validityTo) return false;
   const expiry = new Date(validityTo);
   const now = new Date();

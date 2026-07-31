@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2";
 import { query, type QueryParam } from "./db";
 import { getPackageStats } from "./package-repository";
+import { SGT_TIME_ZONE } from "./format-date";
 import type {
   ChartDataPoint,
   ContentSummaryItem,
@@ -137,15 +138,40 @@ async function getDashboardStats(): Promise<DashboardStats> {
 
 function formatChartLabel(value: unknown): string {
   if (value instanceof Date) {
-    return value.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return value.toLocaleDateString("en-US", {
+      timeZone: SGT_TIME_ZONE,
+      month: "short",
+      day: "numeric",
+    });
   }
   if (typeof value === "string") {
     const date = new Date(value);
     if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return date.toLocaleDateString("en-US", {
+        timeZone: SGT_TIME_ZONE,
+        month: "short",
+        day: "numeric",
+      });
     }
   }
   return String(value ?? "");
+}
+
+function getSgtDayKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SGT_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+}
+
+function parseDayKeyAsUtcDate(dayKey: string): Date {
+  return new Date(`${dayKey}T00:00:00Z`);
 }
 
 function fillChartDays(
@@ -155,10 +181,11 @@ function fillChartDays(
   const byDay = new Map<string, { visitors: number; pageViews: number }>();
 
   for (const row of rows) {
-    const key =
-      row.day instanceof Date
-        ? row.day.toISOString().slice(0, 10)
-        : String(row.day).slice(0, 10);
+    const rowDate =
+      row.day instanceof Date ? row.day : new Date(String(row.day));
+    const key = Number.isNaN(rowDate.getTime())
+      ? String(row.day).slice(0, 10)
+      : getSgtDayKey(rowDate);
     byDay.set(key, {
       visitors: Number(row.visitors ?? 0),
       pageViews: Number(row.pageViews ?? 0),
@@ -166,13 +193,12 @@ function fillChartDays(
   }
 
   const points: ChartDataPoint[] = [];
-  const end = new Date();
-  end.setHours(0, 0, 0, 0);
+  const end = parseDayKeyAsUtcDate(getSgtDayKey(new Date()));
 
   for (let offset = days - 1; offset >= 0; offset -= 1) {
     const date = new Date(end);
-    date.setDate(end.getDate() - offset);
-    const key = date.toISOString().slice(0, 10);
+    date.setUTCDate(end.getUTCDate() - offset);
+    const key = getSgtDayKey(date);
     const values = byDay.get(key) ?? { visitors: 0, pageViews: 0 };
     points.push({
       date: formatChartLabel(date),
@@ -215,6 +241,12 @@ function mapBlogStatus(status: string): DashboardActivity["status"] {
   return "Draft";
 }
 
+function asAuditName(value: unknown): string | null {
+  if (value == null) return null;
+  const name = String(value).trim();
+  return name || null;
+}
+
 async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
   const [packages, blogs, destinations, testimonials] = await Promise.all([
     query<RowDataPacket[]>(
@@ -223,6 +255,8 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
           ap.id,
           ap.status,
           ap.updated_at AS occurred_at,
+          ap.created_by,
+          ap.updated_by,
           tp.p_name AS title
         FROM ${DB}.add_package ap
         INNER JOIN ${LEGACY_DB}.tbl_packages tp ON tp.id = ap.package_id
@@ -234,7 +268,13 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
     ),
     query<RowDataPacket[]>(
       `
-        SELECT id, title, status, COALESCE(published_at, updated_at, created_at) AS occurred_at
+        SELECT
+          id,
+          title,
+          status,
+          COALESCE(published_at, updated_at, created_at) AS occurred_at,
+          COALESCE(created_by, author_name) AS created_by,
+          COALESCE(updated_by, created_by, author_name) AS updated_by
         FROM ${DB}.blog_posts
         ORDER BY COALESCE(published_at, updated_at, created_at) DESC
         LIMIT ?
@@ -268,6 +308,8 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
       id: `package-${row.id}`,
       title: `Package "${String(row.title ?? "Untitled")}" updated`,
       occurredAt: new Date(row.occurred_at).toISOString(),
+      createdBy: asAuditName(row.created_by),
+      updatedBy: asAuditName(row.updated_by) ?? asAuditName(row.created_by),
       icon: "Package",
       iconBg: "bg-violet-50",
       iconColor: "text-violet-500",
@@ -277,6 +319,8 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
       id: `blog-${row.id}`,
       title: `Blog post "${String(row.title)}" ${row.status === "published" ? "published" : "updated"}`,
       occurredAt: new Date(row.occurred_at).toISOString(),
+      createdBy: asAuditName(row.created_by),
+      updatedBy: asAuditName(row.updated_by),
       icon: "FileText",
       iconBg: "bg-blue-50",
       iconColor: "text-blue-500",
@@ -286,6 +330,8 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
       id: `destination-${row.id}`,
       title: `Destination "${String(row.title)}" added`,
       occurredAt: new Date(row.occurred_at).toISOString(),
+      createdBy: null,
+      updatedBy: null,
       icon: "MapPin",
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-500",
@@ -295,6 +341,8 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
       id: `testimonial-${row.id}`,
       title: `Testimonial from ${String(row.title)} approved`,
       occurredAt: new Date(row.occurred_at).toISOString(),
+      createdBy: null,
+      updatedBy: null,
       icon: "Star",
       iconBg: "bg-amber-50",
       iconColor: "text-amber-500",

@@ -100,6 +100,7 @@ export async function listBlogPosts(
     search,
     status = "all",
     category_id,
+    author_name,
     sort = "published_at",
     order = "desc",
     page = 1,
@@ -120,6 +121,11 @@ export async function listBlogPosts(
     values.push(category_id);
   }
 
+  if (author_name?.trim()) {
+    conditions.push("p.author_name = ?");
+    values.push(author_name.trim());
+  }
+
   if (featuredOnly) {
     conditions.push("p.is_featured = 1");
   }
@@ -133,7 +139,13 @@ export async function listBlogPosts(
   const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const sortColumn =
-    sort === "title" ? "p.title" : sort === "created_at" ? "p.created_at" : "p.published_at";
+    sort === "title"
+      ? "p.title"
+      : sort === "created_at"
+        ? "p.created_at"
+        : sort === "author_name"
+          ? "p.author_name"
+          : "p.published_at";
   const sortOrder = order === "asc" ? "ASC" : "DESC";
 
   const countRows = await query<RowDataPacket[]>(
@@ -167,6 +179,16 @@ export async function getBlogPostById(id: number): Promise<BlogPostRecord | null
   const rows = await query<RowDataPacket[]>(`${POST_SELECT} WHERE p.id = ? LIMIT 1`, [id]);
   if (!rows.length) return null;
   return parsePostRow(rows[0]);
+}
+
+export async function listBlogAuthors(): Promise<string[]> {
+  const rows = await query<RowDataPacket[]>(
+    `SELECT DISTINCT TRIM(author_name) AS author_name
+     FROM ${POSTS_TABLE}
+     WHERE author_name IS NOT NULL AND TRIM(author_name) <> ''
+     ORDER BY TRIM(author_name) ASC`
+  );
+  return rows.map((row) => String(row.author_name).trim()).filter(Boolean);
 }
 
 export async function getBlogStats(): Promise<BlogStats> {

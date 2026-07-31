@@ -8,11 +8,19 @@ import {
   archivePackageRecord,
   deletePackageRecord,
   getPackageEditHref,
-  isWizardPackage } from
-"@/lib/package-api";
+  isWizardPackage,
+} from "@/lib/package-api";
 import type { PackageRecord } from "@/lib/package-types";
-import { formatAuditSummary } from "@/components/package/PackageAuditCard";
-import { formatPackageDate, formatPackageDateTime } from "@/lib/format-date";import { Button } from "@/components/ui/button";import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { formatPackageDate, formatPackageTime } from "@/lib/format-date";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
 
 const STATUS_STYLES: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
@@ -43,12 +51,7 @@ const actionLinkClass =
 
 function formatUpdatedTimeAndName(pkg: PackageRecord): string {
   if (!pkg.updated_at) return "—";
-  const date = new Date(pkg.updated_at);
-  if (Number.isNaN(date.getTime())) return pkg.updated_by ? `${pkg.updated_at} · ${pkg.updated_by}` : pkg.updated_at;
-  const time = date.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const time = formatPackageTime(pkg.updated_at);
   return pkg.updated_by ? `${time} · ${pkg.updated_by}` : time;
 }
 
@@ -348,7 +351,7 @@ export default function PackageListTable({
                   <TableCell className="px-3 py-3 text-gray-600">{pkg.current_step}/14</TableCell>
                   {showValidity &&
                     <TableCell className="px-3 py-3 whitespace-normal text-gray-600">
-                      {pkg.supplier_source?.validityTo || "—"}
+                      {(pkg.supplier_source as { validityTo?: string } | null)?.validityTo || "—"}
                     </TableCell>
                     }
                   <TableCell className="px-3 py-3 whitespace-normal text-gray-600">

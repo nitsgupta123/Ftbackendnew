@@ -68,8 +68,8 @@ export default function OverviewChart({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm h-full">
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-5">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-base font-semibold text-gray-900">Overview Statistics</h3>
         <NativeSelect
           value={period}
@@ -85,7 +85,7 @@ export default function OverviewChart({
         </NativeSelect>
       </div>
 
-      <div className="flex items-center gap-5 mb-3 text-xs text-gray-500">
+      <div className="mb-3 flex flex-wrap items-center gap-3 sm:gap-5 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
           Unique Enquiries
@@ -105,7 +105,7 @@ export default function OverviewChart({
 
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto"
+          className="h-auto min-w-[520px] w-full"
           onMouseLeave={() => setHoveredIndex(null)}
         >
           {yTicks.map((tick) => (

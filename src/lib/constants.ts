@@ -6,14 +6,15 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Settings",
     icon: "Settings",
     children: [
-      { label: "General" },
-      { label: "Users" },
-      { label: "Roles" },
+      { label: "General", href: "/settings/general" },
+      { label: "User Management", href: "/user-management" },
+      { label: "Role Management", href: "/settings/role-management" },
+      { label: "Access Control", href: "/settings/roles" },
     ],
   },
   { label: "Blogs Management", icon: "FileText", href: "/blogs/all", children: [
-      { label: "Write New Blog", href: "/blogs/new" },
       { label: "All Posts", href: "/blogs/all" },
+      { label: "Write New Blog", href: "/blogs/new" },
       { label: "Drafts", href: "/blogs/drafts" },
       { label: "Published", href: "/blogs/published" },
       { label: "Blog Categories", href: "/blogs/categories" },
@@ -24,8 +25,6 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Drafts", href: "/pages/drafts" },
       { label: "Published", href: "/pages/published" },
     ] },
-  { label: "Ecommerce", icon: "ShoppingCart" },
-  { label: "Destinations", icon: "MapPin" },
   {
     label: "Packages",
     icon: "Package",
@@ -51,10 +50,9 @@ export const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
-  { label: "Partners", icon: "Users" },
-  { label: "Promotions", icon: "Percent" },
-  { label: "Enquiry", icon: "MessageSquare" },
-  { label: "User Management", icon: "UserCog", href: "/user-management" },
+  { label: "Suppliers", icon: "Users", href: "/suppliers" },
+  { label: "Promotions", icon: "Percent", href: "/promotions" },
+  { label: "Enquiry", icon: "MessageSquare", href: "/enquiry" },
 ];
 
 export const STEPS: Step[] = [

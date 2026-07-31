@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { Icon } from "../ui/icons";
 
 import type { InclusionsData } from "@/lib/package-types";
-import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";import { Button } from "@/components/ui/button";import { Input } from "@/components/ui/input";import { Label } from "@/components/ui/label";import { Textarea } from "@/components/ui/textarea";
+import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 interface InclusionsFormProps extends StepFormBaseProps {
   onNext: (data: InclusionsData) => void;
@@ -217,15 +222,40 @@ function TagColumnCard({
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Feature Inclusion Toggle                                                  */
+/* -------------------------------------------------------------------------- */
+function FeatureToggleCard({
+  label,
+  enabled,
+  onChange,
+}: {
+  label: string;
+  enabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[8px] border border-[#E5E7EB] bg-white px-4 py-3.5">
+      <span className="text-sm font-semibold text-[#334155]">{label}</span>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className={`text-sm font-medium ${enabled ? "text-[#27AE60]" : "text-gray-400"}`}>
+          {enabled ? "Yes" : "No"}
+        </span>
+        <ToggleSwitch checked={enabled} onCheckedChange={onChange} />
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Footer Toggle Card                                                        */
 /* -------------------------------------------------------------------------- */
 function ConsultantToggleCard({
   active,
-  onChange
-
-
-
-}: {active: boolean;onChange: (value: boolean) => void;}) {
+  onChange,
+}: {
+  active: boolean;
+  onChange: (value: boolean) => void;
+}) {
   return (
     <div
       onClick={() => onChange(!active)}
@@ -237,73 +267,79 @@ function ConsultantToggleCard({
           onChange(!active);
         }
       }}
-      className="flex items-center justify-between bg-white border border-[#E5E7EB] rounded-[12px] px-5 py-4 cursor-pointer select-none transition-all duration-200 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20">
-      
-      {/* Left: Label */}
+      className="flex items-center justify-between bg-white border border-[#E5E7EB] rounded-[12px] px-5 py-4 cursor-pointer select-none transition-all duration-200 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20"
+    >
       <span className="text-sm font-bold text-[#1F2A44] leading-snug max-w-[75%]">
         Consultant must explain these before booking
       </span>
 
-      {/* Right: Toggle pill + status label */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <span
           className={`text-sm font-semibold transition-colors duration-200 ${
-          active ? "text-[#16A34A]" : "text-[#64748B]"}`
-          }>
-          
+            active ? "text-[#16A34A]" : "text-[#64748B]"
+          }`}
+        >
           {active ? "Yes" : "No"}
         </span>
-        <div
-          role="switch"
-          aria-checked={active}
-          className={`
-            relative inline-flex h-[26px] w-[46px] items-center rounded-full flex-shrink-0
-            transition-colors duration-300 ease-in-out
-            ${active ? "bg-[#22C55E]" : "bg-[#CBD5E1]"}
-          `}>
-          
-          <span
-            className={`
-              inline-block h-[20px] w-[20px] transform rounded-full bg-white
-              shadow-sm ring-0 transition-transform duration-300 ease-in-out
-              ${active ? "translate-x-[23px]" : "translate-x-[3px]"}
-            `} />
-          
-        </div>
+        <ToggleSwitch
+          checked={active}
+          onCheckedChange={onChange}
+          size="lg"
+          color="emerald"
+        />
       </div>
-    </div>);
-
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
 /*  Main InclusionsForm Component                                             */
 /* -------------------------------------------------------------------------- */
-export default function InclusionsForm({ onNext, onPrevious, isSaving = false }: InclusionsFormProps) {
-  const [included, setIncluded] = useState<string[]>([]);
-  const [excluded, setExcluded] = useState<string[]>([
-  "International",
-  "Visa fees",
-  "Travel insura",
-  "City tax or to"]
+export default function InclusionsForm({
+  onNext,
+  onPrevious,
+  initialData,
+  isSaving = false,
+}: InclusionsFormProps) {
+  const [included, setIncluded] = useState<string[]>(initialData?.included ?? []);
+  const [excluded, setExcluded] = useState<string[]>(
+    initialData?.excluded ?? ["International", "Visa fees", "Travel insura", "City tax or to"]
   );
-  const [optionalAddons, setOptionalAddons] = useState<string[]>([
-  "Travel insura",
-  "Visa support",
-  "Private guide"]
+  const [optionalAddons, setOptionalAddons] = useState<string[]>(
+    initialData?.optionalAddons ?? ["Travel insura", "Visa support", "Private guide"]
   );
 
-  const [localFees, setLocalFees] = useState("");
-  const [nonRefundable, setNonRefundable] = useState("");
-  const [consultantMustExplain, setConsultantMustExplain] = useState(true);
+  const [localFees, setLocalFees] = useState(initialData?.localFees ?? "");
+  const [nonRefundable, setNonRefundable] = useState(initialData?.nonRefundable ?? "");
+  const [consultantMustExplain, setConsultantMustExplain] = useState(
+    initialData?.consultantMustExplain ?? true
+  );
+  const [flightsIncluded, setFlightsIncluded] = useState(
+    initialData?.flightsIncluded ?? false
+  );
+  const [trainIncluded, setTrainIncluded] = useState(initialData?.trainIncluded ?? false);
+  const [transfersIncluded, setTransfersIncluded] = useState(
+    initialData?.transfersIncluded ?? true
+  );
+
+  useEffect(() => {
+    if (!initialData) return;
+    setIncluded(initialData.included ?? []);
+    setExcluded(initialData.excluded ?? []);
+    setOptionalAddons(initialData.optionalAddons ?? []);
+    setLocalFees(initialData.localFees ?? "");
+    setNonRefundable(initialData.nonRefundable ?? "");
+    setConsultantMustExplain(initialData.consultantMustExplain ?? true);
+    setFlightsIncluded(initialData.flightsIncluded ?? false);
+    setTrainIncluded(initialData.trainIncluded ?? false);
+    setTransfersIncluded(initialData.transfersIncluded ?? true);
+  }, [initialData]);
 
   const textareaClass =
-  "w-full min-h-[140px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300 resize-y";
+    "w-full min-h-[140px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300 resize-y";
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* ================================================================== */}
-      {/*  SECTION HEADER                                                     */}
-      {/* ================================================================== */}
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm px-6 pt-6 pb-5">
         <h2 className="text-lg font-bold text-[#1F2A44]">
           Inclusions, Exclusions & Add-ons
@@ -314,47 +350,59 @@ export default function InclusionsForm({ onNext, onPrevious, isSaving = false }:
         </p>
       </div>
 
-      {/* ================================================================== */}
-      {/*  3-COLUMN GRID                                                      */}
-      {/* ================================================================== */}
+      {/* Transport inclusion toggles */}
+      <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
+        <h3 className="text-sm font-bold text-[#1F2A44] mb-4">Transport inclusions</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FeatureToggleCard
+            label="Flights Included"
+            enabled={flightsIncluded}
+            onChange={setFlightsIncluded}
+          />
+          <FeatureToggleCard
+            label="Train Included"
+            enabled={trainIncluded}
+            onChange={setTrainIncluded}
+          />
+          <FeatureToggleCard
+            label="Transfers Included"
+            enabled={transfersIncluded}
+            onChange={setTransfersIncluded}
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Column 1: Included */}
         <IncludedColumn
           items={included}
           onAdd={(value) => setIncluded((prev) => [...prev, value])}
           onRemove={(index) =>
-          setIncluded((prev) => prev.filter((_, i) => i !== index))
-          } />
-        
+            setIncluded((prev) => prev.filter((_, i) => i !== index))
+          }
+        />
 
-        {/* Column 2: Excluded */}
         <TagColumnCard
           title="Excluded"
           items={excluded}
           placeholder="Add exclusion"
           onAdd={(value) => setExcluded((prev) => [...prev, value])}
           onRemove={(index) =>
-          setExcluded((prev) => prev.filter((_, i) => i !== index))
-          } />
-        
+            setExcluded((prev) => prev.filter((_, i) => i !== index))
+          }
+        />
 
-        {/* Column 3: Optional add-ons */}
         <TagColumnCard
           title="Optional add-ons"
           items={optionalAddons}
           placeholder="Add optional"
           onAdd={(value) => setOptionalAddons((prev) => [...prev, value])}
           onRemove={(index) =>
-          setOptionalAddons((prev) => prev.filter((_, i) => i !== index))
-          } />
-        
+            setOptionalAddons((prev) => prev.filter((_, i) => i !== index))
+          }
+        />
       </div>
 
-      {/* ================================================================== */}
-      {/*  2-COLUMN TEXTAREA GRID                                             */}
-      {/* ================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left: Local fees and taxes */}
         <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
           <Label className="block text-sm font-bold text-[#1F2A44] mb-3">
             Local fees and taxes
@@ -363,11 +411,10 @@ export default function InclusionsForm({ onNext, onPrevious, isSaving = false }:
             placeholder="Describe any local fees, tourist taxes, or surcharges payable on-site..."
             value={localFees}
             onChange={(e) => setLocalFees(e.target.value)}
-            className={textareaClass} />
-          
+            className={textareaClass}
+          />
         </div>
 
-        {/* Right: Non-refundable components */}
         <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
           <Label className="block text-sm font-bold text-[#1F2A44] mb-3">
             Non-refundable components
@@ -376,25 +423,22 @@ export default function InclusionsForm({ onNext, onPrevious, isSaving = false }:
             placeholder="List any non-refundable deposits, fees, or components..."
             value={nonRefundable}
             onChange={(e) => setNonRefundable(e.target.value)}
-            className={textareaClass} />
-          
+            className={textareaClass}
+          />
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/*  FOOTER TOGGLE CARD                                                 */}
-      {/* ================================================================== */}
       <ConsultantToggleCard
         active={consultantMustExplain}
-        onChange={setConsultantMustExplain} />
-      
+        onChange={setConsultantMustExplain}
+      />
 
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm px-6 py-4 flex items-center justify-between flex-wrap gap-3">
         <Button
           type="button"
           onClick={onPrevious}
-          className={stepPreviousButtonClass}>
-          
+          className={stepPreviousButtonClass}
+        >
           <Icon name="ChevronLeft" size={16} />
           Previous
         </Button>
@@ -406,22 +450,25 @@ export default function InclusionsForm({ onNext, onPrevious, isSaving = false }:
         <Button
           type="button"
           onClick={() =>
-          onNext({
-            included,
-            excluded,
-            optionalAddons,
-            localFees,
-            nonRefundable,
-            consultantMustExplain
-          })
+            onNext({
+              included,
+              excluded,
+              optionalAddons,
+              localFees,
+              nonRefundable,
+              consultantMustExplain,
+              flightsIncluded,
+              trainIncluded,
+              transfersIncluded,
+            })
           }
           disabled={isSaving}
-          className={stepSaveButtonClass}>
-          
+          className={stepSaveButtonClass}
+        >
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />
         </Button>
       </div>
-    </div>);
-
+    </div>
+  );
 }

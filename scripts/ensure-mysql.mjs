@@ -4,7 +4,7 @@ import { existsSync } from "fs";
 
 const DB_HOST = process.env.DB_HOST ?? "127.0.0.1";
 const DB_PORT = Number(process.env.DB_PORT ?? 3306);
-const MAX_WAIT_MS = 30_000;
+const MAX_WAIT_MS = 90_000;
 const POLL_MS = 500;
 
 function isPortOpen(host, port) {
@@ -27,25 +27,23 @@ function isPortOpen(host, port) {
 }
 
 function startXamppMysql() {
-  const candidates = [
-    process.env.XAMPP_MYSQL_START,
-    "C:\\xampp\\mysql_start.bat",
-    "C:\\xampp\\mysql\\bin\\mysqld.exe",
-  ].filter(Boolean);
+  const xamppRoot = process.env.XAMPP_ROOT ?? "C:\\xampp";
+  const mysqld = process.env.XAMPP_MYSQLD ?? `${xamppRoot}\\mysql\\bin\\mysqld.exe`;
+  const ini = process.env.XAMPP_MY_INI ?? `${xamppRoot}\\mysql\\bin\\my.ini`;
 
-  for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
+  if (existsSync(mysqld) && existsSync(ini)) {
+    spawn(mysqld, [`--defaults-file=${ini}`, "--standalone"], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+      cwd: xamppRoot,
+    }).unref();
+    return true;
+  }
 
-    if (candidate.endsWith(".bat")) {
-      spawn("cmd.exe", ["/c", candidate], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-      }).unref();
-      return true;
-    }
-
-    spawn(candidate, ["--standalone"], {
+  const bat = process.env.XAMPP_MYSQL_START ?? `${xamppRoot}\\mysql_start.bat`;
+  if (existsSync(bat)) {
+    spawn("cmd.exe", ["/c", "start", "/B", bat], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,

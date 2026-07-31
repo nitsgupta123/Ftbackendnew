@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 const inputClass =
   "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
@@ -32,7 +33,7 @@ interface PricingRuleFormProps {
   onCancel: () => void;
 }
 
-function ToggleSwitch({
+function PricingRuleToggleField({
   label,
   subtext,
   enabled,
@@ -49,21 +50,7 @@ function ToggleSwitch({
         <span className="text-sm font-medium text-[#334155]">{label}</span>
         {subtext && <p className="text-xs text-gray-400 mt-0.5">{subtext}</p>}
       </div>
-      <Button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        onClick={() => onChange(!enabled)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-          enabled ? "bg-[#27AE60]" : "bg-[#CBD5E1]"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition ${
-            enabled ? "translate-x-6" : "translate-x-1"
-          }`}
-        />
-      </Button>
+      <ToggleSwitch checked={enabled} onCheckedChange={onChange} />
     </div>
   );
 }
@@ -327,7 +314,7 @@ export default function PricingRuleForm({
             control={control}
             name="requires_finance_approval"
             render={({ field }) => (
-              <ToggleSwitch
+              <PricingRuleToggleField
                 label="Require finance approval"
                 subtext="When margin falls below threshold, package needs Finance sign-off."
                 enabled={field.value ?? true}
@@ -386,7 +373,7 @@ export default function PricingRuleForm({
             control={control}
             name="is_default"
             render={({ field }) => (
-              <ToggleSwitch
+              <PricingRuleToggleField
                 label="Default rule"
                 subtext="Used as fallback when no scoped rule matches."
                 enabled={field.value ?? false}

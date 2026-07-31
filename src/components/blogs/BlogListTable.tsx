@@ -125,6 +125,12 @@ export default function BlogListTable({
   onView,
   onPostRemoved,
 }: BlogListTableProps) {
+  const resolvePublishedByName = (post: BlogPostRecord) =>
+    post.created_by ?? post.author_name ?? "—";
+
+  const resolveUpdatedByName = (post: BlogPostRecord) =>
+    post.updated_by ?? post.created_by ?? post.author_name ?? "—";
+
   if (loading) {
     return <LoadingSkeleton />;
   }
@@ -222,10 +228,16 @@ export default function BlogListTable({
                   </span>
                 </TableCell>
                 <TableCell className="px-4 py-3.5 text-gray-500 text-xs hidden sm:table-cell">
-                  {post.published_at ? formatPackageDateTime(post.published_at) : "—"}
+                  <div className="space-y-0.5">
+                    <p>{post.published_at ? formatPackageDateTime(post.published_at) : "—"}</p>
+                    <p className="text-[11px] text-gray-400">By {resolvePublishedByName(post)}</p>
+                  </div>
                 </TableCell>
                 <TableCell className="px-4 py-3.5 text-gray-500 text-xs hidden xl:table-cell">
-                  {formatPackageDateTime(post.updated_at)}
+                  <div className="space-y-0.5">
+                    <p>{formatPackageDateTime(post.updated_at)}</p>
+                    <p className="text-[11px] text-gray-400">By {resolveUpdatedByName(post)}</p>
+                  </div>
                 </TableCell>
                 <TableCell className="px-4 py-3.5">
                   <BlogRowActions

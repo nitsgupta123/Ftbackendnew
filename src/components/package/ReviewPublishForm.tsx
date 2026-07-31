@@ -54,8 +54,8 @@ const HEALTH_CHECKS: HealthCheckItem[] = [
   status: "warning"
 },
 {
-  title: "Expiry",
-  description: "Supplier validity and booking deadline tracked",
+  title: "Supplier contacts",
+  description: "Supplier name and contact emails recorded",
   status: "complete"
 }];
 

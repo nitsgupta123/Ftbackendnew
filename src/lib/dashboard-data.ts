@@ -1,3 +1,4 @@
+import { formatPackageDate, SGT_TIME_ZONE } from "./format-date";
 import type { DashboardActivity, DashboardStats } from "./dashboard-types";
 
 export interface StatCardData {
@@ -21,6 +22,9 @@ export interface ActivityItem {
   id: string;
   title: string;
   time: string;
+  date: string;
+  createdBy: string | null;
+  updatedBy: string | null;
   icon: string;
   iconBg: string;
   iconColor: string;
@@ -166,6 +170,7 @@ export function formatRelativeTime(isoDate: string): string {
   if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 
   return date.toLocaleDateString("en-US", {
+    timeZone: SGT_TIME_ZONE,
     month: "short",
     day: "numeric",
     year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
@@ -177,6 +182,9 @@ export function mapActivities(activities: DashboardActivity[]): ActivityItem[] {
     id: activity.id,
     title: activity.title,
     time: formatRelativeTime(activity.occurredAt),
+    date: formatPackageDate(activity.occurredAt),
+    createdBy: activity.createdBy,
+    updatedBy: activity.updatedBy,
     icon: activity.icon,
     iconBg: activity.iconBg,
     iconColor: activity.iconColor,

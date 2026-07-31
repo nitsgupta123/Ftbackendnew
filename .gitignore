@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+/public/tinymce
 
 # production
 /build
@@ -23,6 +24,10 @@
 # misc
 .DS_Store
 *.pem
+
+# uploaded media
+/uploads
+!/uploads/.gitkeep
 
 # debug
 npm-debug.log*

@@ -179,6 +179,9 @@ export default function BlogCategoryListTable({
               Order
             </TableHead>
             <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 hidden lg:table-cell">
+              Created by
+            </TableHead>
+            <TableHead className="text-left px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500 hidden xl:table-cell">
               Updated
             </TableHead>
             <TableHead className="text-right px-4 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -238,7 +241,20 @@ export default function BlogCategoryListTable({
                   </span>
                 </TableCell>
                 <TableCell className="px-4 py-3.5 text-gray-500 text-xs hidden lg:table-cell">
-                  {formatPackageDateTime(category.updated_at)}
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-gray-700">{category.created_by ?? "—"}</p>
+                    <p className="text-[11px] text-gray-400">
+                      {formatPackageDateTime(category.created_at)}
+                    </p>
+                  </div>
+                </TableCell>
+                <TableCell className="px-4 py-3.5 text-gray-500 text-xs hidden xl:table-cell">
+                  <div className="space-y-0.5">
+                    <p>{formatPackageDateTime(category.updated_at)}</p>
+                    <p className="text-[11px] text-gray-400">
+                      By {category.updated_by ?? category.created_by ?? "—"}
+                    </p>
+                  </div>
                 </TableCell>
                 <TableCell className="px-4 py-3.5">
                   <CategoryRowActions

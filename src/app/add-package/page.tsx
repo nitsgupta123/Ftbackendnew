@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Sidebar from "@/components/layout/Sidebar";
-import Header from "@/components/layout/Header";
+import AdminShell from "@/components/layout/AdminShell";
 import PageHeader from "@/components/package/PageHeader";
 import ProgressCard from "@/components/package/ProgressCard";
 import GuideCard from "@/components/package/GuideCard";
@@ -29,10 +28,12 @@ import { applyPackageTemplate } from "@/lib/package-template-api";
 import { PACKAGE_STEP_FIELDS } from "@/lib/package-types";
 import type { PackageRecord, ReviewPublishData, UpdatePackageInput } from "@/lib/package-types";
 import type { SupplierFormValues, PackageBasicsValues } from "@/lib/validation";
+import { usePermissions } from "@/components/auth/PermissionsProvider";
+import { PACKAGE_STEP_PERMISSION_KEYS } from "@/lib/permission-types";
 
 export default function AddPackagePage() {
   const searchParams = useSearchParams();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { can } = usePermissions();
   const [currentStep, setCurrentStep] = useState(1);
   const [packageId, setPackageId] = useState<number | null>(null);
   const [packageData, setPackageData] = useState<PackageRecord | null>(null);
@@ -88,7 +89,7 @@ export default function AddPackagePage() {
     }
   }, [searchParams]);
 
-  const applyTemplateToNewPackage = async (templateId: number) => {
+  async function applyTemplateToNewPackage(templateId: number) {
     setIsApplyingTemplate(true);
     setSaveError(null);
     setSaveSuccess(null);
@@ -117,9 +118,25 @@ export default function AddPackagePage() {
     } finally {
       setIsApplyingTemplate(false);
     }
+  }
+
+  const canAccessStep = (step: number) => {
+    const key = PACKAGE_STEP_PERMISSION_KEYS[step];
+    if (!key) return true;
+    return can(key, "view");
+  };
+
+  const canEditStep = (step: number) => {
+    const key = PACKAGE_STEP_PERMISSION_KEYS[step];
+    if (!key) return true;
+    return can(key, "edit");
   };
 
   const goToStep = (step: number) => {
+    if (!canAccessStep(step)) {
+      setSaveError("You do not have permission to view this module.");
+      return;
+    }
     setCurrentStep(step);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -129,6 +146,10 @@ export default function AddPackagePage() {
     payload: UpdatePackageInput,
     nextStep?: number
   ) => {
+    if (!canEditStep(step)) {
+      setSaveError("You do not have permission to edit this module.");
+      return;
+    }
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
@@ -256,6 +277,7 @@ export default function AddPackagePage() {
         return (
           <ItineraryForm
             initialData={packageData?.itinerary ?? undefined}
+            packageDurationDays={packageData?.package_basics?.days}
             onNext={(data) => saveStepAndContinue(5, data)}
             onPrevious={handlePrevious}
             isSaving={isSaving}
@@ -301,6 +323,16 @@ export default function AddPackagePage() {
         return (
           <SupplierQuoteTool
             initialData={packageData?.supplier_quote_tool ?? undefined}
+            supplierSource={packageData?.supplier_source ?? undefined}
+            packageId={packageData?.id ?? null}
+            destination={
+              [
+                packageData?.package_basics?.countriesCovered,
+                packageData?.package_basics?.citiesOrRegions,
+              ]
+                .filter(Boolean)
+                .join(" · ") || ""
+            }
             onNext={(data) => saveStepAndContinue(10, data)}
             onPrevious={handlePrevious}
             isSaving={isSaving}
@@ -348,23 +380,8 @@ export default function AddPackagePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB]">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
-
-      <div
-        className={`transition-all duration-300 ${
-          sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-[280px]"
-        }`}
-      >
-        <Header
-          breadcrumbs={breadcrumbs}
-          onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-
-        <main className="p-4 lg:p-8 max-w-[1600px] mx-auto">
+    <>
+    <AdminShell breadcrumbs={breadcrumbs}>
           <PageHeader
             currentStep={currentStep}
             packageTitle={packageData?.package_title}
@@ -406,8 +423,8 @@ export default function AddPackagePage() {
             </div>
           )}
 
-          <div className="flex flex-col lg:flex-row gap-6">
-            <aside className="w-full lg:w-[320px] flex-shrink-0">
+          <div className="flex flex-col gap-6 xl:flex-row">
+            <aside className="w-full flex-shrink-0 xl:w-[320px]">
               <div className="lg:sticky lg:top-20 space-y-4">
                 <ProgressCard currentStep={currentStep} />
                 <PackageAuditCard packageData={packageData} />
@@ -415,6 +432,7 @@ export default function AddPackagePage() {
                 <Stepper
                   currentStep={currentStep}
                   onStepClick={handleStepClick}
+                  canAccessStep={canAccessStep}
                 />
               </div>
             </aside>
@@ -425,8 +443,7 @@ export default function AddPackagePage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
+    </AdminShell>
 
       <UseTemplateModal
         open={templateModalOpen}
@@ -437,6 +454,6 @@ export default function AddPackagePage() {
           await applyTemplateToNewPackage(templateId);
         }}
       />
-    </div>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Icon } from "@/components/ui/icons";
@@ -13,7 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
+import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
+import { uploadMediaFile } from "@/lib/media-api";
 
+const GOLD = "#A68231";
 const inputClass =
   "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
 const textareaClass =
@@ -26,7 +29,9 @@ interface PageFormProps {
   onCancel: () => void;
 }
 
-function ToggleSwitch({
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
+
+function LabeledToggleSwitch({
   label,
   enabled,
   onChange,
@@ -38,21 +43,7 @@ function ToggleSwitch({
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-4 py-3">
       <span className="text-sm font-medium text-[#334155]">{label}</span>
-      <Button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        onClick={() => onChange(!enabled)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          enabled ? "bg-[#27AE60]" : "bg-[#CBD5E1]"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition ${
-            enabled ? "translate-x-6" : "translate-x-1"
-          }`}
-        />
-      </Button>
+      <ToggleSwitch checked={enabled} onCheckedChange={onChange} />
     </div>
   );
 }
@@ -91,7 +82,24 @@ export default function PageForm({
 
   const nameValue = useWatch({ control, name: "title" }) ?? "";
   const slugValue = useWatch({ control, name: "slug" }) ?? "";
+  const featuredImagePath = useWatch({ control, name: "featured_image_path" }) ?? "";
   const [slugTouched, setSlugTouched] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const featuredImageInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFeaturedImageUpload(file: File) {
+    setImageUploadError(null);
+    setImageUploading(true);
+    try {
+      const result = await uploadMediaFile(file);
+      setValue("featured_image_path", result.url, { shouldDirty: true, shouldValidate: true });
+    } catch (error) {
+      setImageUploadError(error instanceof Error ? error.message : "Image upload failed");
+    } finally {
+      setImageUploading(false);
+    }
+  }
 
   useEffect(() => {
     if (initialData) {
@@ -160,12 +168,16 @@ export default function PageForm({
             <Label htmlFor="content" className="block text-sm font-semibold text-[#334155] mb-1.5">
               Content
             </Label>
-            <Textarea
-              id="content"
-              className={`${textareaClass} min-h-[280px] font-mono text-xs`}
-              rows={14}
-              placeholder="Write your page content. HTML is supported."
-              {...register("content")}
+            <Controller
+              control={control}
+              name="content"
+              render={({ field }) => (
+                <BlogRichTextEditor
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="Write your page content. HTML is supported."
+                />
+              )}
             />
           </div>
         </div>
@@ -222,7 +234,7 @@ export default function PageForm({
               control={control}
               name="show_in_nav"
               render={({ field }) => (
-                <ToggleSwitch
+                <LabeledToggleSwitch
                   label="Show in Navigation"
                   enabled={field.value ?? false}
                   onChange={field.onChange}
@@ -235,18 +247,77 @@ export default function PageForm({
             <h3 className="text-sm font-bold text-[#1F2A44]">Media</h3>
 
             <div>
-              <Label
-                htmlFor="featured_image_path"
-                className="block text-sm font-semibold text-[#334155] mb-1.5"
-              >
-                Hero Image URL
+              <Label className="block text-sm font-semibold text-[#334155] mb-1.5">
+                Hero Image
               </Label>
-              <Input
-                id="featured_image_path"
-                className={inputClass}
-                placeholder="/images/pages/about-us.jpg"
-                {...register("featured_image_path")}
+              <input
+                ref={featuredImageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void handleFeaturedImageUpload(file);
+                }}
               />
+              <input type="hidden" {...register("featured_image_path")} />
+
+              {featuredImagePath ? (
+                <div className="space-y-3">
+                  <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-[#F8F9FB]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={featuredImagePath}
+                      alt="Hero image preview"
+                      className="h-40 w-full object-cover"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      disabled={imageUploading}
+                      onClick={() => featuredImageInputRef.current?.click()}
+                      className="h-9 rounded-lg border border-[#E5E7EB] bg-white px-3 text-xs font-semibold text-[#334155] hover:bg-[#F9FAFB]"
+                    >
+                      {imageUploading ? "Uploading…" : "Replace image"}
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={imageUploading}
+                      onClick={() => {
+                        setImageUploadError(null);
+                        setValue("featured_image_path", "", {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                      className="h-9 rounded-lg border border-[#FECACA] bg-white px-3 text-xs font-semibold text-[#B91C1C] hover:bg-[#FEF2F2]"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={imageUploading}
+                  onClick={() => featuredImageInputRef.current?.click()}
+                  className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#D1D5DB] bg-[#F8F9FB] px-4 py-8 text-center transition-colors hover:border-[#B48A2C] hover:bg-[#FFFBF5] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E5E7EB] bg-white">
+                    <Icon name="Upload" size={18} className="text-[#A68231]" />
+                  </span>
+                  <span className="text-sm font-semibold text-[#334155]">
+                    {imageUploading ? "Uploading…" : "Upload hero image"}
+                  </span>
+                  <span className="text-xs text-gray-400">JPG, PNG, GIF, or WebP</span>
+                </button>
+              )}
+
+              {imageUploadError && (
+                <p className="mt-2 text-xs text-[#B91C1C]">{imageUploadError}</p>
+              )}
             </div>
           </div>
 
@@ -297,7 +368,8 @@ export default function PageForm({
         <Button
           type="submit"
           disabled={isSaving}
-          className="inline-flex h-11 px-5 items-center gap-2 text-sm font-semibold text-white bg-[#B48A2C] rounded-xl hover:bg-[#B48A2C]/90 disabled:opacity-50"
+          className="inline-flex h-11 px-5 items-center gap-2 text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 shadow-sm border-transparent"
+          style={{ backgroundColor: GOLD, color: "#fff" }}
         >
           {isSaving && <Icon name="Loader2" size={16} className="animate-spin" />}
           {isSaving ? "Saving…" : isEdit ? "Update Page" : "Create Page"}

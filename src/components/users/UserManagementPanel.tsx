@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
 import { Icon } from "@/components/ui/icons";
 import { useAuth } from "@/components/auth/AuthProvider";
 import UserStatsGrid from "@/components/users/UserStatsGrid";
@@ -9,12 +16,19 @@ import UserFormModal from "@/components/users/UserFormModal";
 import { createUser, getUserStats, listUsers, updateUser } from "@/lib/user-api";
 import type { AdminUser } from "@/lib/auth-types";
 import type { CreateUserFormValues } from "@/lib/auth-validation";
-import { USER_ROLE_FILTER_OPTIONS, USER_SORT_OPTIONS, USER_STATUS_FILTER_OPTIONS, type AdminUserStats, type UserRoleFilter, type UserSortField, type UserStatusFilter } from "@/lib/user-types";
+import { USER_ROLE_FILTER_OPTIONS, USER_SORT_OPTIONS, USER_STATUS_FILTER_OPTIONS, formatRoleLabel, type AdminUserStats, type UserRoleFilter, type UserSortField, type UserStatusFilter } from "@/lib/user-types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
+
 type FormMode = "create" | "edit" | null;
-export default function UserManagementPanel() {
+
+export interface UserManagementPanelHandle {
+  openCreate: () => void;
+}
+
+const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
+  function UserManagementPanel(_, ref) {
   const {
     user: currentUser
   } = useAuth();
@@ -35,6 +49,7 @@ export default function UserManagementPanel() {
   const limit = 20;
   const [formMode, setFormMode] = useState<FormMode>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [customRoles, setCustomRoles] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
@@ -88,11 +103,43 @@ export default function UserManagementPanel() {
     }
     return "No admin users found.";
   }, [search, statusFilter, roleFilter]);
+  const roleFilterOptions = useMemo(() => {
+    const dynamicRoles = Array.from(
+      new Set([...users.map((user) => user.role), ...customRoles])
+    );
+    const options = [...USER_ROLE_FILTER_OPTIONS];
+    for (const roleOption of dynamicRoles) {
+      if (!options.some((item) => item.value === roleOption)) {
+        options.push({ value: roleOption, label: formatRoleLabel(roleOption) });
+      }
+    }
+    return options;
+  }, [users, customRoles]);
+
+  const availableRoles = useMemo(() => {
+    return Array.from(
+      new Set([
+        "admin",
+        "super_admin",
+        ...customRoles,
+        ...users.map((user) => user.role),
+        editingUser?.role ?? "",
+      ].filter(Boolean))
+    );
+  }, [users, editingUser, customRoles]);
   async function handleCreate(data: CreateUserFormValues) {
     setIsSaving(true);
     setError(null);
     try {
-      await createUser(data);
+      const { user: created } = await createUser(data);
+      if (created.role !== data.role) {
+        setError(
+          `Role "${data.role}" could not be saved correctly. Run "npm run db:migrate:admin-role-string" and try again.`
+        );
+      }
+      setCustomRoles((prev) =>
+        prev.includes(created.role) ? prev : [...prev, created.role]
+      );
       setFormMode(null);
       setPage(1);
       await Promise.all([loadUsers(), loadStats()]);
@@ -132,66 +179,99 @@ export default function UserManagementPanel() {
     setEditingUser(user);
     setFormMode("edit");
   }
+
+  useImperativeHandle(ref, () => ({ openCreate }), []);
+
   return <>
       <div className="mb-6">
         <UserStatsGrid stats={stats} loading={statsLoading} />
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <div className="relative flex-1 max-w-md">
-          <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          
-          <Input type="search" value={search} onChange={e => {
-          setSearch(e.target.value);
-          setPage(1);
-        }} placeholder="Search by name or email..." className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]" />
-          
+      <div className="mb-4 rounded-2xl border border-[#E8ECF0] bg-white shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-3 px-4 py-4 border-b border-[#E8ECF0] bg-gradient-to-r from-[#FFFCF7] via-white to-white xl:flex-row xl:items-center">
+          <div className="relative flex-1 min-w-0">
+            <Icon
+              name="Search"
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by name or email..."
+              className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]"
+            />
+          </div>
+
+          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:w-auto xl:items-center xl:gap-2 xl:shrink-0">
+            <NativeSelect
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as UserStatusFilter);
+                setPage(1);
+              }}
+              wrapperClassName="w-full xl:w-auto xl:shrink-0"
+              className="h-10 w-full xl:min-w-[130px] px-3 pr-9 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+            >
+              {USER_STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+
+            <NativeSelect
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value as UserRoleFilter);
+                setPage(1);
+              }}
+              wrapperClassName="w-full xl:w-auto xl:shrink-0"
+              className="h-10 w-full xl:min-w-[130px] px-3 pr-9 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+            >
+              {roleFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+
+            <NativeSelect
+              value={sort}
+              onChange={(e) => setSort(e.target.value as UserSortField)}
+              wrapperClassName="w-full xl:w-auto xl:shrink-0"
+              className="h-10 w-full xl:min-w-[150px] px-3 pr-9 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+            >
+              {USER_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  Sort: {option.label}
+                </option>
+              ))}
+            </NativeSelect>
+
+            <NativeSelect
+              value={order}
+              onChange={(e) => setOrder(e.target.value as "asc" | "desc")}
+              wrapperClassName="w-full xl:w-auto xl:shrink-0"
+              className="h-10 w-full xl:min-w-[120px] px-3 pr-9 rounded-lg border border-[#E5E7EB] bg-white text-sm"
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </NativeSelect>
+          </div>
         </div>
 
-        {canManage && <Button type="button" onClick={openCreate} className="inline-flex h-10 px-5 items-center gap-2 text-sm font-semibold text-white bg-[#B48A2C] rounded-xl hover:bg-[#B48A2C]/90 shadow-sm shrink-0">
-          
-            <Icon name="User" size={16} />
-            Add User
-          </Button>}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <NativeSelect value={statusFilter} onChange={e => {
-        setStatusFilter(e.target.value as UserStatusFilter);
-        setPage(1);
-      }} className="h-10 min-w-[140px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm">
-          
-          {USER_STATUS_FILTER_OPTIONS.map(option => <option key={option.value} value={option.value}>
-              {option.label}
-            </option>)}
-        </NativeSelect>
-
-        <NativeSelect value={roleFilter} onChange={e => {
-        setRoleFilter(e.target.value as UserRoleFilter);
-        setPage(1);
-      }} className="h-10 min-w-[140px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm">
-          
-          {USER_ROLE_FILTER_OPTIONS.map(option => <option key={option.value} value={option.value}>
-              {option.label}
-            </option>)}
-        </NativeSelect>
-
-        <NativeSelect value={sort} onChange={e => setSort(e.target.value as UserSortField)} className="h-10 min-w-[160px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm">
-          
-          {USER_SORT_OPTIONS.map(option => <option key={option.value} value={option.value}>
-              Sort: {option.label}
-            </option>)}
-        </NativeSelect>
-
-        <NativeSelect value={order} onChange={e => setOrder(e.target.value as "asc" | "desc")} className="h-10 min-w-[120px] px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm">
-          
-          <option value="desc">Descending</option>
-          <option value="asc">Ascending</option>
-        </NativeSelect>
-
-        {!loading && total > 0 && <p className="text-xs text-gray-400 ml-auto">
-            {users.length} of {total} users
-          </p>}
+        {!loading && total > 0 && (
+          <div className="px-4 py-3 bg-[#FAFBFC]">
+            <p className="text-xs text-gray-500">
+              {users.length} of {total} users
+            </p>
+          </div>
+        )}
       </div>
 
       {error && <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-100 text-sm">
@@ -208,6 +288,9 @@ export default function UserManagementPanel() {
 
       {!canManage && <div className="mb-4 px-4 py-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-100 text-sm">
           You have read-only access. Only Super Admins can create or edit users.
+        </div>}
+      {canManage && <div className="mb-4 px-4 py-3 rounded-lg bg-[#FFF9EB] text-[#7A6226] border border-[#F2E3B8] text-sm">
+          Super Admin can add custom roles from Add User. New roles are assigned to users immediately.
         </div>}
 
       <UserListTable
@@ -231,7 +314,7 @@ export default function UserManagementPanel() {
       />
       
 
-      {totalPages > 1 && <div className="flex items-center justify-center gap-2 mt-4">
+      {totalPages > 1 && <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
           <Button type="button" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)} className="h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm disabled:opacity-40">
           
             Previous
@@ -245,7 +328,7 @@ export default function UserManagementPanel() {
           </Button>
         </div>}
 
-      {formMode && <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {formMode && <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
           <Button type="button" className="absolute inset-0 bg-[#B48A2C]/40" aria-label="Close" onClick={() => {
         if (!isSaving) {
           setFormMode(null);
@@ -253,11 +336,13 @@ export default function UserManagementPanel() {
         }
       }} />
         
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#E5E7EB] p-6">
+          <div className="relative w-full max-w-md max-h-[calc(100vh-1.5rem)] overflow-y-auto rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-5">
               {formMode === "create" ? "Add Admin User" : "Edit User"}
             </h2>
-            <UserFormModal mode={formMode} initialUser={editingUser} isSaving={isSaving} onSubmit={data => {
+            <UserFormModal mode={formMode} initialUser={editingUser} availableRoles={availableRoles} onRoleAdded={(role) => {
+          setCustomRoles((prev) => (prev.includes(role) ? prev : [...prev, role]));
+        }} isSaving={isSaving} onSubmit={data => {
           if (formMode === "create") {
             void handleCreate(data as CreateUserFormValues);
           } else {
@@ -277,4 +362,6 @@ export default function UserManagementPanel() {
           </div>
         </div>}
     </>;
-}
+});
+
+export default UserManagementPanel;

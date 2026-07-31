@@ -111,7 +111,7 @@ export function computePackageStats(packages: PackageRecord[]): PackageStats {
     published: counts.published ?? 0,
     archived: counts.archived ?? 0,
     expiring_rates: packages.filter((pkg) => {
-      const validityTo = pkg.supplier_source?.validityTo;
+      const validityTo = (pkg.supplier_source as { validityTo?: string } | null)?.validityTo;
       if (!validityTo) return false;
       const expiry = new Date(validityTo);
       const now = new Date();
@@ -178,6 +178,32 @@ export async function archivePackageRecord(pkg: PackageRecord) {
     return parseApiResponse<{ package: PackageRecord }>(response);
   }
   return archivePackage(pkg.id);
+}
+
+export async function sendSupplierQuoteEmail(
+  packageId: number,
+  payload: {
+    to: string[];
+    additionalTo?: string[];
+    subject: string;
+    body: string;
+    quoteData?: Record<string, unknown>;
+  }
+) {
+  const response = await authenticatedFetch(
+    `/api/packages/${packageId}/supplier-quotes/send`,
+    {
+      method: "POST",
+      headers: requestHeaders(true),
+      body: JSON.stringify(payload),
+    }
+  );
+  return parseApiResponse<{
+    success: boolean;
+    messageId: string;
+    package: PackageRecord;
+    recipients: { to: string[]; cc: string[]; bcc: string[] };
+  }>(response);
 }
 
 export type { PackageListSource, PackageStats };

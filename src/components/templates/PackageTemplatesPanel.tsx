@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icons";
-import { useAuth } from "@/components/auth/AuthProvider";
+import { usePermissions } from "@/components/auth/PermissionsProvider";
 import PackageTemplateListTable from "@/components/templates/PackageTemplateListTable";
 import PackageTemplateForm from "@/components/templates/PackageTemplateForm";
 import PackageTemplateDetailsModal from "@/components/templates/PackageTemplateDetailsModal";
@@ -30,8 +30,8 @@ import { NativeSelect } from "@/components/ui/native-select";
 type FormMode = "create" | "edit" | null;
 
 export default function PackageTemplatesPanel() {
-  const { user } = useAuth();
-  const canDelete = user?.role === "super_admin";
+  const { can } = usePermissions();
+  const canDelete = can("package_templates", "delete");
 
   const [templates, setTemplates] = useState<PackageTemplateRecord[]>([]);
   const [stats, setStats] = useState<PackageTemplatesStats | null>(null);

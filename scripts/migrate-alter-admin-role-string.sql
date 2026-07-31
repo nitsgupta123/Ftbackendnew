@@ -1,0 +1,4 @@
+USE fz;
+
+ALTER TABLE admin_users
+  MODIFY COLUMN role VARCHAR(60) NOT NULL DEFAULT 'admin';

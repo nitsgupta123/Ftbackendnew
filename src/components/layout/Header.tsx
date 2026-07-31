@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { getUserInitials } from "@/lib/auth-storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import BrandLogo from "./BrandLogo";
 
 interface BreadcrumbItem {
   label: string;
@@ -16,12 +17,17 @@ interface BreadcrumbItem {
 interface HeaderProps {
   breadcrumbs: BreadcrumbItem[];
   onMenuToggle: () => void;
+  sidebarCollapsed?: boolean;
 }
 
 const headerControlClass =
   "h-10 shrink-0 rounded-xl border border-[#E5E7EB] bg-white text-[#1F2A44] hover:bg-gray-50 transition-colors";
 
-export default function Header({ breadcrumbs, onMenuToggle }: HeaderProps) {
+export default function Header({
+  breadcrumbs,
+  onMenuToggle,
+  sidebarCollapsed = false,
+}: HeaderProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -35,20 +41,22 @@ export default function Header({ breadcrumbs, onMenuToggle }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-[#E5E7EB] bg-white px-4 shadow-sm lg:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b border-[#E5E7EB] bg-white px-3 shadow-sm sm:gap-3 sm:px-4 lg:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <Button
           onClick={onMenuToggle}
           variant="ghost"
-          className={`lg:hidden ${headerControlClass} w-10 p-0 text-gray-500 hover:text-gray-700`}
+          className={`${headerControlClass} w-10 p-0 text-gray-500 hover:text-gray-700 ${
+            sidebarCollapsed ? "" : "lg:hidden"
+          }`}
+          aria-label={sidebarCollapsed ? "Open sidebar" : "Close sidebar"}
         >
           <Icon name="Menu" size={20} />
         </Button>
 
-        <nav
-          className="flex items-center gap-2 overflow-hidden text-sm whitespace-nowrap"
-          aria-label="Breadcrumb"
-        >
+        {sidebarCollapsed && <BrandLogo className="h-8" />}
+
+        <nav className="max-w-[45vw] overflow-x-auto whitespace-nowrap text-sm sm:max-w-none" aria-label="Breadcrumb">
           {breadcrumbs.map((crumb, index) => (
             <div key={crumb.label} className="flex shrink-0 items-center gap-2">
               {index > 0 && <span className="text-gray-300">/</span>}
@@ -75,9 +83,9 @@ export default function Header({ breadcrumbs, onMenuToggle }: HeaderProps) {
         </nav>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+      <div className="flex min-w-0 shrink-0 items-center gap-1 sm:gap-2">
         <div
-          className={`hidden md:flex h-10 w-48 items-center gap-2 px-3 lg:w-64 ${headerControlClass}`}
+          className={`hidden h-10 items-center gap-2 px-3 md:flex md:min-w-[180px] md:max-w-xs md:flex-1 lg:min-w-[240px] ${headerControlClass}`}
         >
           <Icon name="Search" size={14} className="shrink-0 text-gray-400" />
           <Input

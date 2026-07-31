@@ -37,6 +37,15 @@ export function packageAllPackagesHref(status: PackageStatusFilter = "all"): str
   return `/packages/all?status=${encodeURIComponent(status)}`;
 }
 
+/** Marketing / frontend asset attached under Package Highlights */
+export interface PackageMediaAsset {
+  id: string;
+  url: string;
+  altText?: string;
+  sourceUrl?: string;
+  filename?: string;
+}
+
 export interface MediaFrontendData {
   desktopHeroImage?: string | null;
   mobileHeroImage?: string | null;
@@ -47,8 +56,18 @@ export interface MediaFrontendData {
   secondaryCta?: string;
   whatsappNumber?: string;
   whatsappLink?: string;
+  /** Package highlight images for frontend marketing */
+  highlightImages?: PackageMediaAsset[];
+  /** Marketing banners for package pages */
+  marketingBanners?: PackageMediaAsset[];
+  /** Promotional assets (campaign creatives, overlays, etc.) */
+  promotionalAssets?: PackageMediaAsset[];
+  /** Package highlight graphics / icons */
+  highlightGraphics?: PackageMediaAsset[];
+  /** @deprecated Moved to Package Basics (`frontendNotes`) */
   frontEndSummary?: string;
   whyChooseThisPackage?: string;
+  /** @deprecated Moved to Package Basics (`importantInfo`) */
   clientFacingNotes?: string;
 }
 
@@ -94,19 +113,22 @@ export interface PricingData {
 export interface ItineraryDay {
   dayNumber: number;
   title?: string;
-  city?: string;
   description?: string;
   activitiesIncluded?: string;
-  optionalActivities?: string;
-  transport?: string;
-  hotelThatNight?: string;
+  highlights?: string;
   internalNotes?: string;
-  supplierNotes?: string;
   mobilityWarning?: string;
-  halalFoodNote?: string;
+  supplierNotes?: string;
+  dietaryNotes?: string;
   breakfast?: boolean;
   lunch?: boolean;
   dinner?: boolean;
+  /** @deprecated Legacy fields retained for existing package JSON */
+  city?: string;
+  optionalActivities?: string;
+  transport?: string;
+  hotelThatNight?: string;
+  halalFoodNote?: string;
   guideIncluded?: boolean;
   imageUrl?: string | null;
 }
@@ -140,6 +162,9 @@ export interface InclusionsData {
   localFees?: string;
   nonRefundable?: string;
   consultantMustExplain?: boolean;
+  flightsIncluded?: boolean;
+  trainIncluded?: boolean;
+  transfersIncluded?: boolean;
 }
 
 export interface CancellationRow {
@@ -192,6 +217,15 @@ export interface SupplierQuoteToolData {
   negotiationNote?: string;
   includeDayByDayItinerary?: boolean;
   includeClientBudget?: boolean;
+  /** Supplier emails selected as To recipients */
+  toEmails?: string[];
+  /** Extra To recipients added manually */
+  additionalEmails?: string[];
+  emailSubject?: string;
+  emailBody?: string;
+  lastSentAt?: string;
+  lastSentBy?: string | null;
+  lastSentTo?: string[];
 }
 
 export interface FaqItem {

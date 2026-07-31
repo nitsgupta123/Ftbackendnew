@@ -12,13 +12,13 @@ declare module "@fastify/jwt" {
       sub: number;
       email: string;
       name: string;
-      role: "admin" | "super_admin";
+      role: string;
     };
     user: {
       sub: number;
       email: string;
       name: string;
-      role: "admin" | "super_admin";
+      role: string;
     };
   }
 }

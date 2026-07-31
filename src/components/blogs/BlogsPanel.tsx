@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icons";
-import { useAuth } from "@/components/auth/AuthProvider";
+import { usePermissions } from "@/components/auth/PermissionsProvider";
 import BlogListTable from "@/components/blogs/BlogListTable";
 import BlogDetailsModal from "@/components/blogs/BlogDetailsModal";
 import WriteNewBlogLink from "@/components/blogs/WriteNewBlogLink";
-import { getBlogStats, listBlogPosts } from "@/lib/blog-api";
+import { getBlogStats, listBlogAuthors, listBlogPosts } from "@/lib/blog-api";
 import {
   BLOG_SORT_OPTIONS,
   BLOG_STATUS_FILTER_OPTIONS,
@@ -60,8 +60,8 @@ function StatCard({
 }
 
 export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: BlogsPanelProps) {
-  const { user } = useAuth();
-  const canDelete = user?.role === "super_admin";
+  const { can } = usePermissions();
+  const canDelete = can("blogs", "delete");
 
   const [posts, setPosts] = useState<BlogPostRecord[]>([]);
   const [stats, setStats] = useState<BlogStats | null>(null);
@@ -72,7 +72,9 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<BlogStatusFilter>(defaultStatus ?? "all");
-  const [sort, setSort] = useState<"published_at" | "created_at" | "title">("published_at");
+  const [authorFilter, setAuthorFilter] = useState("all");
+  const [authors, setAuthors] = useState<string[]>([]);
+  const [sort, setSort] = useState<"published_at" | "created_at" | "title" | "author_name">("published_at");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [viewingPost, setViewingPost] = useState<BlogPostRecord | null>(null);
@@ -90,6 +92,28 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
     }
   }, []);
 
+  const loadAuthors = useCallback(async () => {
+    try {
+      const result = await listBlogAuthors();
+      setAuthors(result);
+    } catch {
+      // Fallback: collect distinct authors from a wide posts query
+      try {
+        const fallback = await listBlogPosts({ limit: 100, sort: "author_name", order: "asc" });
+        const names = [
+          ...new Set(
+            fallback.posts
+              .map((post) => post.author_name?.trim())
+              .filter((name): name is string => Boolean(name))
+          ),
+        ].sort((a, b) => a.localeCompare(b));
+        setAuthors(names);
+      } catch {
+        setAuthors([]);
+      }
+    }
+  }, []);
+
   const loadPosts = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -97,6 +121,7 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
       const result = await listBlogPosts({
         search: search.trim() || undefined,
         status: statusFilter,
+        author_name: authorFilter !== "all" ? authorFilter : undefined,
         sort,
         order,
         page,
@@ -105,19 +130,28 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
       setPosts(result.posts);
       setTotal(result.total);
       setTotalPages(result.totalPages);
+      // Keep author chips in sync with names seen on posts
+      setAuthors((prev) => {
+        const fromPosts = result.posts
+          .map((post) => post.author_name?.trim())
+          .filter((name): name is string => Boolean(name));
+        if (fromPosts.length === 0) return prev;
+        return [...new Set([...prev, ...fromPosts])].sort((a, b) => a.localeCompare(b));
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load blog posts");
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, sort, order, page]);
+  }, [search, statusFilter, authorFilter, sort, order, page]);
 
   useEffect(() => {
     queueMicrotask(() => {
       void loadStats();
+      void loadAuthors();
       void loadPosts();
     });
-  }, [loadStats, loadPosts]);
+  }, [loadStats, loadAuthors, loadPosts]);
 
   useEffect(() => {
     if (defaultStatus) {
@@ -127,13 +161,14 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
 
   const emptyMessage = useMemo(() => {
     if (search.trim()) return `No posts match "${search.trim()}".`;
+    if (authorFilter !== "all") return `No posts found for author "${authorFilter}".`;
     if (statusFilter !== "all") {
       const label =
         BLOG_STATUS_FILTER_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter;
       return `No ${label.toLowerCase()} posts found.`;
     }
     return "No blog posts found. Write your first post to get started.";
-  }, [search, statusFilter]);
+  }, [search, statusFilter, authorFilter]);
 
   const featuredOnPage = useMemo(
     () => posts.filter((post) => post.is_featured).length,
@@ -262,9 +297,26 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
             )}
 
             <NativeSelect
+              value={authorFilter}
+              onChange={(e) => {
+                setAuthorFilter(e.target.value);
+                setPage(1);
+              }}
+              wrapperClassName="w-auto shrink-0"
+              className={`min-w-[150px] px-3 pr-9 ${filterControlClass}`}
+            >
+              <option value="all">All authors</option>
+              {authors.map((author) => (
+                <option key={author} value={author}>
+                  {author}
+                </option>
+              ))}
+            </NativeSelect>
+
+            <NativeSelect
               value={sort}
               onChange={(e) =>
-                setSort(e.target.value as "published_at" | "created_at" | "title")
+                setSort(e.target.value as "published_at" | "created_at" | "title" | "author_name")
               }
               wrapperClassName="w-auto shrink-0"
               className={`min-w-[150px] px-3 pr-9 ${filterControlClass}`}
@@ -322,6 +374,7 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
           onPostRemoved={(id) => {
             setPosts((prev) => prev.filter((p) => p.id !== id));
             setTotal((t) => Math.max(0, t - 1));
+            void loadAuthors();
           }}
         />
 

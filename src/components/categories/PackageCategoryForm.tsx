@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 const inputClass = "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
 const textareaClass = "w-full px-3 py-2.5 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C] resize-y min-h-[88px]";
 interface PackageCategoryFormProps {
@@ -20,24 +21,24 @@ interface PackageCategoryFormProps {
   onSubmit: (data: CreateCategoryFormValues) => Promise<void>;
   onCancel: () => void;
 }
-function ToggleSwitch({
+
+function FeaturedCategoryToggle({
   label,
   enabled,
-  onChange
+  onChange,
 }: {
   label: string;
   enabled: boolean;
   onChange: (value: boolean) => void;
 }) {
-  return <div className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-4 py-3">
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-4 py-3">
       <span className="text-sm font-medium text-[#334155]">{label}</span>
-      <Button type="button" role="switch" aria-checked={enabled} onClick={() => onChange(!enabled)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? "bg-[#27AE60]" : "bg-[#CBD5E1]"}`}>
-        
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition ${enabled ? "translate-x-6" : "translate-x-1"}`} />
-        
-      </Button>
-    </div>;
+      <ToggleSwitch checked={enabled} onCheckedChange={onChange} />
+    </div>
+  );
 }
+
 export default function PackageCategoryForm({
   initialData,
   isSaving = false,
@@ -167,7 +168,7 @@ export default function PackageCategoryForm({
 
         <Controller control={control} name="is_featured" render={({
         field
-      }) => <ToggleSwitch label="Featured Category" enabled={field.value ?? false} onChange={field.onChange} />} />
+      }) => <FeaturedCategoryToggle label="Featured Category" enabled={field.value ?? false} onChange={field.onChange} />} />
         
       </div>
 

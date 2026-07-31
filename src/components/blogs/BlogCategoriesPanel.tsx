@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/components/auth/AuthProvider";
+import { usePermissions } from "@/components/auth/PermissionsProvider";
 import BlogCategoryListTable from "@/components/blogs/BlogCategoryListTable";
 import BlogCategoryForm from "@/components/blogs/BlogCategoryForm";
 import {
@@ -59,8 +59,8 @@ function StatCard({
 }
 
 export default function BlogCategoriesPanel() {
-  const { user } = useAuth();
-  const canDelete = user?.role === "super_admin";
+  const { can } = usePermissions();
+  const canDelete = can("blog_categories", "delete");
 
   const [categories, setCategories] = useState<BlogCategoryRecord[]>([]);
   const [total, setTotal] = useState(0);
