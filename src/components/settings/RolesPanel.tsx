@@ -123,13 +123,15 @@ export default function RolesPanel() {
     canManage,
     allUsers,
     rolePermissions: roleState.rolePermissions,
-    fallbackPermissions: roleState.draft,
+    fallbackPermissions: roleState.rolePermissions.admin ?? roleState.draft,
     defaultProfiles: DEFAULT_EMPLOYEE_PROFILES,
     currentUserName: user?.fullName,
+    currentUserId: user?.id,
     onPushActivity: pushActivity,
     onError: roleState.setError,
     onSuccess: roleState.setSuccess,
     onUsersUpdated: setAllUsers,
+    refreshMyPermissions,
   });
 
   const reloadData = async () => {
@@ -333,7 +335,9 @@ export default function RolesPanel() {
             onRoleChange={(userId, role) => {
               void employeeState.updateEmployeeRole(userId, role);
             }}
-            onManageAccess={employeeState.setManageAccessUserId}
+            onManageAccess={(userId) => {
+              void employeeState.openManageAccess(userId);
+            }}
           />
 
         </div>
@@ -357,16 +361,18 @@ export default function RolesPanel() {
         selectedEmployeeHasOverrides={employeeState.selectedEmployeeHasOverrides}
         selectedEmployeeOverrides={employeeState.selectedEmployeeOverrides}
         rolePermissions={roleState.rolePermissions}
-        fallbackPermissions={roleState.draft}
+        fallbackPermissions={roleState.rolePermissions.admin ?? roleState.draft}
         modulesByGroup={modulesByGroup}
         formatRoleLabel={formatRoleLabel}
+        loading={employeeState.loadingAccess}
+        saving={employeeState.savingAccess}
         onClose={() => employeeState.setManageAccessUserId(null)}
         onTogglePermission={employeeState.toggleEmployeePermission}
         onResetDefaults={() => {
-          employeeState.resetSelectedEmployeeOverrides();
+          void employeeState.resetSelectedEmployeeOverrides();
         }}
         onSave={() => {
-          employeeState.saveEmployeeAccess();
+          void employeeState.saveEmployeeAccess();
         }}
       />
 

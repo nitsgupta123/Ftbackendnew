@@ -1,6 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { PackageAuditContext } from "./audit-context";
 import { query } from "./db";
+import { nowMysqlDateTimeSgt } from "./format-date";
 import { slugify, uniqueSlug } from "./slug";
 import type {
   CmsPageRecord,
@@ -174,7 +175,7 @@ function resolvePublishedAt(
   if (status === "published") {
     if (publishedAt) return publishedAt;
     if (existingPublishedAt) return existingPublishedAt;
-    return new Date().toISOString().slice(0, 19).replace("T", " ");
+    return nowMysqlDateTimeSgt();
   }
   if (publishedAt !== undefined) {
     return publishedAt;

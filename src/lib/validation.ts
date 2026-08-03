@@ -232,14 +232,17 @@ export type UpdatePackageTemplateFormValues = z.infer<typeof updatePackageTempla
 
 const slugFieldSchema = z
   .string()
-  .transform((s) => (s.trim() === "" ? undefined : s))
-  .pipe(
-    z
-      .string()
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be lowercase with hyphens only")
-      .optional()
-  )
-  .optional();
+  .optional()
+  .nullable()
+  .transform((s) => {
+    if (s == null) return undefined;
+    const trimmed = s.trim();
+    return trimmed === "" ? undefined : trimmed;
+  })
+  .refine(
+    (s) => s === undefined || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s),
+    "Slug must be lowercase with hyphens only"
+  );
 
 export const blogPostStatusSchema = z.enum(["draft", "published", "archived"]);
 
@@ -249,7 +252,14 @@ export const createBlogPostSchema = z.object({
   excerpt: z.string().optional().nullable(),
   content: z.string().optional().nullable(),
   featured_image_path: z.string().optional().nullable(),
-  category_id: z.number().int().positive().optional().nullable(),
+  category_id: z.preprocess(
+    (value) => {
+      if (value === "" || value === "null" || value === undefined || value === null) return null;
+      const num = typeof value === "number" ? value : Number(value);
+      return Number.isFinite(num) && num > 0 ? num : null;
+    },
+    z.number().int().positive().nullable().optional()
+  ),
   author_name: z.string().optional().nullable(),
   status: blogPostStatusSchema.optional(),
   is_featured: z.boolean().optional(),

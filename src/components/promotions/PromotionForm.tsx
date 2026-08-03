@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Icon } from "@/components/ui/icons";
 import PackageMultiSelect from "@/components/promotions/PackageMultiSelect";
@@ -14,9 +14,21 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 const inputClass =
   "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
+
+const dateInputClass = cn(
+  inputClass,
+  "relative pr-10",
+  "[&::-webkit-calendar-picker-indicator]:absolute",
+  "[&::-webkit-calendar-picker-indicator]:inset-0",
+  "[&::-webkit-calendar-picker-indicator]:h-full",
+  "[&::-webkit-calendar-picker-indicator]:w-full",
+  "[&::-webkit-calendar-picker-indicator]:cursor-pointer",
+  "[&::-webkit-calendar-picker-indicator]:opacity-0"
+);
 
 export interface PromotionFormValues {
   title: string;
@@ -39,9 +51,65 @@ interface PromotionFormProps {
 
 function toDateInput(value: string | null | undefined): string {
   if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function openDatePicker(input: HTMLInputElement | null | undefined) {
+  if (!input) return;
+  input.focus();
+  try {
+    input.showPicker?.();
+  } catch {
+    // Browsers may reject showPicker outside a direct user gesture.
+  }
+}
+
+function DateField({
+  id,
+  value,
+  onChange,
+  onBlur,
+  name,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+  name: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="relative">
+      <Input
+        ref={inputRef}
+        id={id}
+        name={name}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        onClick={() => openDatePicker(inputRef.current)}
+        onPointerDown={(e) => e.stopPropagation()}
+        className={dateInputClass}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Open calendar"
+        className="absolute right-2 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+        onClick={() => openDatePicker(inputRef.current)}
+      >
+        <Icon name="Calendar" size={16} />
+      </button>
+    </div>
+  );
 }
 
 export default function PromotionForm({
@@ -108,38 +176,38 @@ export default function PromotionForm({
           <Label htmlFor="valid_from" className="block text-sm font-semibold text-[#334155] mb-1.5">
             Valid From
           </Label>
-          <div className="relative">
-            <Input
-              id="valid_from"
-              type="date"
-              className={`${inputClass} pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
-              {...register("valid_from")}
-            />
-            <Icon
-              name="Calendar"
-              size={16}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-            />
-          </div>
+          <Controller
+            control={control}
+            name="valid_from"
+            render={({ field }) => (
+              <DateField
+                id="valid_from"
+                name={field.name}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+              />
+            )}
+          />
         </div>
 
         <div className="md:col-span-3">
           <Label htmlFor="valid_to" className="block text-sm font-semibold text-[#334155] mb-1.5">
             Valid To
           </Label>
-          <div className="relative">
-            <Input
-              id="valid_to"
-              type="date"
-              className={`${inputClass} pr-10 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
-              {...register("valid_to")}
-            />
-            <Icon
-              name="Calendar"
-              size={16}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-            />
-          </div>
+          <Controller
+            control={control}
+            name="valid_to"
+            render={({ field }) => (
+              <DateField
+                id="valid_to"
+                name={field.name}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+              />
+            )}
+          />
         </div>
       </div>
 

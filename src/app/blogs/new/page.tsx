@@ -28,7 +28,16 @@ export default function NewBlogPage() {
         category_id: data.category_id ?? null,
       };
       const { post } = await createBlogPost(payload);
-      router.push(`/blogs/edit/${post.id}`);
+      const listPath =
+        post.status === "published"
+          ? "/blogs/published"
+          : post.status === "draft"
+            ? "/blogs/drafts"
+            : post.status === "archived"
+              ? "/blogs/archived"
+              : "/blogs/all";
+      router.push(listPath);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create blog post");
     } finally {

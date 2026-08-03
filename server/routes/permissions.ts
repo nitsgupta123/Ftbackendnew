@@ -1,14 +1,19 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { requireSuperAdmin } from "../lib/audit";
 import {
+  clearUserPermissionOverrides,
+  diffFromRoleDefaults,
+  getEffectivePermissionMatrix,
   getPermissionsPayload,
   getRolePermissionMatrix,
+  getUserPermissionOverrides,
   resetRolePermissions,
+  setUserPermissionOverrides,
   updateRolePermissions,
 } from "../../src/lib/permission-repository";
 import { ACCESS_MODULE_KEYS } from "../../src/lib/permission-types";
 import type { AdminRole } from "../../src/lib/auth-types";
+import { findAdminUserById } from "../../src/lib/auth-repository";
 
 const roleSchema = z
   .string()
@@ -28,6 +33,26 @@ const updatePermissionsSchema = z.object({
   permissions: z.array(modulePermissionSchema).min(1),
 });
 
+const updateUserPermissionsSchema = z.object({
+  permissions: z.array(modulePermissionSchema),
+});
+
+function canManageAccess(role: string | undefined): boolean {
+  return role === "super_admin" || role === "owner";
+}
+
+async function requireAccessManager(
+  request: { user?: { role?: string } },
+  reply: { status: (code: number) => { send: (body: unknown) => unknown } }
+) {
+  if (!canManageAccess(request.user?.role)) {
+    return reply.status(403).send({
+      error: "Forbidden",
+      message: "Only Super Admin or Owner can manage employee access",
+    });
+  }
+}
+
 export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
 
@@ -46,7 +71,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
   app.get("/me", async (request, reply) => {
     try {
       const role = (request.user.role ?? "admin") as AdminRole;
-      const matrix = await getRolePermissionMatrix(role);
+      const matrix = await getEffectivePermissionMatrix(request.user.sub, role);
       return reply.send({ matrix });
     } catch (error) {
       app.log.error(error);
@@ -57,8 +82,138 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  app.get("/users/:userId", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+
+    try {
+      const userId = Number((request.params as { userId?: string }).userId);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return reply.status(400).send({ error: "Invalid user id" });
+      }
+
+      const target = await findAdminUserById(userId);
+      if (!target) {
+        return reply.status(404).send({ error: "User not found" });
+      }
+
+      const [roleMatrix, overrides] = await Promise.all([
+        getRolePermissionMatrix(target.role as AdminRole),
+        getUserPermissionOverrides(userId),
+      ]);
+
+      return reply.send({
+        userId,
+        role: target.role,
+        rolePermissions: roleMatrix.permissions,
+        overrides,
+        effective: await getEffectivePermissionMatrix(userId, target.role as AdminRole),
+      });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error:
+          error instanceof Error ? error.message : "Failed to load user permissions",
+      });
+    }
+  });
+
+  app.put("/users/:userId", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+
+    try {
+      const userId = Number((request.params as { userId?: string }).userId);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return reply.status(400).send({ error: "Invalid user id" });
+      }
+
+      const target = await findAdminUserById(userId);
+      if (!target) {
+        return reply.status(404).send({ error: "User not found" });
+      }
+
+      const bodyParsed = updateUserPermissionsSchema.safeParse(request.body);
+      if (!bodyParsed.success) {
+        return reply.status(400).send({
+          error: "Validation failed",
+          details: bodyParsed.error.flatten().fieldErrors,
+        });
+      }
+
+      const allowed = new Set(ACCESS_MODULE_KEYS);
+      const unknown = bodyParsed.data.permissions.filter((p) => !allowed.has(p.moduleKey));
+      if (unknown.length > 0) {
+        return reply.status(400).send({
+          error: "Unknown module keys",
+          details: unknown.map((p) => p.moduleKey),
+        });
+      }
+
+      const roleMatrix = await getRolePermissionMatrix(target.role as AdminRole);
+      const onlyDiffs = diffFromRoleDefaults(
+        roleMatrix.permissions,
+        bodyParsed.data.permissions
+      );
+      const overrides = await setUserPermissionOverrides(userId, onlyDiffs);
+      const effective = await getEffectivePermissionMatrix(
+        userId,
+        target.role as AdminRole
+      );
+
+      return reply.send({
+        userId,
+        role: target.role,
+        overrides,
+        effective,
+      });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error:
+          error instanceof Error ? error.message : "Failed to update user permissions",
+      });
+    }
+  });
+
+  app.delete("/users/:userId", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+
+    try {
+      const userId = Number((request.params as { userId?: string }).userId);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return reply.status(400).send({ error: "Invalid user id" });
+      }
+
+      const target = await findAdminUserById(userId);
+      if (!target) {
+        return reply.status(404).send({ error: "User not found" });
+      }
+
+      await clearUserPermissionOverrides(userId);
+      const effective = await getEffectivePermissionMatrix(
+        userId,
+        target.role as AdminRole
+      );
+
+      return reply.send({
+        userId,
+        role: target.role,
+        overrides: [],
+        effective,
+      });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error:
+          error instanceof Error ? error.message : "Failed to reset user permissions",
+      });
+    }
+  });
+
   app.put("/:role", async (request, reply) => {
-    const denied = await requireSuperAdmin(request, reply);
+    const denied = await requireAccessManager(request, reply);
     if (denied) return;
 
     try {
@@ -103,7 +258,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/:role/reset", async (request, reply) => {
-    const denied = await requireSuperAdmin(request, reply);
+    const denied = await requireAccessManager(request, reply);
     if (denied) return;
 
     try {

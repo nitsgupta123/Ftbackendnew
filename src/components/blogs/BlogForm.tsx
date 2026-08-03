@@ -144,11 +144,34 @@ export default function BlogForm({
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
-    await onSubmit({ ...data, tags });
+    await onSubmit({
+      ...data,
+      title: data.title.trim(),
+      slug: data.slug?.trim() || undefined,
+      excerpt: data.excerpt?.trim() || null,
+      content: data.content || null,
+      featured_image_path: data.featured_image_path?.trim() || null,
+      author_name: data.author_name?.trim() || null,
+      category_id: data.category_id ?? null,
+      status: data.status ?? "draft",
+      tags,
+    });
   }
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+    <form
+      onSubmit={handleSubmit(handleFormSubmit, (formErrors) => {
+        const first = Object.values(formErrors)[0];
+        const message =
+          first && typeof first === "object" && "message" in first && first.message
+            ? String(first.message)
+            : "Please fix the highlighted fields before saving.";
+        const titleEl = document.getElementById("title");
+        titleEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+        window.alert(message);
+      })}
+      className="space-y-6"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-5">
           <div>
@@ -227,20 +250,33 @@ export default function BlogForm({
               >
                 Category
               </Label>
-              <NativeSelect
-                id="category_id"
-                className={inputClass}
-                {...register("category_id", {
-                  setValueAs: (v) => (v === "" || v === "null" ? null : Number(v)),
-                })}
-              >
-                <option value="">No category</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="category_id"
+                render={({ field }) => (
+                  <NativeSelect
+                    id="category_id"
+                    className={inputClass}
+                    value={field.value == null ? "" : String(field.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      field.onChange(value === "" ? null : Number(value));
+                    }}
+                    onBlur={field.onBlur}
+                    ref={field.ref}
+                  >
+                    <option value="">No category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                )}
+              />
+              {errors.category_id && (
+                <p className="mt-1 text-xs text-red-600">{errors.category_id.message}</p>
+              )}
             </div>
 
             <div>

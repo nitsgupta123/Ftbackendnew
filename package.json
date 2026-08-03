@@ -22,6 +22,7 @@
     "db:migrate:settings": "node scripts/run-migrate-settings.mjs",
     "db:migrate:quote-emails": "node scripts/run-migrate-quote-management-emails.mjs",
     "db:migrate:permissions": "node scripts/run-migrate-permissions.mjs",
+    "db:migrate:user-permissions": "node scripts/run-migrate-user-permissions.mjs",
     "db:migrate:blogs": "node scripts/run-migrate-blogs.mjs",
     "db:migrate:pages": "node scripts/run-migrate-pages.mjs",
     "db:migrate:suppliers": "node scripts/run-migrate-suppliers.mjs",

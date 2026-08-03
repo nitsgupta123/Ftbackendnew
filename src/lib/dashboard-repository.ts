@@ -390,7 +390,7 @@ export async function getDashboardOverview(chartDays = 7): Promise<DashboardOver
   const stats = await getDashboardStats();
   const [chart, activities] = await Promise.all([
     getEnquiryChart(chartDays),
-    getRecentActivities(),
+    getRecentActivities(20),
   ]);
 
   return {

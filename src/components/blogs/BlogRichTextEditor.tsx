@@ -260,6 +260,54 @@ function normalizeYoutubeUrl(url: string) {
   return trimmed;
 }
 
+function normalizeHref(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^(https?:|mailto:|tel:|\/|#)/i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function insertLinkOrEmbed(editor: Editor, rawUrl: string) {
+  const href = normalizeHref(rawUrl);
+  if (!href) return false;
+
+  // YouTube URLs become embeds so they actually appear on the page.
+  if (isYoutubeUrl(href)) {
+    const normalized = normalizeYoutubeUrl(href);
+    return editor
+      .chain()
+      .focus()
+      .setYoutubeVideo({
+        src: normalized,
+        width: 640,
+        height: 360,
+      })
+      .run();
+  }
+
+  const { empty, from, to } = editor.state.selection;
+  const selectedText = empty ? "" : editor.state.doc.textBetween(from, to, " ");
+
+  if (!selectedText.trim()) {
+    return editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "text",
+        text: href,
+        marks: [{ type: "link", attrs: { href, target: "_blank", rel: "noopener noreferrer" } }],
+      })
+      .run();
+  }
+
+  return editor
+    .chain()
+    .focus()
+    .extendMarkRange("link")
+    .setLink({ href, target: "_blank", rel: "noopener noreferrer" })
+    .run();
+}
+
 function setBlockLineHeight(editor: Editor, lineHeight: string) {
   const { state, view } = editor;
   const { $from } = state.selection;
@@ -763,11 +811,14 @@ function GoogleDocsToolbar({
             const previousUrl = editor.getAttributes("link").href as string | undefined;
             const url = window.prompt("Enter URL", previousUrl ?? "https://");
             if (url === null) return;
-            if (url === "") {
-              editor.chain().focus().unsetLink().run();
+            if (url.trim() === "") {
+              editor.chain().focus().extendMarkRange("link").unsetLink().run();
               return;
             }
-            editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+            const inserted = insertLinkOrEmbed(editor, url);
+            if (!inserted) {
+              window.alert("Could not insert this link. Please try again.");
+            }
           }}
         >
           <Link2 className="h-4 w-4" />
@@ -999,9 +1050,22 @@ export default function BlogRichTextEditor({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4] } }),
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3, 4] },
+        link: false,
+        underline: false,
+      }),
       Underline,
-      Link.configure({ openOnClick: false, autolink: true }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: "https",
+        HTMLAttributes: {
+          class: "blog-editor-link",
+          target: "_blank",
+          rel: "noopener noreferrer",
+        },
+      }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TextStyle,
       Color,

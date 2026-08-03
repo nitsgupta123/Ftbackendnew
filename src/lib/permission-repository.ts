@@ -19,7 +19,67 @@ interface PermissionRow extends RowDataPacket {
 }
 
 const BUILTIN_ROLES: AdminRole[] = ["admin", "super_admin"];
-const BUILTIN_ROLE_SET = new Set(BUILTIN_ROLES);
+
+interface UserPermissionRow extends RowDataPacket {
+  user_id: number;
+  module_key: string;
+  can_view: number | boolean;
+  can_edit: number | boolean;
+  can_delete: number | boolean;
+}
+
+let userPermissionsTableReady = false;
+
+async function ensureUserPermissionsTable(): Promise<void> {
+  if (userPermissionsTableReady) return;
+  await query<ResultSetHeader>(
+    `
+      CREATE TABLE IF NOT EXISTS user_permissions (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id INT UNSIGNED NOT NULL,
+        module_key VARCHAR(80) NOT NULL,
+        can_view TINYINT(1) NOT NULL DEFAULT 0,
+        can_edit TINYINT(1) NOT NULL DEFAULT 0,
+        can_delete TINYINT(1) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uq_user_module (user_id, module_key),
+        KEY idx_user_permissions_user (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `
+  );
+  userPermissionsTableReady = true;
+}
+
+function mapUserRow(row: UserPermissionRow): ModulePermission {
+  return {
+    moduleKey: row.module_key,
+    canView: Boolean(row.can_view),
+    canEdit: Boolean(row.can_edit),
+    canDelete: Boolean(row.can_delete),
+  };
+}
+
+function normalizeStoredPermission(perm: ModulePermission): ModulePermission {
+  const canEdit = Boolean(perm.canEdit);
+  const canDelete = Boolean(perm.canDelete);
+  const canView = Boolean(perm.canView) || canEdit || canDelete;
+  return {
+    moduleKey: perm.moduleKey,
+    canView,
+    canEdit,
+    canDelete,
+  };
+}
+
+function permissionsEqual(a: ModulePermission, b: ModulePermission): boolean {
+  return (
+    a.moduleKey === b.moduleKey &&
+    a.canView === b.canView &&
+    a.canEdit === b.canEdit &&
+    a.canDelete === b.canDelete
+  );
+}
 
 function mapRow(row: PermissionRow): ModulePermission {
   return {
@@ -144,9 +204,92 @@ export async function getRolePermissionMatrix(
   role: AdminRole
 ): Promise<RolePermissionMatrix> {
   await ensureRolePermissionsSeeded();
-  const resolvedRole = BUILTIN_ROLE_SET.has(role) ? role : "admin";
-  const rows = await listStoredPermissions(resolvedRole);
+  const rows = await listStoredPermissions(role);
   return mergeMatrix(role, rows);
+}
+
+export async function getUserPermissionOverrides(
+  userId: number
+): Promise<ModulePermission[]> {
+  await ensureUserPermissionsTable();
+  const rows = await query<UserPermissionRow[]>(
+    `
+      SELECT user_id, module_key, can_view, can_edit, can_delete
+      FROM user_permissions
+      WHERE user_id = ?
+      ORDER BY module_key ASC
+    `,
+    [userId]
+  );
+  return rows.map(mapUserRow);
+}
+
+export async function setUserPermissionOverrides(
+  userId: number,
+  permissions: ModulePermission[]
+): Promise<ModulePermission[]> {
+  await ensureUserPermissionsTable();
+
+  const allowedKeys = new Set(ACCESS_MODULES.map((m) => m.key));
+  const normalized = permissions
+    .filter((perm) => allowedKeys.has(perm.moduleKey))
+    .map(normalizeStoredPermission);
+
+  await query<ResultSetHeader>(`DELETE FROM user_permissions WHERE user_id = ?`, [userId]);
+
+  for (const perm of normalized) {
+    await query<ResultSetHeader>(
+      `
+        INSERT INTO user_permissions (user_id, module_key, can_view, can_edit, can_delete)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [
+        userId,
+        perm.moduleKey,
+        perm.canView ? 1 : 0,
+        perm.canEdit ? 1 : 0,
+        perm.canDelete ? 1 : 0,
+      ]
+    );
+  }
+
+  return getUserPermissionOverrides(userId);
+}
+
+export async function clearUserPermissionOverrides(userId: number): Promise<void> {
+  await ensureUserPermissionsTable();
+  await query<ResultSetHeader>(`DELETE FROM user_permissions WHERE user_id = ?`, [userId]);
+}
+
+/** Role matrix with per-user overrides applied (overrides win when present). */
+export async function getEffectivePermissionMatrix(
+  userId: number,
+  role: AdminRole
+): Promise<RolePermissionMatrix> {
+  const roleMatrix = await getRolePermissionMatrix(role);
+  const overrides = await getUserPermissionOverrides(userId);
+  if (!overrides.length) return roleMatrix;
+
+  const overrideMap = new Map(overrides.map((row) => [row.moduleKey, row]));
+  return {
+    role,
+    permissions: roleMatrix.permissions.map((row) => overrideMap.get(row.moduleKey) ?? row),
+  };
+}
+
+/** Keep only modules that differ from the role defaults. */
+export function diffFromRoleDefaults(
+  rolePermissions: ModulePermission[],
+  overrides: ModulePermission[]
+): ModulePermission[] {
+  const roleMap = new Map(rolePermissions.map((row) => [row.moduleKey, row]));
+  return overrides
+    .map(normalizeStoredPermission)
+    .filter((row) => {
+      const roleDefault = roleMap.get(row.moduleKey);
+      if (!roleDefault) return true;
+      return !permissionsEqual(row, roleDefault);
+    });
 }
 
 export async function updateRolePermissions(

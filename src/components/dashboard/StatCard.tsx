@@ -1,12 +1,24 @@
+import Link from "next/link";
 import { Icon } from "@/components/ui/icons";
 import type { StatCardData } from "@/lib/dashboard-data";
 
-export default function StatCard({ label, value, change, icon, iconBg, iconColor }: StatCardData) {
+export default function StatCard({
+  label,
+  value,
+  change,
+  icon,
+  iconBg,
+  iconColor,
+  href,
+}: StatCardData) {
   const isPositive = change > 0;
   const isNeutral = change === 0;
 
   return (
-    <div className="w-full min-h-[120px] rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:min-h-[140px] sm:p-5">
+    <Link
+      href={href}
+      className="block w-full min-h-[120px] rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-all hover:shadow-md hover:border-[#B48A2C]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B48A2C]/40 sm:min-h-[140px] sm:p-5"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className={`w-12 h-12 rounded-full ${iconBg} flex items-center justify-center flex-shrink-0`}>
           <Icon name={icon} size={24} className={iconColor} />
@@ -30,6 +42,6 @@ export default function StatCard({ label, value, change, icon, iconBg, iconColor
       <p className="mt-4 text-xl font-extrabold text-gray-900 leading-none">{value.toLocaleString()}</p>
       <p className="mt-2 text-sm font-bold text-gray-600">{label}</p>
       <p className="mt-1.5 text-xs font-semibold text-gray-400">vs last month</p>
-    </div>
+    </Link>
   );
 }

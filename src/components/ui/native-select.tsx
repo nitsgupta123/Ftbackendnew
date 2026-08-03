@@ -12,8 +12,9 @@ function NativeSelect({
   className,
   wrapperClassName,
   size = "default",
+  ref,
   ...props
-}: NativeSelectProps) {
+}: NativeSelectProps & { ref?: React.Ref<HTMLSelectElement> }) {
   return (
     <div
       className={cn(
@@ -24,6 +25,7 @@ function NativeSelect({
       data-size={size}
     >
       <select
+        ref={ref}
         data-slot="native-select"
         data-size={size}
         className={cn(

@@ -8,6 +8,7 @@ export interface StatCardData {
   icon: string;
   iconBg: string;
   iconColor: string;
+  href: string;
 }
 
 export interface QuickActionItem {
@@ -50,6 +51,7 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-blue-50",
     iconColor: "text-blue-500",
     key: "pages",
+    href: "/pages/all",
   },
   {
     label: "Total Destinations",
@@ -57,6 +59,7 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-emerald-50",
     iconColor: "text-emerald-500",
     key: "destinations",
+    href: "/packages",
   },
   {
     label: "Total Packages",
@@ -64,6 +67,7 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-violet-50",
     iconColor: "text-violet-500",
     key: "packages",
+    href: "/packages/all",
   },
   {
     label: "Total Testimonials",
@@ -71,6 +75,7 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-amber-50",
     iconColor: "text-amber-500",
     key: "testimonials",
+    href: "/enquiry",
   },
   {
     label: "Total Blogs",
@@ -78,6 +83,7 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-yellow-50",
     iconColor: "text-yellow-500",
     key: "blogs",
+    href: "/blogs/all",
   },
   {
     label: "Total Products",
@@ -85,6 +91,7 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-red-50",
     iconColor: "text-red-500",
     key: "products",
+    href: "/packages/all",
   },
   {
     label: "Newsletter Subscribers",
@@ -92,6 +99,7 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-teal-50",
     iconColor: "text-teal-500",
     key: "newsletterSubscribers",
+    href: "/enquiry",
   },
 ];
 
@@ -150,6 +158,7 @@ export function buildStatCards(stats: DashboardStats): StatCardData[] {
       icon: config.icon,
       iconBg: config.iconBg,
       iconColor: config.iconColor,
+      href: config.href,
     };
   });
 }

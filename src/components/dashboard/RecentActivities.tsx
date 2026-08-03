@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import type { ActivityItem } from "@/lib/dashboard-data";
 import { Button } from "@/components/ui/button";
@@ -8,19 +11,31 @@ const STATUS_STYLES = {
   Pending: "bg-amber-50 text-amber-600",
 };
 
+const PREVIEW_COUNT = 5;
+
 interface RecentActivitiesProps {
   activities: ActivityItem[];
   loading?: boolean;
 }
 
 export default function RecentActivities({ activities, loading = false }: RecentActivitiesProps) {
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = activities.length > PREVIEW_COUNT;
+  const visibleActivities = expanded ? activities : activities.slice(0, PREVIEW_COUNT);
+
   return (
     <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold text-gray-900">Recent Activities</h3>
-        <Button className="text-sm text-[#B48A2C] hover:text-[#9a7624] font-medium transition-colors">
-          View All
-        </Button>
+        {canExpand && (
+          <Button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="h-8 px-3 text-sm font-medium"
+          >
+            {expanded ? "Show Less" : "View All"}
+          </Button>
+        )}
       </div>
 
       <ul className="space-y-1 flex-1">
@@ -30,10 +45,10 @@ export default function RecentActivities({ activities, loading = false }: Recent
         {!loading && !activities.length && (
           <li className="text-sm text-gray-400 py-6 text-center">No recent activity yet.</li>
         )}
-        {activities.map((activity) => (
+        {visibleActivities.map((activity) => (
           <li
             key={activity.id}
-            className="flex items-start gap-3 p-2.5 -mx-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+            className="flex items-start gap-3 p-2.5 -mx-2.5 rounded-lg hover:bg-gray-50 transition-colors group"
           >
             <div
               className={`w-8 h-8 rounded-lg ${activity.iconBg} flex items-center justify-center flex-shrink-0 mt-0.5`}

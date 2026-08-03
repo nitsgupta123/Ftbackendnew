@@ -11,6 +11,17 @@ import type {
   PermissionKey,
 } from "./types";
 
+function extendedEqual(a: ExtendedPermission, b: ExtendedPermission): boolean {
+  return (
+    a.moduleKey === b.moduleKey &&
+    a.canView === b.canView &&
+    a.canCreate === b.canCreate &&
+    a.canEdit === b.canEdit &&
+    a.canDelete === b.canDelete &&
+    a.canApprove === b.canApprove
+  );
+}
+
 type EmployeeAccessDrawerProps = {
   canManage: boolean;
   employee: ManageableUser | null;
@@ -21,6 +32,8 @@ type EmployeeAccessDrawerProps = {
   fallbackPermissions: ExtendedPermission[];
   modulesByGroup: ModuleGroupSection[];
   formatRoleLabel: (role: string) => string;
+  loading?: boolean;
+  saving?: boolean;
   onClose: () => void;
   onTogglePermission: (moduleKey: string, field: PermissionKey, value: boolean) => void;
   onResetDefaults: () => void;
@@ -37,12 +50,16 @@ export default function EmployeeAccessDrawer({
   fallbackPermissions,
   modulesByGroup,
   formatRoleLabel,
+  loading = false,
+  saving = false,
   onClose,
   onTogglePermission,
   onResetDefaults,
   onSave,
 }: EmployeeAccessDrawerProps) {
   if (!employee) return null;
+
+  const controlsDisabled = !canManage || loading || saving;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
@@ -58,13 +75,18 @@ export default function EmployeeAccessDrawer({
                 {formatRoleLabel(employee.role)}
               </p>
             </div>
-            <Button type="button" size="icon-sm" onClick={onClose}>
+            <Button type="button" size="icon-sm" onClick={onClose} disabled={saving}>
               <Icon name="X" size={14} />
             </Button>
           </div>
           {selectedEmployeeHasOverrides && (
             <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Warning: Individual permissions differ from assigned role defaults.
+            </div>
+          )}
+          {loading && (
+            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              Loading employee permissions...
             </div>
           )}
         </div>
@@ -114,8 +136,8 @@ export default function EmployeeAccessDrawer({
                       ) ?? null;
                     const custom = selectedEmployeeOverrides[mod.key];
                     const effective = custom ?? roleDefault;
-                    if (!effective) return null;
-                    const isCustom = Boolean(custom);
+                    if (!effective || !roleDefault) return null;
+                    const isCustom = Boolean(custom) && !extendedEqual(custom, roleDefault);
                     return (
                       <tr key={`${employee.id}-${mod.key}`} className="bg-white">
                         <td className="border-b border-[#EEF1F4] px-3 py-2 font-medium text-[#1F2A44]">
@@ -131,7 +153,7 @@ export default function EmployeeAccessDrawer({
                             <div className="inline-flex">
                               <Switch
                                 checked={Boolean(effective[field])}
-                                disabled={!canManage}
+                                disabled={controlsDisabled}
                                 onCheckedChange={(checked) =>
                                   onTogglePermission(mod.key, field, checked)
                                 }
@@ -161,11 +183,21 @@ export default function EmployeeAccessDrawer({
         </div>
 
         <div className="shrink-0 z-30 border-t border-[#E8ECF0] bg-white px-5 py-4 flex flex-col-reverse items-stretch justify-between gap-2 sm:flex-row sm:items-center">
-          <Button type="button" variant="outline" onClick={onResetDefaults}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onResetDefaults}
+            disabled={controlsDisabled || !selectedEmployeeHasOverrides}
+          >
             Reset to Role Defaults
           </Button>
-          <Button type="button" className="bg-[#A68231] text-white hover:opacity-90" onClick={onSave}>
-            Save Changes
+          <Button
+            type="button"
+            className="bg-[#A68231] text-white hover:opacity-90"
+            onClick={onSave}
+            disabled={controlsDisabled}
+          >
+            {saving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </div>

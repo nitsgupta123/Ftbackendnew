@@ -1,6 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { PackageAuditContext } from "./audit-context";
 import { query } from "./db";
+import { nowMysqlDateTimeSgt } from "./format-date";
 import { slugify, uniqueSlug } from "./slug";
 import type {
   BlogPostRecord,
@@ -145,7 +146,7 @@ export async function listBlogPosts(
         ? "p.created_at"
         : sort === "author_name"
           ? "p.author_name"
-          : "p.published_at";
+          : "COALESCE(p.published_at, p.created_at)";
   const sortOrder = order === "asc" ? "ASC" : "DESC";
 
   const countRows = await query<RowDataPacket[]>(
@@ -220,7 +221,7 @@ function resolvePublishedAt(
   if (status === "published") {
     if (publishedAt) return publishedAt;
     if (existingPublishedAt) return existingPublishedAt;
-    return new Date().toISOString().slice(0, 19).replace("T", " ");
+    return nowMysqlDateTimeSgt();
   }
   if (publishedAt !== undefined) {
     return publishedAt;

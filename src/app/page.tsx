@@ -122,6 +122,7 @@ export default function DashboardPage() {
                   icon: config.icon,
                   iconBg: config.iconBg,
                   iconColor: config.iconColor,
+                  href: config.href,
                 }))
               : statCards
             ).map((card) => (

@@ -113,7 +113,7 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
             <div>
               <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Content Preview</h3>
               <div
-                className="prose prose-sm max-w-none text-gray-700 border border-[#E5E7EB] rounded-xl p-4 bg-gray-50/50"
+                className="blog-content-preview prose prose-sm max-w-none text-gray-700 border border-[#E5E7EB] rounded-xl p-4 bg-gray-50/50"
                 dangerouslySetInnerHTML={{ __html: post.content }}
               />
             </div>

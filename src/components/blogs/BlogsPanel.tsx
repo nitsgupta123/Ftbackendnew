@@ -74,7 +74,9 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
   const [statusFilter, setStatusFilter] = useState<BlogStatusFilter>(defaultStatus ?? "all");
   const [authorFilter, setAuthorFilter] = useState("all");
   const [authors, setAuthors] = useState<string[]>([]);
-  const [sort, setSort] = useState<"published_at" | "created_at" | "title" | "author_name">("published_at");
+  const [sort, setSort] = useState<"published_at" | "created_at" | "title" | "author_name">(
+    "created_at"
+  );
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [viewingPost, setViewingPost] = useState<BlogPostRecord | null>(null);
@@ -154,9 +156,8 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
   }, [loadStats, loadAuthors, loadPosts]);
 
   useEffect(() => {
-    if (defaultStatus) {
-      setStatusFilter(defaultStatus);
-    }
+    setStatusFilter(defaultStatus ?? "all");
+    setPage(1);
   }, [defaultStatus]);
 
   const emptyMessage = useMemo(() => {

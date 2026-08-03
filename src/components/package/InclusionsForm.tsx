@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { Icon } from "../ui/icons";
 
@@ -18,16 +18,41 @@ interface InclusionsFormProps extends StepFormBaseProps {
   initialData?: InclusionsData | null;
 }
 
+function asStringArray(value: unknown, fallback: string[] = []): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+  return fallback;
+}
+
+function inclusionsSyncKey(data: InclusionsData | null | undefined): string | null {
+  if (!data) return null;
+  return JSON.stringify({
+    included: asStringArray(data.included),
+    excluded: asStringArray(data.excluded),
+    optionalAddons: asStringArray(data.optionalAddons),
+    localFees: data.localFees ?? "",
+    nonRefundable: data.nonRefundable ?? "",
+    consultantMustExplain: data.consultantMustExplain ?? true,
+    flightsIncluded: data.flightsIncluded ?? false,
+    trainIncluded: data.trainIncluded ?? false,
+    transfersIncluded: data.transfersIncluded ?? true,
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Tag Item Chip (used in Excluded & Optional add-ons columns)               */
 /* -------------------------------------------------------------------------- */
 function TagItem({
   label,
-  onRemove
-
-
-
-}: {label: string;onRemove: () => void;}) {
+  onRemove,
+}: {
+  label: string;
+  onRemove: () => void;
+}) {
   return (
     <div className="flex items-center justify-between bg-white border border-[#E5E7EB] rounded-[8px] px-4 py-[10px] transition-all duration-200 hover:border-gray-300 group">
       <span className="text-sm text-[#1F2A44] font-medium truncate pr-2">
@@ -35,14 +60,15 @@ function TagItem({
       </span>
       <Button
         type="button"
+        variant="ghost"
         onClick={onRemove}
         className="flex-shrink-0 w-[22px] h-[22px] flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-        aria-label={`Remove ${label}`}>
-        
+        aria-label={`Remove ${label}`}
+      >
         <X size={12} />
       </Button>
-    </div>);
-
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -51,68 +77,78 @@ function TagItem({
 function IncludedColumn({
   items,
   onAdd,
-  onRemove
-
-
-
-
-}: {items: string[];onAdd: (value: string) => void;onRemove: (index: number) => void;}) {
+  onRemove,
+}: {
+  items: string[];
+  onAdd: (value: string) => void;
+  onRemove: (index: number) => void;
+}) {
   const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleAdd = () => {
-    const trimmed = inputValue.trim();
-    if (trimmed) {
-      onAdd(trimmed);
-      setInputValue("");
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const trimmed = (inputRef.current?.value ?? inputValue).trim();
+    if (!trimmed) {
+      setError(true);
+      inputRef.current?.focus();
+      return;
     }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleAdd();
+    setError(false);
+    onAdd(trimmed);
+    setInputValue("");
+    if (inputRef.current) {
+      inputRef.current.value = "";
     }
   };
 
   return (
     <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-6 flex flex-col h-full">
-      {/* Title */}
       <h3 className="text-sm font-bold text-[#1F2A44] mb-4">Included</h3>
 
-      {/* Tag items (if any were added) */}
-      {items.length > 0 &&
-      <div className="space-y-2.5 mb-4">
-          {items.map((item, idx) =>
-        <TagItem
-          key={`${item}-${idx}`}
-          label={item}
-          onRemove={() => onRemove(idx)} />
-
-        )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Input
+            ref={inputRef}
+            type="text"
+            placeholder="Enter included item"
+            value={inputValue}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              if (error) setError(false);
+            }}
+            aria-invalid={error || undefined}
+            className="w-full h-[44px] px-4 text-sm border border-[#E5E7EB] rounded-[10px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300"
+          />
+          {error && (
+            <p className="mt-1.5 text-xs text-red-600">Enter an item before adding.</p>
+          )}
         </div>
-      }
 
-      {/* Empty text input */}
-      <Input
-        type="text"
-        placeholder="Enter included item"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        className="w-full h-[44px] px-4 text-sm border border-[#E5E7EB] rounded-[10px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300" />
-      
+        <button
+          type="submit"
+          className="w-fit h-[42px] px-4 text-sm font-medium text-white bg-[#1F2A44] border border-[#B48A2C] rounded-md hover:bg-[#283556] active:bg-[#1A2338] transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+        >
+          <Plus size={15} aria-hidden />
+          Add
+        </button>
+      </form>
 
-      {/* "+ Add" button */}
-      <Button
-        type="button"
-        onClick={handleAdd}
-        className="w-fit h-[42px] px-4 mt-4 text-sm font-medium text-white bg-[#1F2A44] rounded-md hover:bg-[#283556] active:bg-[#1A2338] transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
-        
-        <Plus size={15} />
-        Add
-      </Button>
-    </div>);
-
+      {items.length > 0 && (
+        <div className="space-y-2.5 mt-4">
+          {items.map((item, idx) => (
+            <TagItem
+              key={`${item}-${idx}`}
+              label={item}
+              onRemove={() => onRemove(idx)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -301,12 +337,17 @@ export default function InclusionsForm({
   initialData,
   isSaving = false,
 }: InclusionsFormProps) {
-  const [included, setIncluded] = useState<string[]>(initialData?.included ?? []);
-  const [excluded, setExcluded] = useState<string[]>(
-    initialData?.excluded ?? ["International", "Visa fees", "Travel insura", "City tax or to"]
+  const [included, setIncluded] = useState<string[]>(() => asStringArray(initialData?.included));
+  const [excluded, setExcluded] = useState<string[]>(() =>
+    asStringArray(initialData?.excluded, [
+      "International",
+      "Visa fees",
+      "Travel insura",
+      "City tax or to",
+    ])
   );
-  const [optionalAddons, setOptionalAddons] = useState<string[]>(
-    initialData?.optionalAddons ?? ["Travel insura", "Visa support", "Private guide"]
+  const [optionalAddons, setOptionalAddons] = useState<string[]>(() =>
+    asStringArray(initialData?.optionalAddons, ["Travel insura", "Visa support", "Private guide"])
   );
 
   const [localFees, setLocalFees] = useState(initialData?.localFees ?? "");
@@ -322,18 +363,25 @@ export default function InclusionsForm({
     initialData?.transfersIncluded ?? true
   );
 
+  const syncKey = inclusionsSyncKey(initialData);
+  const lastSyncedKey = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!initialData) return;
-    setIncluded(initialData.included ?? []);
-    setExcluded(initialData.excluded ?? []);
-    setOptionalAddons(initialData.optionalAddons ?? []);
+    if (!syncKey || !initialData) return;
+    // Only re-hydrate when saved/server inclusions actually change (not on new object refs).
+    if (lastSyncedKey.current === syncKey) return;
+    lastSyncedKey.current = syncKey;
+
+    setIncluded(asStringArray(initialData.included));
+    setExcluded(asStringArray(initialData.excluded));
+    setOptionalAddons(asStringArray(initialData.optionalAddons));
     setLocalFees(initialData.localFees ?? "");
     setNonRefundable(initialData.nonRefundable ?? "");
     setConsultantMustExplain(initialData.consultantMustExplain ?? true);
     setFlightsIncluded(initialData.flightsIncluded ?? false);
     setTrainIncluded(initialData.trainIncluded ?? false);
     setTransfersIncluded(initialData.transfersIncluded ?? true);
-  }, [initialData]);
+  }, [syncKey, initialData]);
 
   const textareaClass =
     "w-full min-h-[140px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300 resize-y";

@@ -47,6 +47,46 @@ export async function getMyPermissions(): Promise<{ matrix: RolePermissionMatrix
   return parseApiResponse<{ matrix: RolePermissionMatrix }>(response);
 }
 
+export interface UserPermissionsPayload {
+  userId: number;
+  role: string;
+  rolePermissions: ModulePermission[];
+  overrides: ModulePermission[];
+  effective: RolePermissionMatrix;
+}
+
+export async function getUserPermissions(
+  userId: number
+): Promise<UserPermissionsPayload> {
+  const response = await fetch(apiUrl(`/api/permissions/users/${userId}`), {
+    cache: "no-store",
+    headers: requestHeaders(),
+  });
+  return parseApiResponse<UserPermissionsPayload>(response);
+}
+
+export async function updateUserPermissions(
+  userId: number,
+  permissions: ModulePermission[]
+): Promise<UserPermissionsPayload> {
+  const response = await fetch(apiUrl(`/api/permissions/users/${userId}`), {
+    method: "PUT",
+    headers: requestHeaders(true),
+    body: JSON.stringify({ permissions }),
+  });
+  return parseApiResponse<UserPermissionsPayload>(response);
+}
+
+export async function resetUserPermissions(
+  userId: number
+): Promise<UserPermissionsPayload> {
+  const response = await fetch(apiUrl(`/api/permissions/users/${userId}`), {
+    method: "DELETE",
+    headers: requestHeaders(),
+  });
+  return parseApiResponse<UserPermissionsPayload>(response);
+}
+
 export async function updateRolePermissions(
   role: AdminRole,
   input: UpdateRolePermissionsInput

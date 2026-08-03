@@ -8,6 +8,12 @@ interface PackageAuditCardProps {
   packageData?: PackageRecord | null;
 }
 
+function formatAuditDateTime(value: string | null | undefined): string {
+  const formatted = formatPackageDateTime(value);
+  if (!value || formatted === "—") return "—";
+  return formatted.endsWith(" SGT") ? formatted : `${formatted} SGT`;
+}
+
 export default function PackageAuditCard({ packageData }: PackageAuditCardProps) {
   const createdBy = packageData?.created_by ?? null;
   const updatedBy = packageData?.updated_by ?? null;
@@ -15,10 +21,10 @@ export default function PackageAuditCard({ packageData }: PackageAuditCardProps)
   const updatedAt = packageData?.updated_at ?? null;
   const actingUser = updatedBy ?? createdBy ?? DEFAULT_AUDIT_USER;
   const createdSummary = createdBy
-    ? `${createdBy} · ${formatPackageDateTime(createdAt)}`
+    ? `${createdBy} · ${formatAuditDateTime(createdAt)}`
     : "—";
   const updatedSummary = updatedBy
-    ? `${updatedBy} · ${formatPackageDateTime(updatedAt)}`
+    ? `${updatedBy} · ${formatAuditDateTime(updatedAt)}`
     : "—";
 
   return (
@@ -52,7 +58,7 @@ export default function PackageAuditCard({ packageData }: PackageAuditCardProps)
 }
 
 export function formatAuditSummary(pkg: PackageRecord): string {
-  const date = formatPackageDateTime(pkg.updated_at);
+  const date = formatAuditDateTime(pkg.updated_at);
   const user = pkg.updated_by ?? pkg.created_by;
   return user ? `${date} · ${user}` : date;
 }

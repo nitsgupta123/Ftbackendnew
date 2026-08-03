@@ -61,6 +61,7 @@ export default function BlogModulePage({
         <BlogCategoriesPanel />
       ) : (
         <BlogsPanel
+          key={config.slug}
           defaultStatus={config.status}
           hideStatusFilter={Boolean(config.status)}
         />

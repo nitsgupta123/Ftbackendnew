@@ -49,7 +49,7 @@ export function normalizeExtended(list: ModulePermission[]): ExtendedPermission[
   }));
 }
 
-function toBasePermissions(list: ExtendedPermission[]): ModulePermission[] {
+export function toBasePermissions(list: ExtendedPermission[]): ModulePermission[] {
   return list.map((row) => ({
     moduleKey: row.moduleKey,
     canView: row.canView || row.canCreate || row.canEdit || row.canDelete || row.canApprove,

@@ -69,6 +69,8 @@ export default function AddPackagePage() {
     { label: packageId ? "Edit Package" : "Add Package" },
   ];
 
+  const loadedPackageIdRef = useRef<number | null>(null);
+
   useEffect(() => {
     const idParam = searchParams.get("id");
     const templateIdParam = searchParams.get("templateId");
@@ -76,6 +78,9 @@ export default function AddPackagePage() {
     if (idParam) {
       const id = Number(idParam);
       if (Number.isNaN(id)) return;
+      // Avoid duplicate fetches (e.g. Strict Mode) that re-stamp packageData and wipe in-progress step edits.
+      if (loadedPackageIdRef.current === id) return;
+      loadedPackageIdRef.current = id;
 
       queueMicrotask(() => {
         setIsLoading(true);
@@ -88,6 +93,7 @@ export default function AddPackagePage() {
             }
           })
           .catch((error) => {
+            loadedPackageIdRef.current = null;
             setSaveError(error instanceof Error ? error.message : "Failed to load package");
           })
           .finally(() => setIsLoading(false));

@@ -1,0 +1,18 @@
+CREATE DATABASE IF NOT EXISTS fz
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE fz;
+
+CREATE TABLE IF NOT EXISTS user_permissions (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id INT UNSIGNED NOT NULL,
+  module_key VARCHAR(80) NOT NULL,
+  can_view TINYINT(1) NOT NULL DEFAULT 0,
+  can_edit TINYINT(1) NOT NULL DEFAULT 0,
+  can_delete TINYINT(1) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_module (user_id, module_key),
+  KEY idx_user_permissions_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
