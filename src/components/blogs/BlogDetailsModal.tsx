@@ -17,9 +17,9 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <Button
+      <button
         type="button"
-        className="absolute inset-0 bg-[#B48A2C]/40"
+        className="absolute inset-0 cursor-default border-0 bg-black/40"
         aria-label="Close"
         onClick={onClose}
       />

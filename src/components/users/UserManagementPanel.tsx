@@ -13,6 +13,13 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import UserStatsGrid from "@/components/users/UserStatsGrid";
 import UserListTable from "@/components/users/UserListTable";
 import UserFormModal from "@/components/users/UserFormModal";
+import { getPermissions } from "@/lib/permission-api";
+import {
+  getKnownRolesFromStorage,
+  rememberKnownRole,
+  rememberKnownRoles,
+  ROLE_CATALOG_CHANGED_EVENT,
+} from "@/lib/role-catalog";
 import { createUser, getUserStats, listUsers, updateUser } from "@/lib/user-api";
 import type { AdminUser } from "@/lib/auth-types";
 import type { CreateUserFormValues } from "@/lib/auth-validation";
@@ -50,6 +57,7 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
   const [formMode, setFormMode] = useState<FormMode>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [customRoles, setCustomRoles] = useState<string[]>([]);
+  const [catalogRoles, setCatalogRoles] = useState<string[]>(() => getKnownRolesFromStorage());
   const [isSaving, setIsSaving] = useState(false);
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
@@ -62,6 +70,18 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       setStats(null);
     } finally {
       setStatsLoading(false);
+    }
+  }, []);
+  const loadCatalogRoles = useCallback(async () => {
+    try {
+      const permissionsResult = await getPermissions();
+      const fromApi = Array.from(
+        new Set(permissionsResult.matrices.map((matrix) => matrix.role))
+      );
+      const merged = rememberKnownRoles([...fromApi, ...getKnownRolesFromStorage()]);
+      setCatalogRoles(merged);
+    } catch {
+      setCatalogRoles(getKnownRolesFromStorage());
     }
   }, []);
   const loadUsers = useCallback(async () => {
@@ -89,8 +109,20 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
   useEffect(() => {
     queueMicrotask(() => {
       void loadStats();
+      void loadCatalogRoles();
     });
-  }, [loadStats]);
+  }, [loadStats, loadCatalogRoles]);
+  useEffect(() => {
+    const syncFromStorage = () => {
+      setCatalogRoles(getKnownRolesFromStorage());
+    };
+    window.addEventListener(ROLE_CATALOG_CHANGED_EVENT, syncFromStorage);
+    window.addEventListener("storage", syncFromStorage);
+    return () => {
+      window.removeEventListener(ROLE_CATALOG_CHANGED_EVENT, syncFromStorage);
+      window.removeEventListener("storage", syncFromStorage);
+    };
+  }, []);
   useEffect(() => {
     queueMicrotask(() => {
       void loadUsers();
@@ -105,7 +137,7 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
   }, [search, statusFilter, roleFilter]);
   const roleFilterOptions = useMemo(() => {
     const dynamicRoles = Array.from(
-      new Set([...users.map((user) => user.role), ...customRoles])
+      new Set([...catalogRoles, ...users.map((user) => user.role), ...customRoles])
     );
     const options = [...USER_ROLE_FILTER_OPTIONS];
     for (const roleOption of dynamicRoles) {
@@ -114,19 +146,20 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       }
     }
     return options;
-  }, [users, customRoles]);
+  }, [users, customRoles, catalogRoles]);
 
   const availableRoles = useMemo(() => {
     return Array.from(
       new Set([
         "admin",
         "super_admin",
+        ...catalogRoles,
         ...customRoles,
         ...users.map((user) => user.role),
         editingUser?.role ?? "",
       ].filter(Boolean))
     );
-  }, [users, editingUser, customRoles]);
+  }, [users, editingUser, customRoles, catalogRoles]);
   async function handleCreate(data: CreateUserFormValues) {
     setIsSaving(true);
     setError(null);
@@ -140,9 +173,13 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       setCustomRoles((prev) =>
         prev.includes(created.role) ? prev : [...prev, created.role]
       );
+      rememberKnownRole(created.role);
+      setCatalogRoles((prev) =>
+        prev.includes(created.role) ? prev : [...prev, created.role]
+      );
       setFormMode(null);
       setPage(1);
-      await Promise.all([loadUsers(), loadStats()]);
+      await Promise.all([loadUsers(), loadStats(), loadCatalogRoles()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create user");
     } finally {
@@ -162,9 +199,13 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
         user: updated
       } = await updateUser(editingUser.id, data);
       setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+      rememberKnownRole(updated.role);
+      setCatalogRoles((prev) =>
+        prev.includes(updated.role) ? prev : [...prev, updated.role]
+      );
       setFormMode(null);
       setEditingUser(null);
-      await loadStats();
+      await Promise.all([loadStats(), loadCatalogRoles()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update user");
     } finally {
@@ -172,15 +213,19 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
     }
   }
   function openCreate() {
+    setCatalogRoles(getKnownRolesFromStorage());
     setEditingUser(null);
     setFormMode("create");
+    void loadCatalogRoles();
   }
   function openEdit(user: AdminUser) {
+    setCatalogRoles(getKnownRolesFromStorage());
     setEditingUser(user);
     setFormMode("edit");
+    void loadCatalogRoles();
   }
 
-  useImperativeHandle(ref, () => ({ openCreate }), []);
+  useImperativeHandle(ref, () => ({ openCreate }), [openCreate]);
 
   return <>
       <div className="mb-6">
@@ -290,7 +335,7 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
           You have read-only access. Only Super Admins can create or edit users.
         </div>}
       {canManage && <div className="mb-4 px-4 py-3 rounded-lg bg-[#FFF9EB] text-[#7A6226] border border-[#F2E3B8] text-sm">
-          Super Admin can add custom roles from Add User. New roles are assigned to users immediately.
+          Roles from Role Management appear automatically when adding or editing users.
         </div>}
 
       <UserListTable
@@ -328,39 +373,57 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
           </Button>
         </div>}
 
-      {formMode && <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-          <Button type="button" className="absolute inset-0 bg-[#B48A2C]/40" aria-label="Close" onClick={() => {
-        if (!isSaving) {
-          setFormMode(null);
-          setEditingUser(null);
-        }
-      }} />
-        
+      {formMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+          <button
+            type="button"
+            className="absolute inset-0 border-0 bg-black/40"
+            aria-label="Close"
+            onClick={() => {
+              if (!isSaving) {
+                setFormMode(null);
+                setEditingUser(null);
+              }
+            }}
+          />
+
           <div className="relative w-full max-w-md max-h-[calc(100vh-1.5rem)] overflow-y-auto rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-5">
               {formMode === "create" ? "Add Admin User" : "Edit User"}
             </h2>
-            <UserFormModal mode={formMode} initialUser={editingUser} availableRoles={availableRoles} onRoleAdded={(role) => {
-          setCustomRoles((prev) => (prev.includes(role) ? prev : [...prev, role]));
-        }} isSaving={isSaving} onSubmit={data => {
-          if (formMode === "create") {
-            void handleCreate(data as CreateUserFormValues);
-          } else {
-            void handleUpdate(data as {
-              fullName: string;
-              role: AdminUser["role"];
-              isActive: boolean;
-            });
-          }
-        }} onCancel={() => {
-          if (!isSaving) {
-            setFormMode(null);
-            setEditingUser(null);
-          }
-        }} />
-          
+            <UserFormModal
+              mode={formMode}
+              initialUser={editingUser}
+              availableRoles={availableRoles}
+              onRoleAdded={(role) => {
+                rememberKnownRole(role);
+                setCustomRoles((prev) => (prev.includes(role) ? prev : [...prev, role]));
+                setCatalogRoles((prev) => (prev.includes(role) ? prev : [...prev, role]));
+              }}
+              isSaving={isSaving}
+              onSubmit={(data) => {
+                if (formMode === "create") {
+                  void handleCreate(data as CreateUserFormValues);
+                } else {
+                  void handleUpdate(
+                    data as {
+                      fullName: string;
+                      role: AdminUser["role"];
+                      isActive: boolean;
+                    }
+                  );
+                }
+              }}
+              onCancel={() => {
+                if (!isSaving) {
+                  setFormMode(null);
+                  setEditingUser(null);
+                }
+              }}
+            />
           </div>
-        </div>}
+        </div>
+      )}
     </>;
 });
 

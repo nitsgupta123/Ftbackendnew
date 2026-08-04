@@ -305,6 +305,8 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({
         success: true,
         messageId: mailResult.messageId,
+        mode: mailResult.mode,
+        previewUrl: mailResult.previewUrl,
         package: updated,
         recipients: {
           to: toEmails,

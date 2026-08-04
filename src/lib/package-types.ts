@@ -334,6 +334,12 @@ export interface SalesAdsAssetsData {
   socialAdCaptions?: string;
   consultantShareMessage?: string;
   whatsappLink?: string;
+  /** Snapshot used by the Generated sales image/card preview */
+  salesCardTitle?: string;
+  salesCardPrice?: string;
+  salesCardCta?: string;
+  salesCardImage?: string | null;
+  salesCardGeneratedAt?: string;
 }
 
 export interface SeoData {

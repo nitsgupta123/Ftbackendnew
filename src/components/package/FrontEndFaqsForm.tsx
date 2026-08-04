@@ -51,6 +51,21 @@ export default function FrontEndFaqsForm({
       answer: ""
     }]);
   };
+  const deleteFaq = (id: string) => {
+    setFaqs((prev) => {
+      if (prev.length <= 1) {
+        return [
+          {
+            id: String(Date.now()),
+            question: "",
+            visibility: "Show on front-end",
+            answer: "",
+          },
+        ];
+      }
+      return prev.filter((faq) => faq.id !== id);
+    });
+  };
   return <div className="space-y-6 animate-fade-in">
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-6 space-y-6">
         <div>
@@ -63,10 +78,21 @@ export default function FrontEndFaqsForm({
 
         <div className="space-y-4">
           {faqs.map((faq, index) => <div key={faq.id} className="rounded-[12px] border border-[#E5E7EB] p-5 space-y-5">
-            
-              <h3 className="text-sm font-bold text-[#1F2A44]">
-                FAQ {index + 1}
-              </h3>
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-sm font-bold text-[#1F2A44]">
+                  FAQ {index + 1}
+                </h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => deleteFaq(faq.id)}
+                  className="h-[36px] w-[36px] shrink-0 border-[#D1D5DB] text-gray-500 hover:text-red-600 hover:border-red-200"
+                  aria-label={`Delete FAQ ${index + 1}`}
+                  title="Delete FAQ"
+                >
+                  <Icon name="Trash2" size={16} />
+                </Button>
+              </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-x-6 gap-y-5">
                 <div>

@@ -55,14 +55,6 @@ function PricingRuleToggleField({
   );
 }
 
-function PillTag({ label }: { label: string }) {
-  return (
-    <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-[#A8832A] border border-[#A8832A]/40 rounded-full bg-[#FFF9EB]">
-      {label}
-    </span>
-  );
-}
-
 export default function PricingRuleForm({
   initialData,
   isSaving = false,
@@ -131,13 +123,6 @@ export default function PricingRuleForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="rounded-xl border border-[#F5E6C8] bg-[#FFF9EB] px-4 py-3 flex flex-wrap gap-2">
-        <PillTag label="Exchange rate" />
-        <PillTag label="Markup" />
-        <PillTag label="Finance approval" />
-        <PillTag label="Margin alerts" />
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
           <Label htmlFor="name" className="block text-sm font-semibold text-[#334155] mb-1.5">

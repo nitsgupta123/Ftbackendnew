@@ -121,18 +121,19 @@ select {
   pointer-events: none;
 }
 
-/* Keep gold CTA buttons gold (hardcoded bg-[#B48A2C] utilities) */
-button[class*="bg-[#B48A2C]"],
-a[class*="bg-[#B48A2C]"] {
+/* Keep gold CTA buttons gold (hardcoded bg-[#B48A2C] utilities).
+   Exclude opacity variants like bg-[#B48A2C]/40 used for modal backdrops. */
+button[class*="bg-[#B48A2C]"]:not([class*="bg-[#B48A2C]/"]),
+a[class*="bg-[#B48A2C]"]:not([class*="bg-[#B48A2C]/"]) {
   background-color: #b48a2c !important;
   color: #ffffff !important;
   border: 1px solid #b48a2c !important;
 }
 
-button[class*="hover:bg-[#B48A2C]"]:hover,
-a[class*="hover:bg-[#B48A2C]"]:hover,
-button[class*="bg-[#B48A2C]"]:hover,
-a[class*="bg-[#B48A2C]"]:hover {
+button[class*="hover:bg-[#B48A2C]"]:hover:not([class*="bg-[#B48A2C]/"]),
+a[class*="hover:bg-[#B48A2C]"]:hover:not([class*="bg-[#B48A2C]/"]),
+button[class*="bg-[#B48A2C]"]:hover:not([class*="bg-[#B48A2C]/"]),
+a[class*="bg-[#B48A2C]"]:hover:not([class*="bg-[#B48A2C]/"]) {
   background-color: #a8832a !important;
   border-color: #a8832a !important;
   color: #ffffff !important;

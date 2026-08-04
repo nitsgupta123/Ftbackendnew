@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Icon } from "@/components/ui/icons";
@@ -234,6 +234,7 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
   const [details, setDetails] = useState<PackageRecord | null>(pkg);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const summaryCardRef = useRef<HTMLDListElement | null>(null);
 
   useEffect(() => {
     if (!pkg) return;
@@ -277,15 +278,85 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
 
   const editHref = getPackageEditHref(details);
   const statusLabel = details.status.replaceAll("_", " ");
+  const handleOpenPdf = () => {
+    const content = summaryCardRef.current;
+    if (!content) return;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.setAttribute("aria-hidden", "true");
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument;
+    const win = iframe.contentWindow;
+    if (!doc || !win) {
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    const title = details.package_title || "Package Details";
+    const stylesheetNodes = Array.from(
+      document.querySelectorAll("style, link[rel='stylesheet']")
+    );
+    const copiedStyles = stylesheetNodes
+      .map((node) => {
+        if (node.tagName.toLowerCase() === "link") {
+          const href = (node as HTMLLinkElement).href;
+          return `<link rel="stylesheet" href="${href}" />`;
+        }
+        return node.outerHTML;
+      })
+      .join("\n");
+
+    doc.open();
+    doc.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
+          <title>${title}</title>
+          ${copiedStyles}
+          <style>
+            body { margin: 0; background: #ffffff; color: #111827; }
+            .pdf-root { padding: 20px; }
+            @page { size: A4; margin: 12mm; }
+          </style>
+        </head>
+        <body>
+          <div class="pdf-root">${content.outerHTML}</div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    const cleanup = () => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    };
+
+    win.focus();
+    win.addEventListener("afterprint", cleanup, { once: true });
+    setTimeout(() => {
+      win.print();
+    }, 300);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <Button
+      <button
         type="button"
         aria-label="Close package details"
-        className="absolute inset-0 bg-[#B48A2C]/50"
-        onClick={onClose} />
-      
+        className="absolute inset-0 cursor-default border-0 bg-black/40"
+        onClick={onClose}
+      />
+
 
       <div
         role="dialog"
@@ -309,6 +380,16 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              onClick={handleOpenPdf}
+              variant="outline"
+              className="inline-flex h-9 items-center gap-1.5 px-3 text-sm font-medium text-[#1F2A44]"
+              title="Open package details as PDF"
+            >
+              <Icon name="FileText" size={14} />
+              Open PDF
+            </Button>
             <Link
               href={editHref}
               className="inline-flex h-9 items-center px-3 text-sm font-medium text-[#B48A2C] border border-[#B48A2C]/30 rounded-lg hover:bg-[#B48A2C]/5">
@@ -336,7 +417,10 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
             </div>
           }
 
-          <dl className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+          <dl
+            ref={summaryCardRef}
+            className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4"
+          >
             <div>
               <dt className="text-xs font-semibold text-gray-500 uppercase">Status</dt>
               <dd className="mt-1 text-sm font-medium text-gray-900 capitalize">{statusLabel}</dd>
@@ -399,19 +483,31 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
                   className="rounded-xl border border-[#E5E7EB] overflow-hidden">
                   
                   <div className="flex items-center justify-between gap-3 bg-[#F9FAFB] px-4 py-3 border-b border-[#E5E7EB]">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#1F2A44] text-[11px] font-bold text-white">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1F2A44] text-[11px] font-bold text-white">
                         {section.step}
                       </span>
-                      <h3 className="text-sm font-bold text-[#1F2A44]">{section.title}</h3>
+                      <h3 className="text-sm font-bold text-[#1F2A44] truncate">{section.title}</h3>
                     </div>
-                    <span
-                      className={`text-xs font-medium ${
-                      isEmpty ? "text-gray-400" : "text-emerald-600"}`
-                      }>
-                      
-                      {isEmpty ? "Not filled" : "Filled"}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`text-xs font-medium ${
+                          isEmpty ? "text-gray-400" : "text-emerald-600"
+                        }`}
+                      >
+                        {isEmpty ? "Not filled" : "Filled"}
+                      </span>
+                      {isWizardPackage(details) ? (
+                        <Link
+                          href={getPackageEditHref(details, section.step)}
+                          className="inline-flex size-7 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-[#B48A2C] hover:bg-[#B48A2C]/5 hover:border-[#B48A2C]/40 transition-colors"
+                          title={`Edit ${section.title}`}
+                          aria-label={`Edit ${section.title}`}
+                        >
+                          <Icon name="Pencil" size={14} />
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="p-4">{renderSectionContent(sectionData)}</div>
                 </section>);

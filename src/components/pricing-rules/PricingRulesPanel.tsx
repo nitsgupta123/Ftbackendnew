@@ -320,9 +320,9 @@ export default function PricingRulesPanel() {
 
       {formMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <Button
+          <button
             type="button"
-            className="absolute inset-0 bg-[#A68231]/40"
+            className="absolute inset-0 bg-black/40 border-0 cursor-default"
             aria-label="Close"
             onClick={() => {
               if (!isSaving) {
@@ -331,21 +331,39 @@ export default function PricingRulesPanel() {
               }
             }}
           />
-          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-[#E5E7EB] p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-5">
-              {formMode === "edit" ? "Edit Pricing Rule" : "Create Pricing Rule"}
-            </h2>
-            <PricingRuleForm
-              initialData={editingRule}
-              isSaving={isSaving}
-              onSubmit={handleFormSubmit}
-              onCancel={() => {
-                if (!isSaving) {
-                  setFormMode(null);
-                  setEditingRule(null);
-                }
-              }}
-            />
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-[#E5E7EB]">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-6 py-4 border-b border-[#E5E7EB] bg-white rounded-t-2xl">
+              <h2 className="text-lg font-bold text-gray-900">
+                {formMode === "edit" ? "Edit Pricing Rule" : "Create Pricing Rule"}
+              </h2>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!isSaving) {
+                    setFormMode(null);
+                    setEditingRule(null);
+                  }
+                }}
+                disabled={isSaving}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <Icon name="X" size={20} />
+              </Button>
+            </div>
+            <div className="p-6">
+              <PricingRuleForm
+                initialData={editingRule}
+                isSaving={isSaving}
+                onSubmit={handleFormSubmit}
+                onCancel={() => {
+                  if (!isSaving) {
+                    setFormMode(null);
+                    setEditingRule(null);
+                  }
+                }}
+              />
+            </div>
           </div>
         </div>
       )}

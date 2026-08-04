@@ -18,6 +18,7 @@ type RoleFormModalProps = {
   roleForm: RoleFormState;
   allUsers: ManageableUser[];
   showDepartmentAndDesignation?: boolean;
+  isSaving?: boolean;
   onClose: () => void;
   onRoleFormChange: (next: RoleFormState) => void;
   onSubmit: () => void;
@@ -29,6 +30,7 @@ export default function RoleFormModal({
   roleForm,
   allUsers,
   showDepartmentAndDesignation = true,
+  isSaving = false,
   onClose,
   onRoleFormChange,
   onSubmit,
@@ -105,15 +107,20 @@ export default function RoleFormModal({
           </div>
         </div>
         <div className="flex flex-col-reverse justify-end gap-2 border-t border-[#E8ECF0] px-5 py-4 sm:flex-row">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
           <Button
             type="button"
             className="bg-[#A68231] text-white hover:opacity-90"
             onClick={onSubmit}
+            disabled={isSaving}
           >
-            {editingRoleKey ? "Update Role" : "Create Role"}
+            {isSaving
+              ? "Saving…"
+              : editingRoleKey
+                ? "Update Role"
+                : "Create Role"}
           </Button>
         </div>
       </div>

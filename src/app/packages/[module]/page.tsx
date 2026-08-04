@@ -10,7 +10,7 @@ import PricingRulesPanel from "@/components/pricing-rules/PricingRulesPanel";
 import PackageTemplatesPanel from "@/components/templates/PackageTemplatesPanel";
 import { Icon } from "@/components/ui/icons";
 import { GUIDE_ITEMS } from "@/lib/constants";
-import { listAllPackages, listExpiringPackages, listPackages, listSupplierQuoteRequests } from "@/lib/package-api";
+import { isSamePackageRecord, listAllPackages, listExpiringPackages, listPackages, listSupplierQuoteRequests } from "@/lib/package-api";
 import { PACKAGE_MODULES } from "@/lib/package-modules";
 import { PACKAGE_STATUS_FILTER_OPTIONS, packageAllPackagesHref, parsePackageStatusFilter, type PackageRecord, type PackageStatusFilter } from "@/lib/package-types";
 import { Input } from "@/components/ui/input";
@@ -184,7 +184,7 @@ export default function PackageModulePage({
 
       {config.endpoint === "pricing-rules" && <PricingRulesPanel />}
 
-      {(config.endpoint === "list" || config.endpoint === "tbl-list") && <PackageListTable packages={config.endpoint === "tbl-list" ? displayedPackages : packages} loading={loading} showSupplier fullActions={config.endpoint === "tbl-list"} onPackageRemoved={id => setPackages(prev => prev.filter(pkg => pkg.id !== id))} onPackageUpdated={updated => setPackages(prev => prev.map(pkg => pkg.id === updated.id ? updated : pkg))} emptyMessage={config.endpoint === "tbl-list" && search.trim() ? `No packages match "${search.trim()}".` : config.endpoint === "tbl-list" && statusFilter !== "all" ? `No ${PACKAGE_STATUS_FILTER_OPTIONS.find(o => o.value === statusFilter)?.label.toLowerCase() ?? statusFilter} packages found.` : `No packages found for ${config.title.toLowerCase()}.`} />}
+      {(config.endpoint === "list" || config.endpoint === "tbl-list") && <PackageListTable packages={config.endpoint === "tbl-list" ? displayedPackages : packages} loading={loading} showSupplier fullActions={config.endpoint === "tbl-list"} onPackageRemoved={removed => setPackages(prev => prev.filter(pkg => !isSamePackageRecord(pkg, removed)))} onPackageUpdated={updated => setPackages(prev => prev.map(pkg => isSamePackageRecord(pkg, updated) ? updated : pkg))} emptyMessage={config.endpoint === "tbl-list" && search.trim() ? `No packages match "${search.trim()}".` : config.endpoint === "tbl-list" && statusFilter !== "all" ? `No ${PACKAGE_STATUS_FILTER_OPTIONS.find(o => o.value === statusFilter)?.label.toLowerCase() ?? statusFilter} packages found.` : `No packages found for ${config.title.toLowerCase()}.`} />}
 
       {config.endpoint === "expiring-rates" && <PackageListTable packages={packages} loading={loading} showSupplier showValidity emptyMessage="No packages with rates expiring in the next 30 days." />}
 

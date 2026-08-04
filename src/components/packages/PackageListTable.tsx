@@ -8,6 +8,7 @@ import {
   archivePackageRecord,
   deletePackageRecord,
   getPackageEditHref,
+  getPackageRecordKey,
   isWizardPackage,
 } from "@/lib/package-api";
 import type { PackageRecord } from "@/lib/package-types";
@@ -39,7 +40,7 @@ interface PackageListTableProps {
   readOnly?: boolean;
   variant?: "default" | "dashboard";
   fullActions?: boolean;
-  onPackageRemoved?: (id: number) => void;
+  onPackageRemoved?: (pkg: PackageRecord) => void;
   onPackageUpdated?: (pkg: PackageRecord) => void;
 }
 
@@ -96,7 +97,7 @@ function PackageRowActions({
 
 
 
-}: {pkg: PackageRecord;editHref: string;onPackageRemoved?: (id: number) => void;onPackageUpdated?: (pkg: PackageRecord) => void;}) {
+}: {pkg: PackageRecord;editHref: string;onPackageRemoved?: (pkg: PackageRecord) => void;onPackageUpdated?: (pkg: PackageRecord) => void;}) {
   const [busy, setBusy] = useState(false);
 
   async function handleDelete() {
@@ -106,7 +107,7 @@ function PackageRowActions({
     setBusy(true);
     try {
       await deletePackageRecord(pkg);
-      onPackageRemoved?.(pkg.id);
+      onPackageRemoved?.(pkg);
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Failed to delete package");
     } finally {
@@ -237,7 +238,7 @@ export default function PackageListTable({
                   const editHref = getPackageEditHref(pkg);
 
                   return (
-                    <TableRow key={`${pkg.source ?? "pkg"}-${pkg.id}`} className="hover:bg-[#FAFBFD]">
+                    <TableRow key={getPackageRecordKey(pkg)} className="hover:bg-[#FAFBFD]">
                     <TableCell className="w-[35%] px-3 py-3 whitespace-normal">
                       <PackageNameButton
                         pkg={pkg}
@@ -321,7 +322,7 @@ export default function PackageListTable({
                 const wizard = isWizardPackage(pkg);
 
                 return (
-                  <TableRow key={`${pkg.source ?? "pkg"}-${pkg.id}`} className="hover:bg-gray-50/80">
+                  <TableRow key={getPackageRecordKey(pkg)} className="hover:bg-gray-50/80">
                   <TableCell className="w-[35%] px-3 py-3 whitespace-normal">
                     <PackageNameButton
                       pkg={pkg}

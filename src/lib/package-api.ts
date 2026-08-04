@@ -42,15 +42,31 @@ function authenticatedFetch(path: string, init: RequestInit = {}) {
 }
 
 
-export function getPackageEditHref(pkg: PackageRecord): string {
+export function getPackageEditHref(pkg: PackageRecord, step?: number): string {
   if (pkg.source === "wizard") {
-    return `/add-package?id=${pkg.id}`;
+    const base = `/add-package?id=${pkg.id}`;
+    if (step != null && step >= 1 && step <= 14) {
+      return `${base}&step=${step}`;
+    }
+    return base;
   }
   return `/packages/all?legacyId=${pkg.package_id}`;
 }
 
 export function isWizardPackage(pkg: PackageRecord): boolean {
   return pkg.source === "wizard";
+}
+
+/** Stable list identity — wizard and legacy IDs can overlap. */
+export function getPackageRecordKey(pkg: Pick<PackageRecord, "id" | "source">): string {
+  return `${pkg.source ?? "wizard"}-${pkg.id}`;
+}
+
+export function isSamePackageRecord(
+  a: Pick<PackageRecord, "id" | "source">,
+  b: Pick<PackageRecord, "id" | "source">
+): boolean {
+  return a.id === b.id && (a.source ?? "wizard") === (b.source ?? "wizard");
 }
 
 export async function createPackage(payload: UpdatePackageInput = {}) {
@@ -246,6 +262,8 @@ export async function sendSupplierQuoteEmail(
   return parseApiResponse<{
     success: boolean;
     messageId: string;
+    mode?: "graph" | "smtp" | "ethereal";
+    previewUrl?: string;
     package: PackageRecord;
     recipients: { to: string[]; cc: string[]; bcc: string[] };
   }>(response);

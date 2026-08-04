@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import type { AdminUser } from "@/lib/auth-types";
 import type { CreateUserFormValues } from "@/lib/auth-validation";
 import { formatRoleLabel, ROLE_LABELS } from "@/lib/user-types";
@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
+import { isValidRoleKey, normalizeRoleKey, rememberKnownRole } from "@/lib/role-catalog";
+
 interface UserFormModalProps {
   mode: "create" | "edit";
   initialUser?: AdminUser | null;
@@ -21,6 +23,7 @@ interface UserFormModalProps {
   }) => void;
   onCancel: () => void;
 }
+
 export default function UserFormModal({
   mode,
   initialUser,
@@ -34,31 +37,34 @@ export default function UserFormModal({
   const [email, setEmail] = useState(initialUser?.email ?? "");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<AdminUser["role"]>(initialUser?.role ?? "admin");
-  const [roleOptions, setRoleOptions] = useState<string[]>(() => {
-    const base = ["admin", "super_admin", ...availableRoles, initialUser?.role ?? ""];
-    return Array.from(new Set(base.filter(Boolean)));
-  });
+  const [localRoles, setLocalRoles] = useState<string[]>([]);
   const [showAddRole, setShowAddRole] = useState(false);
   const [newRoleDraft, setNewRoleDraft] = useState("");
   const [isActive, setIsActive] = useState(initialUser?.isActive ?? true);
   const [roleError, setRoleError] = useState<string | null>(null);
 
-  function normalizeRole(input: string): string {
-    return input.trim().toLowerCase().replace(/\s+/g, "_");
-  }
+  const roleOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        [
+          "admin",
+          "super_admin",
+          ...availableRoles,
+          ...localRoles,
+          initialUser?.role ?? "",
+        ].filter(Boolean)
+      )
+    );
+  }, [availableRoles, localRoles, initialUser?.role]);
 
   function addRole() {
-    const normalized = normalizeRole(newRoleDraft);
+    const normalized = normalizeRoleKey(newRoleDraft);
     if (!normalized) {
       setRoleError("Role is required");
       return;
     }
-    if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
-      setRoleError("Use lowercase letters, numbers, and underscore only");
-      return;
-    }
-    if (normalized.length > 60) {
-      setRoleError("Role is too long");
+    if (!isValidRoleKey(normalized)) {
+      setRoleError("Use 2+ lowercase letters, numbers, and underscore only");
       return;
     }
     if (roleOptions.includes(normalized)) {
@@ -68,13 +74,15 @@ export default function UserFormModal({
       setRoleError(null);
       return;
     }
-    setRoleOptions((prev) => [...prev, normalized]);
+    rememberKnownRole(normalized);
+    setLocalRoles((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]));
     onRoleAdded?.(normalized);
     setRole(normalized);
     setShowAddRole(false);
     setNewRoleDraft("");
     setRoleError(null);
   }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (mode === "create") {
@@ -92,23 +100,21 @@ export default function UserFormModal({
       });
     }
   }
+
   return <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label className="block text-sm font-medium text-gray-700 mb-1.5">Full name</Label>
         <Input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]" />
-        
       </div>
 
       {mode === "create" && <>
           <div>
             <Label className="block text-sm font-medium text-gray-700 mb-1.5">Email</Label>
             <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]" />
-          
           </div>
           <div>
             <Label className="block text-sm font-medium text-gray-700 mb-1.5">Password</Label>
             <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]" />
-          
             <p className="mt-1 text-xs text-gray-400">
               At least 8 characters with a letter and a number.
             </p>
@@ -118,7 +124,6 @@ export default function UserFormModal({
       {mode === "edit" && <div>
           <Label className="block text-sm font-medium text-gray-700 mb-1.5">Email</Label>
           <Input type="email" value={email} disabled className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] bg-gray-50 text-sm text-gray-500" />
-        
         </div>}
 
       <div>
@@ -175,17 +180,14 @@ export default function UserFormModal({
 
       {mode === "edit" && <Label className="flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-[#B48A2C] focus:ring-[#B48A2C]" />
-        
           Account is active
         </Label>}
 
       <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
         <Button type="button" onClick={onCancel} disabled={isSaving} className="h-10 px-4 rounded-lg border border-[#E5E7EB] text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-          
           Cancel
         </Button>
         <Button type="submit" disabled={isSaving} className="h-10 px-5 rounded-lg text-sm font-semibold text-white bg-[#B48A2C] hover:bg-[#B48A2C]/90 disabled:opacity-50">
-          
           {isSaving ? "Saving…" : mode === "create" ? "Create User" : "Save Changes"}
         </Button>
       </div>

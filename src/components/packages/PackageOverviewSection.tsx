@@ -1,9 +1,20 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { getPackageRecordKey } from "@/lib/package-api";
 import { packageAllPackagesHref, type PackageRecord } from "@/lib/package-types";
 import { formatPackageDate, SGT_TIME_ZONE } from "@/lib/format-date";
+
+const PERIODS = ["Last 7 Days", "Last 30 Days", "Last 90 Days"] as const;
+type ChartPeriod = (typeof PERIODS)[number];
+
+const PERIOD_DAYS: Record<ChartPeriod, number> = {
+  "Last 7 Days": 7,
+  "Last 30 Days": 30,
+  "Last 90 Days": 90,
+};
 
 interface PackageOverviewSectionProps {
   packages: PackageRecord[];
@@ -57,12 +68,13 @@ function formatChartDay(date: Date): string {
   }).format(date);
 }
 
-function buildChartPoints(packages: PackageRecord[]): ChartPoint[] {
+function buildChartPoints(packages: PackageRecord[], days: number): ChartPoint[] {
+  const safeDays = [7, 30, 90].includes(days) ? days : 7;
   const sgtToday = parseDayKeyAsUtcDate(getSgtDayKey(new Date()));
 
-  const points = Array.from({ length: 7 }, (_, index) => {
+  const points = Array.from({ length: safeDays }, (_, index) => {
     const date = new Date(sgtToday);
-    date.setUTCDate(sgtToday.getUTCDate() - (6 - index));
+    date.setUTCDate(sgtToday.getUTCDate() - (safeDays - 1 - index));
     return {
       day: formatChartDay(date),
       key: getSgtDayKey(date),
@@ -86,6 +98,12 @@ function buildChartPoints(packages: PackageRecord[]): ChartPoint[] {
   return points;
 }
 
+function labelStepForDays(days: number): number {
+  if (days <= 7) return 1;
+  if (days <= 30) return 5;
+  return 15;
+}
+
 function getPublishedAt(pkg: PackageRecord): string | null {
   return pkg.review_publish?.publishedAt || pkg.updated_at || pkg.created_at || null;
 }
@@ -101,7 +119,7 @@ function buildRecentPublished(packages: PackageRecord[]): RecentPublishedItem[] 
     const publishedAt = getPublishedAt(pkg);
 
     return {
-      key: `${pkg.source ?? "pkg"}-${pkg.package_id ?? pkg.id}`,
+      key: getPackageRecordKey(pkg),
       title: (pkg.package_title ?? "").trim() || `Package ${index + 1}`,
       subtitle,
       publishedAt: publishedAt ? formatPackageDate(publishedAt) : "Unknown",
@@ -111,23 +129,28 @@ function buildRecentPublished(packages: PackageRecord[]): RecentPublishedItem[] 
 }
 
 export default function PackageOverviewSection({ packages, recentPublished }: PackageOverviewSectionProps) {
+  const [period, setPeriod] = useState<ChartPeriod>("Last 7 Days");
+  const days = PERIOD_DAYS[period];
   const width = 560;
   const height = 250;
   const padding = { top: 20, right: 20, bottom: 34, left: 34 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
-  const chartPoints = buildChartPoints(packages);
+  const chartPoints = useMemo(() => buildChartPoints(packages, days), [packages, days]);
   const maxValue = Math.max(1, ...chartPoints.flatMap((point) => [point.published, point.draft]));
   const maxY = Math.max(4, Math.ceil(maxValue / 4) * 4);
   const ticks = Array.from({ length: 5 }, (_, index) => index * (maxY / 4));
+  const labelStep = labelStepForDays(days);
+  const pointCount = Math.max(chartPoints.length, 1);
 
-  const toX = (i: number) => padding.left + i / (chartPoints.length - 1) * chartW;
-  const toY = (v: number) => padding.top + chartH - v / maxY * chartH;
+  const toX = (i: number) =>
+    padding.left + (pointCount > 1 ? (i / (pointCount - 1)) * chartW : chartW / 2);
+  const toY = (v: number) => padding.top + chartH - (v / maxY) * chartH;
 
   const makePath = (key: "published" | "draft") =>
-  chartPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${toX(index)} ${toY(point[key])}`).join(
-    " "
-  );
+    chartPoints
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${toX(index)} ${toY(point[key])}`)
+      .join(" ");
 
   const recentPublishedItems = buildRecentPublished(recentPublished);
 
@@ -139,12 +162,20 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
             <h2 className="text-base font-semibold text-[#111827]">Package Overview</h2>
             <p className="text-xs text-gray-500 mt-1">Updated packages by current status.</p>
           </div>
-          <Button
-            type="button"
-            className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-xs text-gray-600 hover:bg-gray-50">
-            
-            Last 7 Days
-          </Button>
+          <NativeSelect
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as ChartPeriod)}
+            size="sm"
+            wrapperClassName="w-auto min-w-[140px]"
+            className="h-9 cursor-pointer border-[#E5E7EB] bg-white text-xs text-gray-600 focus-visible:ring-[#B48A2C]/30"
+            aria-label="Chart period"
+          >
+            {PERIODS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </NativeSelect>
         </div>
 
         <div className="mb-3 flex flex-wrap items-center gap-3 sm:gap-5 text-xs text-gray-500">
@@ -178,23 +209,29 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
             const publishedY = toY(point.published);
             const draftY = toY(point.draft);
             const overlapping = point.published === point.draft;
+            const showLabel =
+              index === 0 ||
+              index === chartPoints.length - 1 ||
+              index % labelStep === 0;
 
             return (
               <g key={point.key}>
                 {overlapping ?
                 <>
-                    <circle cx={x} cy={publishedY} r={5} fill="#22C55E" />
-                    <circle cx={x} cy={draftY} r={2.75} fill="#2563EB" />
+                    <circle cx={x} cy={publishedY} r={days > 30 ? 3 : 5} fill="#22C55E" />
+                    <circle cx={x} cy={draftY} r={days > 30 ? 1.75 : 2.75} fill="#2563EB" />
                   </> :
 
                 <>
-                    <circle cx={x} cy={draftY} r={3.5} fill="#2563EB" />
-                    <circle cx={x} cy={publishedY} r={3.5} fill="#22C55E" />
+                    <circle cx={x} cy={draftY} r={days > 30 ? 2.5 : 3.5} fill="#2563EB" />
+                    <circle cx={x} cy={publishedY} r={days > 30 ? 2.5 : 3.5} fill="#22C55E" />
                   </>
                 }
-                <text x={x} y={height - 10} textAnchor="middle" className="fill-[#9CA3AF] text-[10px]">
-                  {point.day}
-                </text>
+                {showLabel ? (
+                  <text x={x} y={height - 10} textAnchor="middle" className="fill-[#9CA3AF] text-[10px]">
+                    {point.day}
+                  </text>
+                ) : null}
               </g>
             );
           })}

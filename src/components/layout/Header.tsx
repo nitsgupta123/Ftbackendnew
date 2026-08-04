@@ -8,7 +8,7 @@ import { getUserInitials } from "@/lib/auth-storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import BrandLogo from "./BrandLogo";
-import { listAllPackages, getPackageEditHref } from "@/lib/package-api";
+import { listAllPackages, getPackageEditHref, getPackageRecordKey } from "@/lib/package-api";
 import { listEnquiries } from "@/lib/enquiry-api";
 import { enquiryDisplayName } from "@/lib/enquiry-types";
 import type { PackageRecord } from "@/lib/package-types";
@@ -291,7 +291,7 @@ export default function Header({
                     ) : (
                       packageResults.map((pkg) => (
                         <button
-                          key={`${pkg.source ?? "wizard"}-${pkg.id}`}
+                          key={getPackageRecordKey(pkg)}
                           type="button"
                           className="flex w-full flex-col rounded-lg px-2 py-2 text-left hover:bg-gray-50"
                           onClick={() => {

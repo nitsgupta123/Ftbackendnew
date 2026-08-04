@@ -356,7 +356,25 @@ export default function SupplierQuoteTool({
         result.recipients.bcc.length > 0
           ? ` BCC: ${result.recipients.bcc.join(", ")}`
           : "";
-      toast.success(`Quote email sent.${ccNote}${bccNote}`);
+      if (result.mode === "ethereal" && result.previewUrl) {
+        toast.success(
+          `Quote email captured (dev preview).${ccNote}${bccNote}`,
+          {
+            description: "Open preview to view the message — not delivered to a real inbox.",
+            action: {
+              label: "Open preview",
+              onClick: () => window.open(result.previewUrl, "_blank", "noopener,noreferrer"),
+            },
+            duration: 12_000,
+          }
+        );
+      } else if (result.mode === "graph") {
+        toast.success(`Quote email sent.${ccNote}${bccNote}`, {
+          description: "Delivered via Microsoft Graph.",
+        });
+      } else {
+        toast.success(`Quote email sent.${ccNote}${bccNote}`);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send email");
     } finally {

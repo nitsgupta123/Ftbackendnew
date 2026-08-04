@@ -74,6 +74,16 @@ export default function AddPackagePage() {
   useEffect(() => {
     const idParam = searchParams.get("id");
     const templateIdParam = searchParams.get("templateId");
+    const stepParam = Number(searchParams.get("step"));
+    const requestedStep =
+      Number.isInteger(stepParam) && stepParam >= 1 && stepParam <= 14
+        ? stepParam
+        : null;
+
+    // Section edit links use ?step=N — always open that form when present.
+    if (requestedStep != null) {
+      queueMicrotask(() => setCurrentStep(requestedStep));
+    }
 
     if (idParam) {
       const id = Number(idParam);
@@ -89,7 +99,7 @@ export default function AddPackagePage() {
             if (result.package) {
               setPackageId(result.package.id);
               setPackageData(result.package);
-              setCurrentStep(result.package.current_step || 1);
+              setCurrentStep(requestedStep ?? (result.package.current_step || 1));
             }
           })
           .catch((error) => {
@@ -470,6 +480,7 @@ export default function AddPackagePage() {
         return (
           <SalesAdsAssetsForm
             initialData={packageData?.sales_ads_assets ?? undefined}
+            packageData={packageData}
             onNext={(data) => saveStepAndContinue(12, data)}
             onPrevious={handlePrevious}
             isSaving={isSaving}

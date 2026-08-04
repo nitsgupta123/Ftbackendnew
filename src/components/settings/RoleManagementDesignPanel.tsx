@@ -6,8 +6,17 @@ import { Icon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import RoleFormModal from "@/components/settings/access-control/RoleFormModal";
-import { getPermissions } from "@/lib/permission-api";
-import { getUserStats, listUsers } from "@/lib/user-api";
+import { getPermissions, updateRolePermissions } from "@/lib/permission-api";
+import { buildDefaultMatrix } from "@/lib/permission-types";
+import type { ModulePermission } from "@/lib/permission-types";
+import type { AdminRole } from "@/lib/auth-types";
+import {
+  isValidRoleKey,
+  normalizeRoleKey,
+  rememberKnownRole,
+  rememberKnownRoles,
+} from "@/lib/role-catalog";
+import { getUserStats, listUsers, updateUser } from "@/lib/user-api";
 import { formatRoleLabel } from "@/lib/user-types";
 import { formatPackageDateTime } from "@/lib/format-date";
 import type { ManageableUser, RoleMeta } from "@/components/settings/access-control/types";
@@ -17,14 +26,6 @@ const GOLD = "#A68231";
 const PROTECTED_ROLES = new Set(["owner", "super_admin"]);
 const LOCAL_STORAGE_ROLE_META = "ftadmin-role-meta-v1";
 const ACTOR_ROLE_LABEL = "Super Admin";
-
-function slugify(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
 
 function readLocalStorageJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -49,7 +50,11 @@ export default function RoleManagementDesignPanel() {
   const { user } = useAuth();
   const actorName = user?.fullName?.trim() || "Super Admin";
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
+  const [rolePermissionMap, setRolePermissionMap] = useState<
+    Record<string, ModulePermission[]>
+  >({});
   const [users, setUsers] = useState<ManageableUser[]>([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -60,6 +65,7 @@ export default function RoleManagementDesignPanel() {
     readLocalStorageJson<Record<string, RoleMeta>>(LOCAL_STORAGE_ROLE_META, {})
   );
   const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [roleModalOpen, setRoleModalOpen] = useState(false);
@@ -82,6 +88,14 @@ export default function RoleManagementDesignPanel() {
           getUserStats().catch(() => null),
         ]);
         setRoles(Array.from(new Set(permissionsResult.matrices.map((m) => m.role))));
+        setRolePermissionMap(
+          Object.fromEntries(
+            permissionsResult.matrices.map((matrix) => [matrix.role, matrix.permissions])
+          )
+        );
+        rememberKnownRoles(
+          permissionsResult.matrices.map((matrix) => matrix.role)
+        );
         setUsers(usersResult.users as ManageableUser[]);
         if (statsResult?.stats) {
           setStats({
@@ -160,74 +174,159 @@ export default function RoleManagementDesignPanel() {
     setRoleModalOpen(true);
   };
 
-  const submitRoleModal = () => {
-    const key = editingRoleKey ?? slugify(roleForm.roleName);
-    if (!key) return;
-
-    setRoles((prev) => (prev.includes(key) ? prev : [...prev, key]));
-    setRoleMeta((prev) => ({
-      ...prev,
-      [key]: {
-        ...(prev[key] ?? {}),
-        key,
-        description: roleForm.description || `${formatRoleLabel(key)} role access definition`,
-        department: roleForm.department || "General",
-        designation: roleForm.designation || "Team Member",
-        createdBy: editingRoleKey ? prev[key]?.createdBy ?? ACTOR_ROLE_LABEL : ACTOR_ROLE_LABEL,
-        createdByName: editingRoleKey ? prev[key]?.createdByName ?? actorName : actorName,
-        createdDate: editingRoleKey ? prev[key]?.createdDate ?? nowIso() : nowIso(),
-        updatedBy: ACTOR_ROLE_LABEL,
-        updatedByName: actorName,
-        updatedAt: nowIso(),
-      },
-    }));
-    setUsers((prev) =>
-      prev.map((userRow) => {
-        if (roleForm.assignUsers.includes(userRow.id)) {
-          return { ...userRow, role: key };
-        }
-        if (editingRoleKey && userRow.role === editingRoleKey) {
-          return { ...userRow, role: "admin" };
-        }
-        return userRow;
-      })
-    );
-    setSuccess(
-      editingRoleKey
-        ? `Role "${formatRoleLabel(key)}" updated successfully.`
-        : `Role "${formatRoleLabel(key)}" created successfully.`
-    );
-    setRoleModalOpen(false);
-    setEditingRoleKey(null);
-    setRoleForm({
-      roleName: "",
-      description: "",
-      department: "",
-      designation: "",
-      assignUsers: [],
+  const persistRolePermissions = async (
+    roleKey: string,
+    permissions?: ModulePermission[]
+  ) => {
+    const seed =
+      permissions ??
+      rolePermissionMap.admin ??
+      buildDefaultMatrix("admin").permissions;
+    const { matrix } = await updateRolePermissions(roleKey as AdminRole, {
+      permissions: seed,
     });
+    setRolePermissionMap((prev) => ({
+      ...prev,
+      [roleKey]: matrix.permissions,
+    }));
   };
 
-  const duplicateRole = (roleKey: string) => {
+  const assignUsersToRole = async (roleKey: string, assignUserIds: number[]) => {
+    const assignSet = new Set(assignUserIds);
+    const nextUsers = [...users];
+
+    for (const userRow of users) {
+      const shouldHaveRole = assignSet.has(userRow.id);
+      const currentlyHasRole = userRow.role === roleKey;
+      if (shouldHaveRole && !currentlyHasRole) {
+        try {
+          const { user: updated } = await updateUser(userRow.id, {
+            fullName: userRow.fullName,
+            role: roleKey,
+            isActive: userRow.isActive,
+          });
+          const idx = nextUsers.findIndex((row) => row.id === userRow.id);
+          if (idx >= 0) nextUsers[idx] = updated as ManageableUser;
+        } catch {
+          // Keep going so other assignments still apply.
+        }
+      } else if (
+        editingRoleKey &&
+        currentlyHasRole &&
+        !shouldHaveRole &&
+        userRow.role === editingRoleKey
+      ) {
+        try {
+          const { user: updated } = await updateUser(userRow.id, {
+            fullName: userRow.fullName,
+            role: "admin",
+            isActive: userRow.isActive,
+          });
+          const idx = nextUsers.findIndex((row) => row.id === userRow.id);
+          if (idx >= 0) nextUsers[idx] = updated as ManageableUser;
+        } catch {
+          // Keep going.
+        }
+      }
+    }
+
+    setUsers(nextUsers);
+  };
+
+  const submitRoleModal = async () => {
+    const key = editingRoleKey ?? normalizeRoleKey(roleForm.roleName);
+    if (!key) {
+      setError("Role name is required.");
+      return;
+    }
+    if (!isValidRoleKey(key)) {
+      setError("Role name must be at least 2 characters (letters, numbers, underscore).");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      // Share with User Management immediately so the role appears in Add/Edit User.
+      rememberKnownRole(key);
+
+      const isNewRole = !editingRoleKey || !roles.includes(key);
+      if (isNewRole) {
+        await persistRolePermissions(key);
+      }
+
+      await assignUsersToRole(key, roleForm.assignUsers);
+
+      setRoles((prev) => (prev.includes(key) ? prev : [...prev, key]));
+      setRoleMeta((prev) => ({
+        ...prev,
+        [key]: {
+          ...(prev[key] ?? {}),
+          key,
+          description: roleForm.description || `${formatRoleLabel(key)} role access definition`,
+          department: roleForm.department || "General",
+          designation: roleForm.designation || "Team Member",
+          createdBy: editingRoleKey ? prev[key]?.createdBy ?? ACTOR_ROLE_LABEL : ACTOR_ROLE_LABEL,
+          createdByName: editingRoleKey ? prev[key]?.createdByName ?? actorName : actorName,
+          createdDate: editingRoleKey ? prev[key]?.createdDate ?? nowIso() : nowIso(),
+          updatedBy: ACTOR_ROLE_LABEL,
+          updatedByName: actorName,
+          updatedAt: nowIso(),
+        },
+      }));
+      setSuccess(
+        editingRoleKey
+          ? `Role "${formatRoleLabel(key)}" updated successfully.`
+          : `Role "${formatRoleLabel(key)}" created successfully.`
+      );
+      setRoleModalOpen(false);
+      setEditingRoleKey(null);
+      setRoleForm({
+        roleName: "",
+        description: "",
+        department: "",
+        designation: "",
+        assignUsers: [],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save role");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const duplicateRole = async (roleKey: string) => {
     const duplicatedKey = `${roleKey}_copy_${Math.floor(Math.random() * 1000)}`;
     const sourceMeta = roleMeta[roleKey];
-    setRoles((prev) => [...prev, duplicatedKey]);
-    setRoleMeta((prev) => ({
-      ...prev,
-      [duplicatedKey]: {
-        key: duplicatedKey,
-        description: sourceMeta?.description ?? `Duplicate of ${formatRoleLabel(roleKey)}`,
-        department: sourceMeta?.department ?? "General",
-        designation: sourceMeta?.designation ?? "Team Member",
-        createdBy: ACTOR_ROLE_LABEL,
-        createdByName: actorName,
-        createdDate: nowIso(),
-        updatedBy: ACTOR_ROLE_LABEL,
-        updatedByName: actorName,
-        updatedAt: nowIso(),
-      },
-    }));
-    setSuccess(`Role "${formatRoleLabel(roleKey)}" duplicated successfully.`);
+    const sourcePermissions = rolePermissionMap[roleKey];
+
+    setSaving(true);
+    setError(null);
+    try {
+      await persistRolePermissions(duplicatedKey, sourcePermissions);
+      rememberKnownRole(duplicatedKey);
+      setRoles((prev) => [...prev, duplicatedKey]);
+      setRoleMeta((prev) => ({
+        ...prev,
+        [duplicatedKey]: {
+          key: duplicatedKey,
+          description: sourceMeta?.description ?? `Duplicate of ${formatRoleLabel(roleKey)}`,
+          department: sourceMeta?.department ?? "General",
+          designation: sourceMeta?.designation ?? "Team Member",
+          createdBy: ACTOR_ROLE_LABEL,
+          createdByName: actorName,
+          createdDate: nowIso(),
+          updatedBy: ACTOR_ROLE_LABEL,
+          updatedByName: actorName,
+          updatedAt: nowIso(),
+        },
+      }));
+      setSuccess(`Role "${formatRoleLabel(roleKey)}" duplicated successfully.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to duplicate role");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const deleteRole = (roleKey: string) => {
@@ -286,6 +385,7 @@ export default function RoleManagementDesignPanel() {
             <Button
               className="h-10 rounded-lg px-4 bg-[#A68231] text-white hover:opacity-90"
               onClick={openCreateRoleModal}
+              disabled={saving}
             >
               <Icon name="Plus" size={15} className="mr-2" />
               Add New Role
@@ -317,6 +417,11 @@ export default function RoleManagementDesignPanel() {
         {success && (
           <div className="mx-5 mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {success}
+          </div>
+        )}
+        {error && (
+          <div className="mx-5 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
           </div>
         )}
 
@@ -369,7 +474,10 @@ export default function RoleManagementDesignPanel() {
                       <Button
                         size="icon-sm"
                         aria-label="Duplicate role"
-                        onClick={() => duplicateRole(row.key)}
+                        disabled={saving}
+                        onClick={() => {
+                          void duplicateRole(row.key);
+                        }}
                       >
                         <Icon name="Copy" size={14} />
                       </Button>
@@ -404,12 +512,16 @@ export default function RoleManagementDesignPanel() {
         roleForm={roleForm}
         allUsers={users}
         showDepartmentAndDesignation={false}
+        isSaving={saving}
         onClose={() => {
+          if (saving) return;
           setRoleModalOpen(false);
           setEditingRoleKey(null);
         }}
         onRoleFormChange={setRoleForm}
-        onSubmit={submitRoleModal}
+        onSubmit={() => {
+          void submitRoleModal();
+        }}
       />
     </div>
   );

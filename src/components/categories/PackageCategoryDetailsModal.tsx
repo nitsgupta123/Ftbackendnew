@@ -22,12 +22,13 @@ export default function PackageCategoryDetailsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <Button
+      <button
         type="button"
-        className="absolute inset-0 bg-[#B48A2C]/40"
+        className="absolute inset-0 cursor-default border-0 bg-black/40"
         aria-label="Close"
-        onClick={onClose} />
-      
+        onClick={onClose}
+      />
+
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-[#E5E7EB]">
         <div className="sticky top-0 flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] bg-white">
           <h2 className="text-lg font-bold text-gray-900">{category.name}</h2>
