@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef } from "react";
 import { Icon } from "@/components/ui/icons";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import PackageCategoryListTable from "@/components/categories/PackageCategoryListTable";
@@ -24,6 +24,10 @@ const filterControlClass =
   "h-10 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#A68231]/25 focus:border-[#A68231] transition-colors";
 
 type FormMode = "create" | "edit" | null;
+
+export type PackageCategoriesPanelHandle = {
+  openCreate: () => void;
+};
 
 function StatCard({
   label,
@@ -55,7 +59,7 @@ function StatCard({
   );
 }
 
-export default function PackageCategoriesPanel() {
+export default forwardRef<PackageCategoriesPanelHandle>(function PackageCategoriesPanel(_props, ref) {
   const { can } = usePermissions();
   const canDelete = can("package_categories", "delete");
 
@@ -128,6 +132,8 @@ export default function PackageCategoriesPanel() {
     setFormMode("create");
     setViewingCategory(null);
   }
+
+  useImperativeHandle(ref, () => ({ openCreate }), []);
 
   function openEdit(category: PackageCategoryRecord) {
     setEditingCategory(category);
@@ -245,16 +251,6 @@ export default function PackageCategoriesPanel() {
               <option value="desc">Descending</option>
             </NativeSelect>
           </div>
-
-          <Button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex h-10 shrink-0 items-center gap-2 px-5 text-sm font-semibold text-white rounded-lg shadow-sm hover:opacity-90 sm:ml-auto"
-            style={{ backgroundColor: GOLD }}
-          >
-            <Icon name="FileText" size={16} />
-            Add Category
-          </Button>
         </div>
 
         {error && (
@@ -390,4 +386,4 @@ export default function PackageCategoriesPanel() {
       />
     </>
   );
-}
+});

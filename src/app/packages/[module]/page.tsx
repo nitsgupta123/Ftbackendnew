@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AdminShell from "@/components/layout/AdminShell";
+import ListPageHeader from "@/components/layout/ListPageHeader";
 import PackageListTable from "@/components/packages/PackageListTable";
-import PackageCategoriesPanel from "@/components/categories/PackageCategoriesPanel";
-import PricingRulesPanel from "@/components/pricing-rules/PricingRulesPanel";
+import PackageCategoriesPanel, {
+  type PackageCategoriesPanelHandle,
+} from "@/components/categories/PackageCategoriesPanel";
+import PricingRulesPanel, {
+  type PricingRulesPanelHandle,
+} from "@/components/pricing-rules/PricingRulesPanel";
 import PackageTemplatesPanel from "@/components/templates/PackageTemplatesPanel";
 import { Icon } from "@/components/ui/icons";
 import { GUIDE_ITEMS } from "@/lib/constants";
@@ -16,6 +20,19 @@ import { PACKAGE_STATUS_FILTER_OPTIONS, packageAllPackagesHref, parsePackageStat
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+
+function packageModuleIcon(slug: string, endpoint?: string): string {
+  if (endpoint === "categories") return "Tags";
+  if (endpoint === "pricing-rules") return "Calculator";
+  if (endpoint === "templates") return "FileStack";
+  if (endpoint === "guide") return "HelpCircle";
+  if (endpoint === "expiring-rates") return "Clock";
+  if (endpoint === "supplier-quotes") return "Building";
+  if (slug === "pending-review") return "Eye";
+  if (slug === "drafts") return "Pencil";
+  if (slug === "archived") return "Archive";
+  return "Package";
+}
 function filterPackages(packages: PackageRecord[], search: string, statusFilter: PackageStatusFilter): PackageRecord[] {
   const query = search.trim().toLowerCase();
   let result = packages;
@@ -43,6 +60,8 @@ export default function PackageModulePage({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const categoriesRef = useRef<PackageCategoriesPanelHandle>(null);
+  const pricingRulesRef = useRef<PricingRulesPanelHandle>(null);
   const [moduleSlug, setModuleSlug] = useState<string | null>(null);
   const [packages, setPackages] = useState<PackageRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,17 +144,29 @@ export default function PackageModulePage({
   if (config.slug === "dashboard") {
     return null;
   }
+
+  const headerAction =
+    config.endpoint === "list" || config.endpoint === "tbl-list"
+      ? { label: "Add Package", href: "/add-package" }
+      : config.endpoint === "categories"
+        ? {
+            label: "Add Category",
+            onClick: () => categoriesRef.current?.openCreate(),
+          }
+        : config.endpoint === "pricing-rules"
+          ? {
+              label: "Add Pricing Rule",
+              onClick: () => pricingRulesRef.current?.openCreate(),
+            }
+          : undefined;
+
   return <AdminShell breadcrumbs={config.breadcrumbs}>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{config.title}</h1>
-          <p className="text-sm text-gray-500 mt-1">{config.description}</p>
-        </div>
-        {(config.endpoint === "list" || config.endpoint === "tbl-list") && <Link href="/add-package" className="inline-flex h-11 px-5 items-center text-sm font-semibold text-white bg-[#B48A2C] rounded-xl hover:bg-[#B48A2C]/90 shadow-sm">
-          
-            + Add Package
-          </Link>}
-      </div>
+      <ListPageHeader
+        icon={packageModuleIcon(config.slug, config.endpoint)}
+        title={config.title}
+        description={config.description}
+        action={headerAction}
+      />
 
       {config.endpoint === "tbl-list" && <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
           <div className="relative flex-1 max-w-md">
@@ -180,9 +211,9 @@ export default function PackageModulePage({
 
       {(config.slug === "templates") && <PackageTemplatesPanel />}
 
-      {config.endpoint === "categories" && <PackageCategoriesPanel />}
+      {config.endpoint === "categories" && <PackageCategoriesPanel ref={categoriesRef} />}
 
-      {config.endpoint === "pricing-rules" && <PricingRulesPanel />}
+      {config.endpoint === "pricing-rules" && <PricingRulesPanel ref={pricingRulesRef} />}
 
       {(config.endpoint === "list" || config.endpoint === "tbl-list") && <PackageListTable packages={config.endpoint === "tbl-list" ? displayedPackages : packages} loading={loading} showSupplier fullActions={config.endpoint === "tbl-list"} onPackageRemoved={removed => setPackages(prev => prev.filter(pkg => !isSamePackageRecord(pkg, removed)))} onPackageUpdated={updated => setPackages(prev => prev.map(pkg => isSamePackageRecord(pkg, updated) ? updated : pkg))} emptyMessage={config.endpoint === "tbl-list" && search.trim() ? `No packages match "${search.trim()}".` : config.endpoint === "tbl-list" && statusFilter !== "all" ? `No ${PACKAGE_STATUS_FILTER_OPTIONS.find(o => o.value === statusFilter)?.label.toLowerCase() ?? statusFilter} packages found.` : `No packages found for ${config.title.toLowerCase()}.`} />}
 

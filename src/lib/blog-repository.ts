@@ -197,6 +197,7 @@ export async function getBlogStats(): Promise<BlogStats> {
     `SELECT
       COUNT(*) AS total,
       SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft,
+      SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) AS scheduled,
       SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) AS published,
       SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END) AS archived,
       SUM(CASE WHEN is_featured = 1 THEN 1 ELSE 0 END) AS featured
@@ -207,10 +208,20 @@ export async function getBlogStats(): Promise<BlogStats> {
   return {
     total: Number(row.total ?? 0),
     draft: Number(row.draft ?? 0),
+    scheduled: Number(row.scheduled ?? 0),
     published: Number(row.published ?? 0),
     archived: Number(row.archived ?? 0),
     featured: Number(row.featured ?? 0),
   };
+}
+
+function assertScheduledHasPublishAt(
+  status: string | undefined,
+  publishedAt: string | null | undefined
+) {
+  if (status === "scheduled" && !publishedAt) {
+    throw new Error("Schedule date/time (SGT) is required for scheduled posts");
+  }
 }
 
 function resolvePublishedAt(
@@ -218,6 +229,11 @@ function resolvePublishedAt(
   publishedAt: string | null | undefined,
   existingPublishedAt: string | null
 ): string | null {
+  if (status === "scheduled") {
+    if (publishedAt) return publishedAt;
+    if (existingPublishedAt) return existingPublishedAt;
+    return null;
+  }
   if (status === "published") {
     if (publishedAt) return publishedAt;
     if (existingPublishedAt) return existingPublishedAt;
@@ -242,6 +258,7 @@ export async function createBlogPost(
   const status = input.status ?? "draft";
   const auditUser = audit?.user ?? null;
   const publishedAt = resolvePublishedAt(status, input.published_at, null);
+  assertScheduledHasPublishAt(status, publishedAt);
   const tagsJson = JSON.stringify(input.tags ?? []);
 
   const result = await query<ResultSetHeader>(
@@ -347,8 +364,11 @@ export async function updateBlogPost(
   const nextStatus = input.status ?? existing.status;
   if (input.status !== undefined || input.published_at !== undefined) {
     const publishedAt = resolvePublishedAt(nextStatus, input.published_at, existing.published_at);
+    assertScheduledHasPublishAt(nextStatus, publishedAt);
     fields.push("published_at = ?");
     values.push(publishedAt);
+  } else {
+    assertScheduledHasPublishAt(nextStatus, existing.published_at);
   }
 
   if (!fields.length) {
@@ -367,6 +387,36 @@ export async function updateBlogPost(
   );
 
   return getBlogPostById(id);
+}
+
+export async function publishDueScheduledBlogPosts(): Promise<{
+  publishedCount: number;
+  publishedIds: number[];
+}> {
+  const dueRows = await query<RowDataPacket[]>(
+    `SELECT id FROM ${POSTS_TABLE}
+     WHERE status = 'scheduled'
+       AND published_at IS NOT NULL
+       AND published_at <= NOW()
+     ORDER BY published_at ASC`
+  );
+
+  const publishedIds = dueRows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id));
+  if (!publishedIds.length) {
+    return { publishedCount: 0, publishedIds: [] };
+  }
+
+  const placeholders = publishedIds.map(() => "?").join(", ");
+  await query<ResultSetHeader>(
+    `UPDATE ${POSTS_TABLE}
+     SET status = 'published',
+         updated_by = 'system-scheduler'
+     WHERE id IN (${placeholders})
+       AND status = 'scheduled'`,
+    publishedIds
+  );
+
+  return { publishedCount: publishedIds.length, publishedIds };
 }
 
 export async function deleteBlogPost(id: number): Promise<boolean> {

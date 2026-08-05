@@ -6,7 +6,7 @@ import WriteNewBlogLink from "@/components/blogs/WriteNewBlogLink";
 import { Icon } from "@/components/ui/icons";
 import { deleteBlogPost } from "@/lib/blog-api";
 import type { BlogPostRecord } from "@/lib/blog-types";
-import { formatPackageDateTime } from "@/lib/format-date";
+import { formatPackageDateTime, formatPackageDateTimeSgt } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
@@ -17,6 +17,10 @@ const STATUS_STYLES: Record<string, { badge: string; dot: string }> = {
   draft: {
     badge: "bg-amber-50 text-amber-700 ring-amber-600/20",
     dot: "bg-amber-500",
+  },
+  scheduled: {
+    badge: "bg-sky-50 text-sky-700 ring-sky-600/20",
+    dot: "bg-sky-500",
   },
   published: {
     badge: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
@@ -229,7 +233,7 @@ export default function BlogListTable({
                 </TableCell>
                 <TableCell className="px-4 py-3.5 text-gray-500 text-xs hidden sm:table-cell">
                   <div className="space-y-0.5">
-                    <p>{post.published_at ? formatPackageDateTime(post.published_at) : "—"}</p>
+                    <p>{post.published_at ? formatPackageDateTimeSgt(post.published_at) : "—"}</p>
                     <p className="text-[11px] text-gray-400">By {resolvePublishedByName(post)}</p>
                   </div>
                 </TableCell>

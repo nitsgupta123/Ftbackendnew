@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef } from "react";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import BlogCategoryListTable from "@/components/blogs/BlogCategoryListTable";
 import BlogCategoryForm from "@/components/blogs/BlogCategoryForm";
@@ -27,6 +27,10 @@ const filterControlClass =
   "h-10 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#A68231]/25 focus:border-[#A68231] transition-colors";
 
 type FormMode = "create" | "edit" | null;
+
+export type BlogCategoriesPanelHandle = {
+  openCreate: () => void;
+};
 
 function StatCard({
   label,
@@ -58,7 +62,7 @@ function StatCard({
   );
 }
 
-export default function BlogCategoriesPanel() {
+export default forwardRef<BlogCategoriesPanelHandle>(function BlogCategoriesPanel(_props, ref) {
   const { can } = usePermissions();
   const canDelete = can("blog_categories", "delete");
 
@@ -130,6 +134,8 @@ export default function BlogCategoriesPanel() {
     setEditingCategory(null);
     setFormMode("create");
   }
+
+  useImperativeHandle(ref, () => ({ openCreate }), []);
 
   function openEdit(category: BlogCategoryRecord) {
     setEditingCategory(category);
@@ -246,16 +252,6 @@ export default function BlogCategoriesPanel() {
               <option value="desc">Descending</option>
             </NativeSelect>
           </div>
-
-          <Button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex h-10 shrink-0 items-center gap-2 px-5 text-sm font-semibold text-white rounded-lg shadow-sm hover:opacity-90 sm:ml-auto"
-            style={{ backgroundColor: GOLD }}
-          >
-            <Icon name="FileText" size={16} />
-            Add Category
-          </Button>
         </div>
 
         {error && (
@@ -379,4 +375,4 @@ export default function BlogCategoriesPanel() {
       )}
     </>
   );
-}
+});

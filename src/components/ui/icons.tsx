@@ -130,12 +130,20 @@ interface IconProps {
   name: string;
   size?: number;
   className?: string;
+  strokeWidth?: number;
 }
 
-export function Icon({ name, size = 20, className = "" }: IconProps) {
+export function Icon({
+  name,
+  size = 20,
+  className = "",
+  strokeWidth,
+}: IconProps) {
   const LucideIcon = iconMap[name];
   if (!LucideIcon) return null;
-  return <LucideIcon size={size} className={className} />;
+  return (
+    <LucideIcon size={size} className={className} strokeWidth={strokeWidth} />
+  );
 }
 
 export { iconMap };

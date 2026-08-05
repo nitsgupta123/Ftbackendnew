@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Icon } from "@/components/ui/icons";
 import type { BlogPostRecord } from "@/lib/blog-types";
-import { formatPackageDateTime } from "@/lib/format-date";
+import { formatPackageDateTime, formatPackageDateTimeSgt } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -81,7 +81,7 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase">Published</dt>
               <dd className="mt-0.5 text-gray-900">
-                {post.published_at ? formatPackageDateTime(post.published_at) : "—"}
+                {post.published_at ? formatPackageDateTimeSgt(post.published_at) : "—"}
               </dd>
             </div>
           </dl>

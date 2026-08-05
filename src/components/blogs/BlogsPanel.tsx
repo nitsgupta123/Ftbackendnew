@@ -5,7 +5,6 @@ import { Icon } from "@/components/ui/icons";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import BlogListTable from "@/components/blogs/BlogListTable";
 import BlogDetailsModal from "@/components/blogs/BlogDetailsModal";
-import WriteNewBlogLink from "@/components/blogs/WriteNewBlogLink";
 import { getBlogStats, listBlogAuthors, listBlogPosts } from "@/lib/blog-api";
 import {
   BLOG_SORT_OPTIONS,
@@ -204,16 +203,29 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
       return [
         { label: "Draft Posts", value: busy ? "—" : total, icon: "FileText" },
         {
+          label: "Scheduled",
+          value: busy ? "—" : (stats?.scheduled ?? 0),
+          icon: "Clock",
+        },
+        {
           label: "Published",
           value: busy ? "—" : (stats?.published ?? 0),
           icon: "CheckCircle",
           accent: "#27AE60",
         },
+      ];
+    }
+
+    if (defaultStatus === "scheduled") {
+      return [
+        { label: "Scheduled Posts", value: busy ? "—" : total, icon: "Clock" },
         {
-          label: "Archived",
-          value: busy ? "—" : (stats?.archived ?? 0),
-          icon: "Archive",
+          label: "Published",
+          value: busy ? "—" : (stats?.published ?? 0),
+          icon: "CheckCircle",
+          accent: "#27AE60",
         },
+        { label: "Draft Posts", value: busy ? "—" : (stats?.draft ?? 0), icon: "FileText" },
       ];
     }
 
@@ -238,7 +250,11 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
         icon: "CheckCircle",
         accent: "#27AE60",
       },
-      { label: "Draft Posts", value: busy ? "—" : (stats?.draft ?? 0), icon: "Pencil" },
+      {
+        label: "Scheduled",
+        value: busy ? "—" : (stats?.scheduled ?? 0),
+        icon: "Clock",
+      },
     ];
   }, [defaultStatus, loading, statsLoading, total, stats, featuredOnPage]);
 
@@ -339,8 +355,6 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
               <option value="asc">Ascending</option>
             </NativeSelect>
           </div>
-
-          <WriteNewBlogLink href={createHref} className="sm:ml-auto" />
         </div>
 
         {error && (

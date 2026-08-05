@@ -39,7 +39,9 @@ import { NativeSelect } from "@/components/ui/native-select";
 
 const PAGE_SIZE = 10;
 const filterControlClass =
-  "h-10 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#A68231]/25 focus:border-[#A68231] transition-colors";
+  "h-9 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#A68231]/25 focus:border-[#A68231] transition-colors";
+const filterSelectClass =
+  `${filterControlClass} !w-full max-w-full shrink-0 px-2.5 pr-7`;
 
 type FormMode = "create" | "edit" | null;
 
@@ -225,10 +227,30 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
     }
   }
 
+  const hasActiveFilters =
+    Boolean(search.trim()) ||
+    statusFilter !== "all" ||
+    relationshipFilter !== "all" ||
+    countryFilter !== "all";
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("all");
+    setRelationshipFilter("all");
+    setCountryFilter("all");
+    setPage(1);
+  }
+
   if (!can("suppliers")) {
     return (
-      <div className="rounded-2xl border border-[#E8ECF4] bg-white p-8 text-center text-sm text-gray-500">
-        You do not have permission to view suppliers.
+      <div className="rounded-2xl border border-[#E8ECF4] bg-white px-6 py-12 text-center shadow-sm">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+          <Icon name="Shield" size={22} />
+        </div>
+        <p className="text-sm font-medium text-gray-700">Access restricted</p>
+        <p className="mt-1 text-sm text-gray-500">
+          You do not have permission to view suppliers.
+        </p>
       </div>
     );
   }
@@ -237,14 +259,14 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
     <>
       <SupplierStatsGrid stats={stats} loading={statsLoading || loading} />
 
-      <div className="rounded-2xl border border-[#E8ECF0] bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto border-b border-[#E8ECF0] bg-gradient-to-r from-[#FFFCF7] via-white to-white">
-          <div className="flex min-w-max items-center gap-2 px-4 py-3">
-            <div className="relative w-[220px] shrink-0">
+      <div className="overflow-hidden rounded-2xl border border-[#E8ECF0] bg-white shadow-sm">
+        <div className="border-b border-[#E8ECF0] bg-gradient-to-r from-[#FFFCF7] via-white to-white px-4 py-4 sm:px-5">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
+            <div className="relative w-[13.5rem] shrink-0 sm:w-[15rem]">
               <Icon
                 name="Search"
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                size={15}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
               />
               <Input
                 type="search"
@@ -254,7 +276,8 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
                   setPage(1);
                 }}
                 placeholder="Search suppliers…"
-                className={`w-full pl-9 pr-3 ${filterControlClass}`}
+                className={`w-full pl-8 pr-2.5 ${filterControlClass}`}
+                aria-label="Search suppliers"
               />
             </div>
 
@@ -264,8 +287,9 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
                 setStatusFilter(e.target.value as SupplierStatusFilter);
                 setPage(1);
               }}
-              wrapperClassName="w-auto shrink-0"
-              className={`min-w-[120px] px-3 pr-9 ${filterControlClass}`}
+              wrapperClassName="w-[7.5rem] shrink-0"
+              className={filterSelectClass}
+              aria-label="Filter by status"
             >
               {SUPPLIER_STATUS_FILTER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -277,11 +301,14 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
             <NativeSelect
               value={relationshipFilter}
               onChange={(e) => {
-                setRelationshipFilter(e.target.value as SupplierRelationshipFilter);
+                setRelationshipFilter(
+                  e.target.value as SupplierRelationshipFilter
+                );
                 setPage(1);
               }}
-              wrapperClassName="w-auto shrink-0"
-              className={`min-w-[140px] px-3 pr-9 ${filterControlClass}`}
+              wrapperClassName="w-[8.75rem] shrink-0"
+              className={filterSelectClass}
+              aria-label="Filter by relationship"
             >
               {SUPPLIER_RELATIONSHIP_FILTER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -296,8 +323,9 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
                 setCountryFilter(e.target.value);
                 setPage(1);
               }}
-              wrapperClassName="w-auto shrink-0"
-              className={`w-[120px] px-2 pr-8 ${filterControlClass}`}
+              wrapperClassName="w-[7.75rem] shrink-0"
+              className={filterSelectClass}
+              aria-label="Filter by country"
             >
               <option value="all">All countries</option>
               {countries.map((country) => (
@@ -313,8 +341,9 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
                 setSort(e.target.value as SupplierSortField);
                 setPage(1);
               }}
-              wrapperClassName="w-auto shrink-0"
-              className={`min-w-[140px] px-3 pr-9 ${filterControlClass}`}
+              wrapperClassName="w-[10.5rem] shrink-0"
+              className={filterSelectClass}
+              aria-label="Sort by"
             >
               {SUPPLIER_SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -326,8 +355,9 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
             <NativeSelect
               value={order}
               onChange={(e) => setOrder(e.target.value as "asc" | "desc")}
-              wrapperClassName="w-auto shrink-0"
-              className={`min-w-[110px] px-3 pr-9 ${filterControlClass}`}
+              wrapperClassName="w-[7rem] shrink-0"
+              className={filterSelectClass}
+              aria-label="Sort order"
             >
               <option value="asc">Ascending</option>
               <option value="desc">Descending</option>
@@ -337,35 +367,61 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
               type="button"
               onClick={handleDownloadExcel}
               disabled={isExporting || loading}
-              className="inline-flex h-10 px-3 items-center justify-center gap-1.5 text-sm font-semibold rounded-lg border border-[#E5E7EB] bg-white text-[#0B3A5C] shadow-sm hover:bg-[#F8FAFC] disabled:opacity-50 shrink-0 whitespace-nowrap"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#0B3A5C] shadow-sm transition hover:bg-[#F8FAFC] disabled:opacity-50"
             >
-              <Icon name="FileSpreadsheet" size={16} />
-              {isExporting ? "Preparing…" : "Download Excel"}
+              <Icon name="FileSpreadsheet" size={15} />
+              {isExporting ? "Preparing…" : "Export Excel"}
             </Button>
           </div>
+
+          {(hasActiveFilters || total > 0) && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#F1F5F9] pt-3">
+              <p className="text-xs text-gray-500">
+                {loading ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Icon
+                      name="Loader2"
+                      size={12}
+                      className="animate-spin text-[#A68231]"
+                    />
+                    Loading suppliers…
+                  </span>
+                ) : total > 0 ? (
+                  <>
+                    Showing{" "}
+                    <span className="font-semibold text-gray-700">
+                      {suppliers.length}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-semibold text-gray-700">{total}</span>{" "}
+                    suppliers
+                    {hasActiveFilters ? " (filtered)" : ""}
+                  </>
+                ) : (
+                  "No suppliers to display"
+                )}
+              </p>
+
+              {hasActiveFilters && (
+                <Button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[#A68231] hover:bg-[#A68231]/10"
+                >
+                  <Icon name="X" size={12} />
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {error && (
-          <div className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <Icon name="AlertCircle" size={16} className="shrink-0 mt-0.5" />
+          <div className="mx-4 mt-4 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-5">
+            <Icon name="AlertCircle" size={16} className="mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
-
-        <div className="px-4 py-3 border-b border-[#F1F5F9] bg-[#FAFBFC]">
-          <p className="text-xs text-gray-500">
-            {loading ? (
-              "Loading suppliers…"
-            ) : total > 0 ? (
-              <>
-                Showing <span className="font-medium text-gray-700">{suppliers.length}</span>{" "}
-                of <span className="font-medium text-gray-700">{total}</span> suppliers
-              </>
-            ) : (
-              "No suppliers to display"
-            )}
-          </p>
-        </div>
 
         <SupplierListTable
           suppliers={suppliers}
@@ -389,16 +445,18 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
         />
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-[#E8ECF0] bg-[#FAFBFC]">
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-[#E8ECF0] bg-[#FAFBFC] px-4 py-3.5 sm:flex-row sm:px-5">
             <span className="text-sm text-gray-500">
-              Page {page} of {totalPages}
+              Page{" "}
+              <span className="font-medium text-gray-700">{page}</span> of{" "}
+              <span className="font-medium text-gray-700">{totalPages}</span>
             </span>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
                 disabled={page <= 1 || loading}
                 onClick={() => setPage((p) => p - 1)}
-                className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 shadow-sm"
+                className="inline-flex h-9 items-center rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-white hover:border-gray-300 disabled:opacity-40"
               >
                 <Icon name="ChevronLeft" size={16} className="mr-1" />
                 Previous
@@ -407,7 +465,7 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
                 type="button"
                 disabled={page >= totalPages || loading}
                 onClick={() => setPage((p) => p + 1)}
-                className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 shadow-sm"
+                className="inline-flex h-9 items-center rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-white hover:border-gray-300 disabled:opacity-40"
               >
                 Next
                 <Icon name="ChevronRight" size={16} className="ml-1" />
@@ -418,12 +476,31 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
       </div>
 
       {formMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-[#E5E7EB] p-6 pointer-events-auto">
-            <div className="mb-5 flex items-start justify-between gap-3">
-              <h2 className="text-lg font-bold text-gray-900">
-                {formMode === "edit" ? "Edit Supplier" : "Add Supplier"}
-              </h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Close dialog"
+            disabled={isSaving}
+            onClick={() => {
+              if (!isSaving) {
+                setFormMode(null);
+                setEditingSupplier(null);
+              }
+            }}
+            className="absolute inset-0 bg-[#0B3A5C]/35 backdrop-blur-[2px]"
+          />
+          <div className="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-3 border-b border-[#F1F5F9] pb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[#1F2A44]">
+                  {formMode === "edit" ? "Edit Supplier" : "Add Supplier"}
+                </h2>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  {formMode === "edit"
+                    ? "Update vendor details and relationship status."
+                    : "Add a new vendor to the supplier directory."}
+                </p>
+              </div>
               <Button
                 type="button"
                 disabled={isSaving}
@@ -433,7 +510,7 @@ const SuppliersPanel = forwardRef<SuppliersPanelHandle>(function SuppliersPanel(
                     setEditingSupplier(null);
                   }
                 }}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40"
                 aria-label="Close"
                 title="Close"
               >

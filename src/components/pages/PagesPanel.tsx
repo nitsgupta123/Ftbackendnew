@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Icon } from "@/components/ui/icons";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import PageListTable from "@/components/pages/PageListTable";
@@ -267,14 +266,6 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
               <option value="desc">Descending</option>
             </NativeSelect>
           </div>
-
-          <Link
-            href="/pages/new"
-            className="sm:ml-auto inline-flex h-10 px-4 items-center justify-center text-sm font-semibold text-white rounded-lg shadow-sm hover:opacity-90"
-            style={{ backgroundColor: GOLD }}
-          >
-            + Create New Page
-          </Link>
         </div>
 
         {error && (

@@ -1,12 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/layout/AdminShell";
+import ListPageHeader from "@/components/layout/ListPageHeader";
 import BlogsPanel from "@/components/blogs/BlogsPanel";
-import BlogCategoriesPanel from "@/components/blogs/BlogCategoriesPanel";
-import { Icon } from "@/components/ui/icons";
+import BlogCategoriesPanel, {
+  type BlogCategoriesPanelHandle,
+} from "@/components/blogs/BlogCategoriesPanel";
 import { BLOG_MODULES } from "@/lib/blog-modules";
+
+function blogModuleIcon(slug: string, endpoint?: string): string {
+  if (endpoint === "categories") return "Tags";
+  if (slug === "scheduled") return "Calendar";
+  if (slug === "published") return "CheckCircle";
+  if (slug === "drafts") return "Pencil";
+  if (slug === "archived") return "Archive";
+  return "FileText";
+}
 
 export default function BlogModulePage({
   params,
@@ -14,6 +25,7 @@ export default function BlogModulePage({
   params: Promise<{ module: string }>;
 }) {
   const router = useRouter();
+  const categoriesRef = useRef<BlogCategoriesPanelHandle>(null);
   const [moduleSlug, setModuleSlug] = useState<string | null>(null);
   const config = moduleSlug ? BLOG_MODULES[moduleSlug] : null;
 
@@ -35,30 +47,29 @@ export default function BlogModulePage({
     );
   }
 
+  const action =
+    config.endpoint === "categories"
+      ? {
+          label: "Add Category",
+          onClick: () => categoriesRef.current?.openCreate(),
+        }
+      : {
+          label: "Write New Blog",
+          href: "/blogs/new",
+          icon: "Pencil",
+        };
+
   return (
     <AdminShell breadcrumbs={config.breadcrumbs}>
-      <div className="mb-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${
-                  config.endpoint === "categories" || config.slug === "published"
-                    ? "bg-[#A68231]/12 text-[#A68231] ring-[#A68231]/20"
-                    : "bg-gray-100 text-[#555E69] ring-[#E5E7EB]"
-                }`}
-              >
-                <Icon name="FileText" size={20} />
-              </div>
-              <h1 className="text-xl font-semibold text-[#1F2A44] tracking-tight">{config.title}</h1>
-            </div>
-            <p className="text-sm text-gray-500 mt-2 ml-[52px] leading-relaxed">{config.description}</p>
-          </div>
-        </div>
-      </div>
+      <ListPageHeader
+        icon={blogModuleIcon(config.slug, config.endpoint)}
+        title={config.title}
+        description={config.description}
+        action={action}
+      />
 
       {config.endpoint === "categories" ? (
-        <BlogCategoriesPanel />
+        <BlogCategoriesPanel ref={categoriesRef} />
       ) : (
         <BlogsPanel
           key={config.slug}

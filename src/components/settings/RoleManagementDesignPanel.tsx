@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useState, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -46,7 +46,14 @@ function formatSingaporeDateTime(value?: string): string {
   return formatPackageDateTime(value);
 }
 
-export default function RoleManagementDesignPanel() {
+export type RoleManagementDesignPanelHandle = {
+  openCreate: () => void;
+};
+
+export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManagementDesignPanel(
+  _props,
+  ref
+) {
   const { user } = useAuth();
   const actorName = user?.fullName?.trim() || "Super Admin";
   const [loading, setLoading] = useState(true);
@@ -160,6 +167,8 @@ export default function RoleManagementDesignPanel() {
     });
     setRoleModalOpen(true);
   };
+
+  useImperativeHandle(ref, () => ({ openCreate: openCreateRoleModal }), []);
 
   const openEditRoleModal = (roleKey: string) => {
     const meta = roleMeta[roleKey];
@@ -375,21 +384,11 @@ export default function RoleManagementDesignPanel() {
 
       <div className="rounded-2xl border border-[#E8ECF0] bg-white shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-[#E8ECF0] bg-gradient-to-r from-[#FFFCF7] via-white to-white">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-[#1F2A44]">Role Management</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Design, assign, and govern role structures for every department.
-              </p>
-            </div>
-            <Button
-              className="h-10 rounded-lg px-4 bg-[#A68231] text-white hover:opacity-90"
-              onClick={openCreateRoleModal}
-              disabled={saving}
-            >
-              <Icon name="Plus" size={15} className="mr-2" />
-              Add New Role
-            </Button>
+          <div>
+            <h2 className="text-lg font-semibold text-[#1F2A44]">Role Management</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Design, assign, and govern role structures for every department.
+            </p>
           </div>
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -525,4 +524,4 @@ export default function RoleManagementDesignPanel() {
       />
     </div>
   );
-}
+});

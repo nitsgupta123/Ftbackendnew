@@ -6,6 +6,7 @@ import {
   SUPPLIER_STATUS_LABELS,
   buildSupplierSummary,
   type SupplierRecord,
+  type SupplierRelationshipStatus,
 } from "@/lib/supplier-types";
 import { formatPackageDate, formatPackageDateTime } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
@@ -16,17 +17,55 @@ interface SupplierDetailsModalProps {
   onEdit?: (supplier: SupplierRecord) => void;
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  active: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+  inactive: "bg-gray-100 text-gray-600 ring-gray-500/10",
+  do_not_use: "bg-red-50 text-red-700 ring-red-600/20",
+};
+
+const RELATIONSHIP_STYLES: Record<SupplierRelationshipStatus, string> = {
+  new: "bg-violet-50 text-violet-700 ring-violet-600/20",
+  under_review: "bg-blue-50 text-blue-700 ring-blue-600/20",
+  with_issues: "bg-orange-50 text-orange-800 ring-orange-600/20",
+  on_probation: "bg-amber-50 text-amber-900 ring-amber-700/20",
+  inactive: "bg-slate-100 text-slate-700 ring-slate-500/15",
+  blacklisted: "bg-gray-800 text-white ring-gray-900/20",
+  poor: "bg-red-50 text-red-700 ring-red-600/20",
+  average: "bg-yellow-50 text-yellow-900 ring-yellow-600/20",
+  good: "bg-emerald-50 text-emerald-800 ring-emerald-600/20",
+  excellent: "bg-emerald-800 text-emerald-50 ring-emerald-900/20",
+};
+
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <dt className="text-xs font-medium text-gray-500 uppercase">{label}</dt>
-      <dd className="mt-0.5 text-gray-900 whitespace-pre-wrap break-words">{value}</dd>
+    <div className="rounded-xl border border-[#EEF2F6] bg-[#FAFBFC] px-3.5 py-3">
+      <dt className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm leading-relaxed text-[#1F2A44] whitespace-pre-wrap break-words">
+        {value}
+      </dd>
     </div>
   );
 }
 
 function display(value: string | null | undefined): string {
   return value?.trim() ? value : "—";
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <h3 className="mb-3 text-sm font-semibold text-[#1F2A44]">{title}</h3>
+      {children}
+    </section>
+  );
 }
 
 export default function SupplierDetailsModal({
@@ -36,38 +75,67 @@ export default function SupplierDetailsModal({
 }: SupplierDetailsModalProps) {
   if (!supplier) return null;
 
+  const statusStyle = STATUS_STYLES[supplier.status] ?? STATUS_STYLES.inactive;
+  const relationshipStyle =
+    RELATIONSHIP_STYLES[supplier.relationship_status] ??
+    RELATIONSHIP_STYLES.average;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-[#E5E7EB] pointer-events-auto">
-        <div className="sticky top-0 flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB] bg-white">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">{supplier.company_name}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {supplier.country}
-              {supplier.city_tour_area ? ` · ${supplier.city_tour_area}` : ""}
-            </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close dialog"
+        onClick={onClose}
+        className="absolute inset-0 bg-[#0B3A5C]/35 backdrop-blur-[2px]"
+      />
+
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-2xl">
+        <div className="shrink-0 border-b border-[#E8ECF0] bg-gradient-to-r from-[#FFFCF7] via-white to-white px-5 py-4 sm:px-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${statusStyle}`}
+                >
+                  {SUPPLIER_STATUS_LABELS[supplier.status] ?? supplier.status}
+                </span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${relationshipStyle}`}
+                >
+                  {RELATIONSHIP_STATUS_LABELS[supplier.relationship_status]}
+                </span>
+              </div>
+              <h2 className="truncate text-lg font-semibold text-[#1F2A44] sm:text-xl">
+                {supplier.company_name}
+              </h2>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500">
+                <span className="inline-flex items-center gap-1">
+                  <Icon name="Globe" size={14} className="text-gray-400" />
+                  {supplier.country}
+                </span>
+                {supplier.city_tour_area ? (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="text-gray-300">·</span>
+                    <Icon name="MapPin" size={14} className="text-gray-400" />
+                    {supplier.city_tour_area}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              aria-label="Close"
+            >
+              <Icon name="X" size={20} />
+            </Button>
           </div>
-          <Button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-          >
-            <Icon name="X" size={20} />
-          </Button>
         </div>
 
-        <div className="p-6 space-y-5">
-          <div>
-            <h3 className="text-sm font-bold text-[#1F2A44] mb-3">Status</h3>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <DetailItem
-                label="Active Status"
-                value={SUPPLIER_STATUS_LABELS[supplier.status] ?? supplier.status}
-              />
-              <DetailItem
-                label="Relationship Status"
-                value={RELATIONSHIP_STATUS_LABELS[supplier.relationship_status]}
-              />
+        <div className="space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+          <Section title="Status & ownership">
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <DetailItem
                 label="Relationship Owner"
                 value={display(supplier.relationship_owner)}
@@ -81,11 +149,10 @@ export default function SupplierDetailsModal({
                 }
               />
             </dl>
-          </div>
+          </Section>
 
-          <div>
-            <h3 className="text-sm font-bold text-[#1F2A44] mb-3">Services & Contact</h3>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <Section title="Services & contact">
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <DetailItem
                 label="Services Offered"
                 value={display(supplier.services_offered)}
@@ -112,11 +179,10 @@ export default function SupplierDetailsModal({
                 />
               </div>
             </dl>
-          </div>
+          </Section>
 
-          <div>
-            <h3 className="text-sm font-bold text-[#1F2A44] mb-3">Notes & Accounts</h3>
-            <dl className="grid grid-cols-1 gap-4 text-sm">
+          <Section title="Notes & accounts">
+            <dl className="grid grid-cols-1 gap-3">
               <DetailItem label="Notes" value={display(supplier.notes)} />
               <DetailItem
                 label="Problems with Services"
@@ -127,28 +193,27 @@ export default function SupplierDetailsModal({
                 value={display(supplier.account_details)}
               />
             </dl>
-          </div>
+          </Section>
 
-          <div>
-            <h3 className="text-sm font-bold text-[#1F2A44] mb-3">Summary</h3>
-            <pre className="rounded-xl border border-[#E8ECF0] bg-[#F8FAFC] p-4 text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+          <Section title="Summary">
+            <pre className="rounded-xl border border-[#E8ECF0] bg-[#F8FAFC] p-4 text-xs leading-relaxed text-gray-700 whitespace-pre-wrap font-sans">
               {buildSupplierSummary(supplier)}
             </pre>
-          </div>
+          </Section>
 
-          <div className="text-xs text-gray-400 border-t border-[#E8ECF0] pt-4">
+          <p className="border-t border-[#E8ECF0] pt-4 text-xs text-gray-400">
             Created {formatPackageDateTime(supplier.created_at)}
             {supplier.created_by ? ` by ${supplier.created_by}` : ""} · Updated{" "}
             {formatPackageDateTime(supplier.updated_at)}
             {supplier.updated_by ? ` by ${supplier.updated_by}` : ""}
-          </div>
+          </p>
         </div>
 
-        <div className="sticky bottom-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-white">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-[#E5E7EB] bg-white px-5 py-4 sm:px-6">
           <Button
             type="button"
             onClick={onClose}
-            className="h-10 px-4 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="h-10 rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
             Close
           </Button>
@@ -156,8 +221,9 @@ export default function SupplierDetailsModal({
             <Button
               type="button"
               onClick={() => onEdit(supplier)}
-              className="h-10 px-4 rounded-lg bg-[#A68231] text-sm font-semibold text-white hover:bg-[#A68231]/90"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#A68231] px-4 text-sm font-semibold text-white transition hover:bg-[#947329]"
             >
+              <Icon name="Pencil" size={14} />
               Edit Supplier
             </Button>
           )}

@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/layout/AdminShell";
+import ListPageHeader from "@/components/layout/ListPageHeader";
 import PagesPanel from "@/components/pages/PagesPanel";
-import { Icon } from "@/components/ui/icons";
 import { PAGE_MODULES } from "@/lib/page-modules";
+
+function pageModuleIcon(slug: string): string {
+  if (slug === "published") return "CheckCircle";
+  if (slug === "drafts") return "Pencil";
+  if (slug === "archived") return "Archive";
+  return "FileStack";
+}
 
 export default function PageModulePage({
   params,
@@ -36,25 +43,16 @@ export default function PageModulePage({
 
   return (
     <AdminShell breadcrumbs={config.breadcrumbs}>
-      <div className="mb-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${
-                  config.slug === "published"
-                    ? "bg-[#A68231]/12 text-[#A68231] ring-[#A68231]/20"
-                    : "bg-gray-100 text-[#555E69] ring-[#E5E7EB]"
-                }`}
-              >
-                <Icon name="FileStack" size={20} />
-              </div>
-              <h1 className="text-xl font-semibold text-[#1F2A44] tracking-tight">{config.title}</h1>
-            </div>
-            <p className="text-sm text-gray-500 mt-2 ml-[52px] leading-relaxed">{config.description}</p>
-          </div>
-        </div>
-      </div>
+      <ListPageHeader
+        icon={pageModuleIcon(config.slug)}
+        title={config.title}
+        description={config.description}
+        action={{
+          label: "Create New Page",
+          href: "/pages/new",
+          icon: "Pencil",
+        }}
+      />
 
       <PagesPanel defaultStatus={config.status} hideStatusFilter={Boolean(config.status)} />
     </AdminShell>

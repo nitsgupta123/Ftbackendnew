@@ -31,11 +31,13 @@ export default function NewBlogPage() {
       const listPath =
         post.status === "published"
           ? "/blogs/published"
-          : post.status === "draft"
-            ? "/blogs/drafts"
-            : post.status === "archived"
-              ? "/blogs/archived"
-              : "/blogs/all";
+          : post.status === "scheduled"
+            ? "/blogs/scheduled"
+            : post.status === "draft"
+              ? "/blogs/drafts"
+              : post.status === "archived"
+                ? "/blogs/archived"
+                : "/blogs/all";
       router.push(listPath);
       router.refresh();
     } catch (err) {

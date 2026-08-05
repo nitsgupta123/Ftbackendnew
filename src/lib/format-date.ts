@@ -87,10 +87,52 @@ export function formatPackageDateTime(value: string | null | undefined): string 
   });
 }
 
+/** Same as `formatPackageDateTime`, with an explicit `SGT` suffix. */
+export function formatPackageDateTimeSgt(value: string | null | undefined): string {
+  const formatted = formatPackageDateTime(value);
+  if (!value || formatted === "—") return "—";
+  return formatted.endsWith(" SGT") ? formatted : `${formatted} SGT`;
+}
+
 export function formatPackageTime(value: string | null | undefined): string {
   return formatWithSgt(value, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
+}
+
+/** Format a stored datetime for `<input type="datetime-local">` in Singapore time. */
+export function toDatetimeLocalValue(value: string | null | undefined): string {
+  const date = toValidDate(value);
+  if (!date) return "";
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SGT_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const hourRaw = getPart(parts, "hour");
+  const hour = hourRaw === "24" ? "00" : hourRaw.padStart(2, "0");
+
+  return `${getPart(parts, "year")}-${getPart(parts, "month")}-${getPart(parts, "day")}T${hour}:${getPart(parts, "minute")}`;
+}
+
+/**
+ * Convert a `datetime-local` value (treated as Singapore wall-clock) to
+ * `YYYY-MM-DD HH:mm:ss` for MySQL storage.
+ */
+export function fromDatetimeLocalValue(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  return `${year}-${month}-${day} ${hour}:${minute}:${second.padStart(2, "0")}`;
 }

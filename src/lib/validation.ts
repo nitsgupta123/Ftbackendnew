@@ -244,9 +244,9 @@ const slugFieldSchema = z
     "Slug must be lowercase with hyphens only"
   );
 
-export const blogPostStatusSchema = z.enum(["draft", "published", "archived"]);
+export const blogPostStatusSchema = z.enum(["draft", "scheduled", "published", "archived"]);
 
-export const createBlogPostSchema = z.object({
+const blogPostFieldsSchema = z.object({
   title: z.string().min(1, "Blog title is required"),
   slug: slugFieldSchema,
   excerpt: z.string().optional().nullable(),
@@ -269,7 +269,24 @@ export const createBlogPostSchema = z.object({
   seo_meta_description: z.string().optional().nullable(),
 });
 
-export const updateBlogPostSchema = createBlogPostSchema.partial();
+function refineScheduledPublishAt(
+  data: { status?: string | null; published_at?: string | null },
+  ctx: z.RefinementCtx
+) {
+  if (data.status !== "scheduled") return;
+  const scheduledAt = data.published_at?.trim();
+  if (!scheduledAt) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["published_at"],
+      message: "Schedule date/time (SGT) is required for scheduled posts",
+    });
+  }
+}
+
+export const createBlogPostSchema = blogPostFieldsSchema.superRefine(refineScheduledPublishAt);
+
+export const updateBlogPostSchema = blogPostFieldsSchema.partial().superRefine(refineScheduledPublishAt);
 
 export type CreateBlogPostFormValues = z.infer<typeof createBlogPostSchema>;
 export type UpdateBlogPostFormValues = z.infer<typeof updateBlogPostSchema>;

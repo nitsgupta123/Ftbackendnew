@@ -96,13 +96,13 @@ interface SupplierListTableProps {
 }
 
 const actionIconClass =
-  "inline-flex items-center justify-center size-8 rounded-lg border border-[#E5E7EB] bg-white text-[#A68231] hover:bg-[#FFFCF7] hover:border-[#A68231]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+  "inline-flex items-center justify-center size-8 rounded-lg border border-[#E5E7EB] bg-white text-[#A68231] shadow-sm hover:bg-[#FFFCF7] hover:border-[#A68231]/40 hover:shadow disabled:opacity-40 disabled:cursor-not-allowed transition-all";
 
 const headerCellClass =
-  "sticky top-0 z-20 text-left px-3 py-3 text-[11px] font-semibold text-white whitespace-normal leading-snug align-bottom border-r border-white/15 last:border-r-0 bg-[#0B3A5C]";
+  "sticky top-0 z-20 text-left px-3.5 py-3.5 text-[11px] font-semibold text-white whitespace-normal leading-snug align-bottom border-r border-white/10 last:border-r-0 bg-[#0B3A5C]";
 
 const bodyCellClass =
-  "px-3 py-2.5 text-xs text-[#334155] align-top border-r border-[#E8ECF0] last:border-r-0 max-w-[220px]";
+  "px-3.5 py-3 text-xs text-[#334155] align-top border-r border-[#EEF2F6] last:border-r-0 max-w-[220px]";
 
 function display(value: string | null | undefined): string {
   const trimmed = value?.trim();
@@ -219,7 +219,7 @@ function SortArrows({ active, order }: { active: boolean; order: "asc" | "desc" 
 const SLIDE_AMOUNT = 280;
 
 const slideArrowClass =
-  "absolute top-1/2 z-40 flex h-[52px] w-7 -translate-y-1/2 items-center justify-center rounded-lg bg-[#D4B56A] text-white shadow-md hover:bg-[#C9A84F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4B56A]/50";
+  "absolute top-1/2 z-40 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-[#0B3A5C] shadow-md transition hover:border-[#A68231]/40 hover:bg-[#FFFCF7] hover:text-[#A68231] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A68231]/40";
 
 export default function SupplierListTable({
   suppliers,
@@ -284,13 +284,33 @@ export default function SupplierListTable({
 
   if (loading) {
     return (
-      <div className="p-12 text-center text-sm text-gray-500">Loading suppliers…</div>
+      <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#A68231]/10 text-[#A68231]">
+          <Icon name="Loader2" size={22} className="animate-spin" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-700">Loading suppliers</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Fetching the latest vendor directory…
+          </p>
+        </div>
+      </div>
     );
   }
 
   if (!suppliers.length) {
     return (
-      <div className="p-12 text-center text-sm text-gray-500">{emptyMessage}</div>
+      <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F8FAFC] text-gray-400 ring-1 ring-[#E8ECF0]">
+          <Icon name="Building" size={26} />
+        </div>
+        <div className="max-w-sm">
+          <p className="text-sm font-medium text-gray-700">No suppliers found</p>
+          <p className="mt-1 text-sm leading-relaxed text-gray-500">
+            {emptyMessage}
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -351,12 +371,12 @@ export default function SupplierListTable({
               const relationshipStyle =
                 RELATIONSHIP_STYLES[supplier.relationship_status] ??
                 RELATIONSHIP_STYLES.average;
-              const rowBg = index % 2 === 0 ? "bg-white" : "bg-[#F8FAFC]";
+                  const rowBg = index % 2 === 0 ? "bg-white" : "bg-[#F9FBFD]";
 
               return (
                 <TableRow
                   key={supplier.id}
-                  className={`group hover:bg-[#FFFCF7] ${rowBg}`}
+                  className={`group transition-colors hover:bg-[#FFFCF7] ${rowBg}`}
                 >
                   <TableCell className={bodyCellClass}>
                     {formatPackageDate(
@@ -463,11 +483,11 @@ export default function SupplierListTable({
         <button
           type="button"
           onClick={() => slideHorizontal("left")}
-          className={`${slideArrowClass} left-2`}
+          className={`${slideArrowClass} left-0.5`}
           title="Slide left"
           aria-label="Slide table left"
         >
-          <Icon name="ChevronLeft" size={18} />
+          <Icon name="ChevronLeft" size={16} strokeWidth={2.25} />
         </button>
       )}
 
@@ -475,11 +495,11 @@ export default function SupplierListTable({
         <button
           type="button"
           onClick={() => slideHorizontal("right")}
-          className={`${slideArrowClass} right-[7.25rem]`}
+          className={`${slideArrowClass} right-[8.75rem]`}
           title="Slide right"
           aria-label="Slide table right"
         >
-          <Icon name="ChevronRight" size={18} />
+          <Icon name="ChevronRight" size={16} strokeWidth={2.25} />
         </button>
       )}
     </div>

@@ -33,6 +33,18 @@ export const BLOG_MODULES: Record<string, BlogModuleConfig> = {
     status: "draft",
     endpoint: "list",
   },
+  scheduled: {
+    slug: "scheduled",
+    title: "Scheduled Posts",
+    description: "Upcoming posts waiting for the cron job to publish at their SGT time.",
+    breadcrumbs: [
+      { label: "Dashboard", href: "/" },
+      { label: "Blogs", href: "/blogs/all" },
+      { label: "Scheduled" },
+    ],
+    status: "scheduled",
+    endpoint: "list",
+  },
   published: {
     slug: "published",
     title: "Published Posts",

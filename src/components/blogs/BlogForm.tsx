@@ -5,6 +5,7 @@ import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Icon } from "@/components/ui/icons";
 import { createBlogPostSchema, type CreateBlogPostFormValues } from "@/lib/validation";
+import { fromDatetimeLocalValue, toDatetimeLocalValue } from "@/lib/format-date";
 import { slugify } from "@/lib/slug";
 import type { BlogPostRecord } from "@/lib/blog-types";
 import { listActiveBlogCategories } from "@/lib/blog-category-api";
@@ -82,6 +83,7 @@ export default function BlogForm({
       author_name: initialData?.author_name ?? "",
       status: initialData?.status ?? "draft",
       is_featured: initialData?.is_featured ?? false,
+      published_at: toDatetimeLocalValue(initialData?.published_at),
       seo_meta_title: initialData?.seo_meta_title ?? "",
       seo_meta_description: initialData?.seo_meta_description ?? "",
       tags: initialData?.tags ?? [],
@@ -91,6 +93,7 @@ export default function BlogForm({
   const nameValue = useWatch({ control, name: "title" }) ?? "";
   const slugValue = useWatch({ control, name: "slug" }) ?? "";
   const featuredImagePath = useWatch({ control, name: "featured_image_path" }) ?? "";
+  const statusValue = useWatch({ control, name: "status" }) ?? "draft";
   const [slugTouched, setSlugTouched] = useState(false);
 
   async function handleFeaturedImageUpload(file: File) {
@@ -124,6 +127,7 @@ export default function BlogForm({
         author_name: initialData.author_name ?? "",
         status: initialData.status,
         is_featured: initialData.is_featured,
+        published_at: toDatetimeLocalValue(initialData.published_at),
         seo_meta_title: initialData.seo_meta_title ?? "",
         seo_meta_description: initialData.seo_meta_description ?? "",
         tags: initialData.tags,
@@ -154,6 +158,7 @@ export default function BlogForm({
       author_name: data.author_name?.trim() || null,
       category_id: data.category_id ?? null,
       status: data.status ?? "draft",
+      published_at: fromDatetimeLocalValue(data.published_at),
       tags,
     });
   }
@@ -238,6 +243,7 @@ export default function BlogForm({
               </Label>
               <NativeSelect id="status" className={inputClass} {...register("status")}>
                 <option value="draft">Draft</option>
+                <option value="scheduled">Scheduled</option>
                 <option value="published">Published</option>
                 <option value="archived">Archived</option>
               </NativeSelect>
@@ -305,6 +311,32 @@ export default function BlogForm({
                 />
               )}
             />
+
+            <div>
+              <Label
+                htmlFor="published_at"
+                className="block text-sm font-semibold text-[#334155] mb-1.5"
+              >
+                Schedule publish (SGT)
+                {statusValue === "scheduled" && <span className="text-red-500"> *</span>}
+              </Label>
+              <Input
+                id="published_at"
+                type="datetime-local"
+                className={inputClass}
+                {...register("published_at")}
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                {statusValue === "scheduled"
+                  ? "Required. Cron will publish this post automatically at this Singapore (SGT) time."
+                  : statusValue === "published"
+                    ? "Times are Singapore (SGT). Leave blank to publish now, or set a future date/time."
+                    : "Times are Singapore (SGT). Set status to Scheduled and pick a date/time for auto-publish."}
+              </p>
+              {errors.published_at && (
+                <p className="mt-1 text-xs text-red-600">{errors.published_at.message}</p>
+              )}
+            </div>
           </div>
 
           <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 space-y-4">

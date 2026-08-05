@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "All Posts", href: "/blogs/all" },
       { label: "Write New Blog", href: "/blogs/new" },
       { label: "Drafts", href: "/blogs/drafts" },
+      { label: "Scheduled", href: "/blogs/scheduled" },
       { label: "Published", href: "/blogs/published" },
       { label: "Blog Categories", href: "/blogs/categories" },
     ] },

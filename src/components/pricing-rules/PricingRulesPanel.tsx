@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef } from "react";
 import { Icon } from "@/components/ui/icons";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import PricingRulesListTable from "@/components/pricing-rules/PricingRulesListTable";
@@ -27,13 +27,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 
-const GOLD = "#A68231";
 const filterControlClass =
   "h-10 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#A68231]/25 focus:border-[#A68231] transition-colors";
 
 type FormMode = "create" | "edit" | null;
 
-export default function PricingRulesPanel() {
+export type PricingRulesPanelHandle = {
+  openCreate: () => void;
+};
+
+export default forwardRef<PricingRulesPanelHandle>(function PricingRulesPanel(_props, ref) {
   const { can } = usePermissions();
   const canDelete = can("pricing_rules", "delete");
 
@@ -156,6 +159,8 @@ export default function PricingRulesPanel() {
     setViewingRule(null);
   }
 
+  useImperativeHandle(ref, () => ({ openCreate }), []);
+
   function openEdit(rule: PricingRuleRecord) {
     setEditingRule(rule);
     setFormMode("edit");
@@ -242,15 +247,6 @@ export default function PricingRulesPanel() {
               <option value="desc">Descending</option>
             </NativeSelect>
           </div>
-
-          <Button
-            type="button"
-            onClick={openCreate}
-            className="sm:ml-auto inline-flex h-10 px-4 items-center justify-center text-sm font-semibold text-white rounded-lg shadow-sm hover:opacity-90"
-            style={{ backgroundColor: GOLD }}
-          >
-            + Add Pricing Rule
-          </Button>
         </div>
 
         {error && (
@@ -378,4 +374,4 @@ export default function PricingRulesPanel() {
       />
     </>
   );
-}
+});

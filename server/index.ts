@@ -26,6 +26,7 @@ import { registerMediaRoutes } from "./routes/media";
 import { registerPermissionRoutes } from "./routes/permissions";
 import { registerSupplierRoutes } from "./routes/suppliers";
 import { isDbConnectionError, verifyDbConnection } from "../src/lib/db";
+import { startBlogPublishScheduler } from "./jobs/blog-publish-scheduler";
 
 const PORT = Number(process.env.API_PORT ?? 4000);
 const HOST = process.env.API_HOST ?? "0.0.0.0";
@@ -118,6 +119,7 @@ async function start() {
   try {
     await app.listen({ port: PORT, host: HOST });
     app.log.info(`Fastify API running at http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`);
+    startBlogPublishScheduler(app.log);
   } catch (error) {
     app.log.error(error);
     process.exit(1);

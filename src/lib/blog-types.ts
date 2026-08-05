@@ -1,4 +1,4 @@
-export type BlogPostStatus = "draft" | "published" | "archived";
+export type BlogPostStatus = "draft" | "scheduled" | "published" | "archived";
 
 export interface BlogPostRecord {
   id: number;
@@ -77,6 +77,7 @@ export interface ListBlogPostsResult {
 export interface BlogStats {
   total: number;
   draft: number;
+  scheduled: number;
   published: number;
   archived: number;
   featured: number;
@@ -85,6 +86,7 @@ export interface BlogStats {
 export const BLOG_STATUS_FILTER_OPTIONS = [
   { value: "all", label: "All statuses" },
   { value: "draft", label: "Draft" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "published", label: "Published" },
   { value: "archived", label: "Archived" },
 ] as const;
