@@ -338,7 +338,7 @@ export default function SupplierQuoteTool({
         additionalTo,
         subject: formData.emailSubject.trim(),
         body: formData.emailBody.trim(),
-        quoteData: toPayload(),
+        quoteData: toPayload() as unknown as Record<string, unknown>,
       });
 
       if (result.package?.supplier_quote_tool) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import PageListTable from "@/components/pages/PageListTable";
@@ -122,8 +122,10 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
     });
   }, [loadStats, loadPages]);
 
+  const prevDefaultStatus = useRef(defaultStatus);
   useEffect(() => {
-    if (defaultStatus) {
+    if (defaultStatus && defaultStatus !== prevDefaultStatus.current) {
+      prevDefaultStatus.current = defaultStatus;
       setStatusFilter(defaultStatus);
     }
   }, [defaultStatus]);

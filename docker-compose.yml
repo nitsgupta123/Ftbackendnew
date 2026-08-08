@@ -1,0 +1,43 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: fz
+      MYSQL_USER: fz
+      MYSQL_PASSWORD: fz
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: fz
+      DB_PASSWORD: fz
+      DB_NAME: fz
+      API_PORT: "4000"
+      API_HOST: "0.0.0.0"
+      CORS_ORIGIN: "http://localhost:3000,http://127.0.0.1:3000"
+    ports:
+      - "3000:3000"
+      - "4000:4000"
+    volumes:
+      - uploads:/app/uploads
+
+volumes:
+  db_data:
+  uploads:
