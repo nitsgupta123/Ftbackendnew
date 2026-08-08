@@ -16,11 +16,9 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY package.json package-lock.json ./
-# Install prod deps; postinstall copies TinyMCE assets (needed at runtime for static serve)
-RUN npm ci --omit=dev
-
-# Copy built output + full source (API runs via tsx)
+# Copy full node_modules from build stage (already compiled, incl. bcrypt)
+COPY --from=build /app/node_modules ./node_modules
+# Copy build output + full source (API runs via tsx)
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/next.config.ts ./next.config.ts
@@ -28,6 +26,7 @@ COPY --from=build /app/server ./server
 COPY --from=build /app/src ./src
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
+COPY package.json package-lock.json ./
 
 # Runtime deps for running the API via tsx
 RUN npm i -g tsx concurrently
