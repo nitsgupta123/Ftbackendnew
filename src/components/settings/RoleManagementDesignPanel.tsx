@@ -6,13 +6,20 @@ import { Icon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import RoleFormModal from "@/components/settings/access-control/RoleFormModal";
-import { getPermissions, updateRolePermissions } from "@/lib/permission-api";
+import {
+  deleteRole as deleteRoleRequest,
+  getPermissions,
+  renameRole as renameRoleRequest,
+  updateRolePermissions,
+} from "@/lib/permission-api";
 import { buildDefaultMatrix } from "@/lib/permission-types";
 import type { ModulePermission } from "@/lib/permission-types";
 import type { AdminRole } from "@/lib/auth-types";
 import {
+  forgetKnownRole,
   isValidRoleKey,
   normalizeRoleKey,
+  replaceKnownRole,
   rememberKnownRole,
   rememberKnownRoles,
 } from "@/lib/role-catalog";
@@ -23,7 +30,7 @@ import type { ManageableUser, RoleMeta } from "@/components/settings/access-cont
 import { useAuth } from "@/components/auth/AuthProvider";
 
 const GOLD = "#A68231";
-const PROTECTED_ROLES = new Set(["owner", "super_admin"]);
+const PROTECTED_ROLES = new Set(["admin", "owner", "super_admin"]);
 const LOCAL_STORAGE_ROLE_META = "ftadmin-role-meta-v1";
 const ACTOR_ROLE_LABEL = "Super Admin";
 
@@ -200,11 +207,15 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
     }));
   };
 
-  const assignUsersToRole = async (roleKey: string, assignUserIds: number[]) => {
+  const assignUsersToRole = async (
+    roleKey: string,
+    assignUserIds: number[],
+    sourceUsers = users
+  ) => {
     const assignSet = new Set(assignUserIds);
-    const nextUsers = [...users];
+    const nextUsers = [...sourceUsers];
 
-    for (const userRow of users) {
+    for (const userRow of sourceUsers) {
       const shouldHaveRole = assignSet.has(userRow.id);
       const currentlyHasRole = userRow.role === roleKey;
       if (shouldHaveRole && !currentlyHasRole) {
@@ -222,8 +233,7 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
       } else if (
         editingRoleKey &&
         currentlyHasRole &&
-        !shouldHaveRole &&
-        userRow.role === editingRoleKey
+        !shouldHaveRole
       ) {
         try {
           const { user: updated } = await updateUser(userRow.id, {
@@ -243,7 +253,7 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
   };
 
   const submitRoleModal = async () => {
-    const key = editingRoleKey ?? normalizeRoleKey(roleForm.roleName);
+    const key = normalizeRoleKey(roleForm.roleName);
     if (!key) {
       setError("Role name is required.");
       return;
@@ -252,32 +262,64 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
       setError("Role name must be at least 2 characters (letters, numbers, underscore).");
       return;
     }
+    if (editingRoleKey && key !== editingRoleKey && roles.includes(key)) {
+      setError("A role with that name already exists.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
     try {
-      // Share with User Management immediately so the role appears in Add/Edit User.
-      rememberKnownRole(key);
-
       const isNewRole = !editingRoleKey || !roles.includes(key);
-      if (isNewRole) {
+      const isRenaming = Boolean(editingRoleKey && editingRoleKey !== key);
+      let usersForAssignment = users;
+
+      if (isRenaming && editingRoleKey) {
+        const { matrix } = await renameRoleRequest(editingRoleKey, key);
+        usersForAssignment = users.map((userRow) =>
+          userRow.role === editingRoleKey ? { ...userRow, role: key } : userRow
+        );
+        setRolePermissionMap((prev) => {
+          const next = { ...prev, [key]: matrix.permissions };
+          delete next[editingRoleKey];
+          return next;
+        });
+        replaceKnownRole(editingRoleKey, key);
+      } else {
+        rememberKnownRole(key);
+      }
+
+      if (isNewRole && !isRenaming) {
         await persistRolePermissions(key);
       }
 
-      await assignUsersToRole(key, roleForm.assignUsers);
+      await assignUsersToRole(key, roleForm.assignUsers, usersForAssignment);
 
-      setRoles((prev) => (prev.includes(key) ? prev : [...prev, key]));
+      setRoles((prev) => {
+        if (isRenaming && editingRoleKey) {
+          return prev.map((role) => (role === editingRoleKey ? key : role));
+        }
+        return prev.includes(key) ? prev : [...prev, key];
+      });
       setRoleMeta((prev) => ({
-        ...prev,
+        ...Object.fromEntries(
+          Object.entries(prev).filter(([role]) => role !== editingRoleKey || role === key)
+        ),
         [key]: {
-          ...(prev[key] ?? {}),
+          ...(prev[editingRoleKey ?? key] ?? prev[key] ?? {}),
           key,
           description: roleForm.description || `${formatRoleLabel(key)} role access definition`,
           department: roleForm.department || "General",
           designation: roleForm.designation || "Team Member",
-          createdBy: editingRoleKey ? prev[key]?.createdBy ?? ACTOR_ROLE_LABEL : ACTOR_ROLE_LABEL,
-          createdByName: editingRoleKey ? prev[key]?.createdByName ?? actorName : actorName,
-          createdDate: editingRoleKey ? prev[key]?.createdDate ?? nowIso() : nowIso(),
+          createdBy: editingRoleKey
+            ? prev[editingRoleKey]?.createdBy ?? ACTOR_ROLE_LABEL
+            : ACTOR_ROLE_LABEL,
+          createdByName: editingRoleKey
+            ? prev[editingRoleKey]?.createdByName ?? actorName
+            : actorName,
+          createdDate: editingRoleKey
+            ? prev[editingRoleKey]?.createdDate ?? nowIso()
+            : nowIso(),
           updatedBy: ACTOR_ROLE_LABEL,
           updatedByName: actorName,
           updatedAt: nowIso(),
@@ -338,18 +380,35 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
     }
   };
 
-  const deleteRole = (roleKey: string) => {
+  const deleteRole = async (roleKey: string) => {
     if (PROTECTED_ROLES.has(roleKey)) return;
-    setRoles((prev) => prev.filter((role) => role !== roleKey));
-    setRoleMeta((prev) => {
-      const next = { ...prev };
-      delete next[roleKey];
-      return next;
-    });
-    setUsers((prev) =>
-      prev.map((userRow) => (userRow.role === roleKey ? { ...userRow, role: "admin" } : userRow))
-    );
-    setSuccess(`Role "${formatRoleLabel(roleKey)}" deleted and users moved to Admin.`);
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteRoleRequest(roleKey);
+      forgetKnownRole(roleKey);
+      setRoles((prev) => prev.filter((role) => role !== roleKey));
+      setRoleMeta((prev) => {
+        const next = { ...prev };
+        delete next[roleKey];
+        return next;
+      });
+      setRolePermissionMap((prev) => {
+        const next = { ...prev };
+        delete next[roleKey];
+        return next;
+      });
+      setUsers((prev) =>
+        prev.map((userRow) =>
+          userRow.role === roleKey ? { ...userRow, role: "admin" } : userRow
+        )
+      );
+      setSuccess(`Role "${formatRoleLabel(roleKey)}" deleted and users moved to Admin.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete role");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -485,7 +544,9 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
                         variant="destructive"
                         disabled={row.protected}
                         aria-label="Delete role"
-                        onClick={() => deleteRole(row.key)}
+                        onClick={() => {
+                          void deleteRole(row.key);
+                        }}
                       >
                         <Icon name="Trash2" size={14} />
                       </Button>
@@ -511,6 +572,9 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
         roleForm={roleForm}
         allUsers={users}
         showDepartmentAndDesignation={false}
+        roleNameDisabled={Boolean(
+          editingRoleKey && PROTECTED_ROLES.has(editingRoleKey)
+        )}
         isSaving={saving}
         onClose={() => {
           if (saving) return;

@@ -18,6 +18,7 @@ type RoleFormModalProps = {
   roleForm: RoleFormState;
   allUsers: ManageableUser[];
   showDepartmentAndDesignation?: boolean;
+  roleNameDisabled?: boolean;
   isSaving?: boolean;
   onClose: () => void;
   onRoleFormChange: (next: RoleFormState) => void;
@@ -30,6 +31,7 @@ export default function RoleFormModal({
   roleForm,
   allUsers,
   showDepartmentAndDesignation = true,
+  roleNameDisabled = false,
   isSaving = false,
   onClose,
   onRoleFormChange,
@@ -51,7 +53,7 @@ export default function RoleFormModal({
               placeholder="Role Name"
               value={roleForm.roleName}
               onChange={(e) => onRoleFormChange({ ...roleForm, roleName: e.target.value })}
-              disabled={Boolean(editingRoleKey)}
+              disabled={roleNameDisabled}
               className="h-10 border-[#E5E7EB]"
             />
             {showDepartmentAndDesignation && (

@@ -25,8 +25,8 @@ interface ListPageHeaderProps {
   action?: ListPageHeaderAction;
 }
 
-const actionClassName =
-  "inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#A68231] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#947329] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A68231]/40";
+export const headerActionClassName =
+  "inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#E3D3AC] bg-[#F7EFDF] px-5 text-sm font-semibold !text-[#8C6D26] shadow-sm transition hover:bg-[#F1E5CD] hover:border-[#D6C295] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A68231]/25";
 
 export default function ListPageHeader({
   icon,
@@ -56,15 +56,16 @@ export default function ListPageHeader({
         </div>
 
         {action?.href ? (
-          <Link href={action.href} className={actionClassName}>
+          <Link href={action.href} className={headerActionClassName}>
             <Icon name={actionIcon} size={16} />
             {action.label}
           </Link>
         ) : action?.onClick ? (
           <Button
             type="button"
+            variant="ghost"
             onClick={action.onClick}
-            className={actionClassName}
+            className={headerActionClassName}
           >
             <Icon name={actionIcon} size={16} />
             {action.label}

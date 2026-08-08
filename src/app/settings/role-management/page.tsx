@@ -20,7 +20,7 @@ export default function SettingsRoleManagementPage() {
     >
       <ListPageHeader
         icon="Shield"
-        title="Settings — Role Management"
+        title="Role Management"
         description="Create, structure, and manage all admin roles with centralized governance."
         action={{
           label: "Add New Role",

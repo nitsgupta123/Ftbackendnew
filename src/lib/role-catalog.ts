@@ -55,3 +55,34 @@ export function rememberKnownRoles(roles: string[]): string[] {
 export function rememberKnownRole(role: string): string[] {
   return rememberKnownRoles([role]);
 }
+
+export function setKnownRoles(roles: string[]): string[] {
+  if (!canUseStorage()) return [];
+  const normalized = Array.from(
+    new Set(
+      roles
+        .map((role) => normalizeRoleKey(role))
+        .filter((role) => isValidRoleKey(role))
+    )
+  );
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  window.dispatchEvent(
+    new CustomEvent(ROLE_CATALOG_CHANGED_EVENT, { detail: { roles: normalized } })
+  );
+  return normalized;
+}
+
+export function forgetKnownRole(role: string): string[] {
+  const roleKey = normalizeRoleKey(role);
+  return setKnownRoles(
+    getKnownRolesFromStorage().filter((knownRole) => knownRole !== roleKey)
+  );
+}
+
+export function replaceKnownRole(currentRole: string, nextRole: string): string[] {
+  const currentKey = normalizeRoleKey(currentRole);
+  return setKnownRoles([
+    ...getKnownRolesFromStorage().filter((knownRole) => knownRole !== currentKey),
+    nextRole,
+  ]);
+}

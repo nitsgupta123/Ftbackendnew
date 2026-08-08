@@ -1,5 +1,5 @@
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
-import { query } from "./db";
+import { getPool, query } from "./db";
 import type { AdminRole } from "./auth-types";
 import {
   ACCESS_MODULES,
@@ -341,4 +341,67 @@ export async function resetRolePermissions(
 ): Promise<RolePermissionMatrix> {
   const defaults = buildDefaultMatrix(role);
   return updateRolePermissions(role, defaults.permissions);
+}
+
+export async function renameRole(
+  currentRole: AdminRole,
+  nextRole: AdminRole
+): Promise<void> {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [existingRows] = await connection.execute<RowDataPacket[]>(
+      `
+        SELECT role FROM role_permissions WHERE role = ? LIMIT 1
+      `,
+      [nextRole]
+    );
+    const [existingUsers] = await connection.execute<RowDataPacket[]>(
+      `
+        SELECT role FROM admin_users WHERE role = ? LIMIT 1
+      `,
+      [nextRole]
+    );
+    if (existingRows.length || existingUsers.length) {
+      throw new Error("A role with that name already exists");
+    }
+
+    await connection.execute(
+      `UPDATE role_permissions SET role = ? WHERE role = ?`,
+      [nextRole, currentRole]
+    );
+    await connection.execute(
+      `UPDATE admin_users SET role = ? WHERE role = ?`,
+      [nextRole, currentRole]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function deleteRole(
+  role: AdminRole,
+  fallbackRole: AdminRole = "admin"
+): Promise<void> {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute(
+      `UPDATE admin_users SET role = ? WHERE role = ?`,
+      [fallbackRole, role]
+    );
+    await connection.execute(`DELETE FROM role_permissions WHERE role = ?`, [role]);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }

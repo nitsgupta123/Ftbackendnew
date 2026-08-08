@@ -110,4 +110,26 @@ export async function resetRolePermissions(
   return parseApiResponse<{ matrix: RolePermissionMatrix }>(response);
 }
 
+export async function renameRole(
+  currentRole: AdminRole,
+  nextRole: AdminRole
+): Promise<{ matrix: RolePermissionMatrix }> {
+  const response = await fetch(apiUrl(`/api/permissions/${currentRole}`), {
+    method: "PATCH",
+    headers: requestHeaders(true),
+    body: JSON.stringify({ role: nextRole }),
+  });
+  return parseApiResponse<{ matrix: RolePermissionMatrix }>(response);
+}
+
+export async function deleteRole(
+  role: AdminRole
+): Promise<{ success: boolean; reassignedRole: AdminRole }> {
+  const response = await fetch(apiUrl(`/api/permissions/${role}`), {
+    method: "DELETE",
+    headers: requestHeaders(),
+  });
+  return parseApiResponse<{ success: boolean; reassignedRole: AdminRole }>(response);
+}
+
 export type { ModulePermission, PermissionsPayload, RolePermissionMatrix };

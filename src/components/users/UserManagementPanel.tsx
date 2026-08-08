@@ -17,8 +17,8 @@ import { getPermissions } from "@/lib/permission-api";
 import {
   getKnownRolesFromStorage,
   rememberKnownRole,
-  rememberKnownRoles,
   ROLE_CATALOG_CHANGED_EVENT,
+  setKnownRoles,
 } from "@/lib/role-catalog";
 import { createUser, getUserStats, listUsers, updateUser } from "@/lib/user-api";
 import type { AdminUser } from "@/lib/auth-types";
@@ -78,8 +78,7 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       const fromApi = Array.from(
         new Set(permissionsResult.matrices.map((matrix) => matrix.role))
       );
-      const merged = rememberKnownRoles([...fromApi, ...getKnownRolesFromStorage()]);
-      setCatalogRoles(merged);
+      setCatalogRoles(setKnownRoles(fromApi));
     } catch {
       setCatalogRoles(getKnownRolesFromStorage());
     }
@@ -114,7 +113,18 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
   }, [loadStats, loadCatalogRoles]);
   useEffect(() => {
     const syncFromStorage = () => {
-      setCatalogRoles(getKnownRolesFromStorage());
+      const nextRoles = getKnownRolesFromStorage();
+      setCatalogRoles(nextRoles);
+      setRoleFilter((current) =>
+        current === "all" ||
+        current === "admin" ||
+        current === "super_admin" ||
+        nextRoles.includes(current)
+          ? current
+          : "all"
+      );
+      void loadUsers();
+      void loadStats();
     };
     window.addEventListener(ROLE_CATALOG_CHANGED_EVENT, syncFromStorage);
     window.addEventListener("storage", syncFromStorage);
@@ -122,7 +132,7 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       window.removeEventListener(ROLE_CATALOG_CHANGED_EVENT, syncFromStorage);
       window.removeEventListener("storage", syncFromStorage);
     };
-  }, []);
+  }, [loadStats, loadUsers]);
   useEffect(() => {
     queueMicrotask(() => {
       void loadUsers();
@@ -212,12 +222,12 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       setIsSaving(false);
     }
   }
-  function openCreate() {
+  const openCreate = useCallback(() => {
     setCatalogRoles(getKnownRolesFromStorage());
     setEditingUser(null);
     setFormMode("create");
     void loadCatalogRoles();
-  }
+  }, [loadCatalogRoles]);
   function openEdit(user: AdminUser) {
     setCatalogRoles(getKnownRolesFromStorage());
     setEditingUser(user);

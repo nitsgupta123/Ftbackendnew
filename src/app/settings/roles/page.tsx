@@ -15,7 +15,7 @@ export default function SettingsRolesPage() {
     >
       <ListPageHeader
         icon="Shield"
-        title="Settings — Access Control"
+        title="Access Control"
         description="Control what each role can view, edit, or delete across the admin panel and package builder modules."
       />
 

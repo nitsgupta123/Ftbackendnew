@@ -2,11 +2,13 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import {
   clearUserPermissionOverrides,
+  deleteRole,
   diffFromRoleDefaults,
   getEffectivePermissionMatrix,
   getPermissionsPayload,
   getRolePermissionMatrix,
   getUserPermissionOverrides,
+  renameRole,
   resetRolePermissions,
   setUserPermissionOverrides,
   updateRolePermissions,
@@ -36,6 +38,12 @@ const updatePermissionsSchema = z.object({
 const updateUserPermissionsSchema = z.object({
   permissions: z.array(modulePermissionSchema),
 });
+
+const renameRoleSchema = z.object({
+  role: roleSchema,
+});
+
+const protectedRoles = new Set(["admin", "super_admin", "owner"]);
 
 function canManageAccess(role: string | undefined): boolean {
   return role === "super_admin" || role === "owner";
@@ -253,6 +261,64 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(500).send({
         error:
           error instanceof Error ? error.message : "Failed to update permissions",
+      });
+    }
+  });
+
+  app.patch("/:role", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+
+    try {
+      const currentRoleParsed = roleSchema.safeParse(
+        (request.params as { role?: string }).role
+      );
+      const bodyParsed = renameRoleSchema.safeParse(request.body);
+      if (!currentRoleParsed.success || !bodyParsed.success) {
+        return reply.status(400).send({ error: "Invalid role" });
+      }
+
+      const currentRole = currentRoleParsed.data;
+      const nextRole = bodyParsed.data.role;
+      if (protectedRoles.has(currentRole)) {
+        return reply.status(400).send({ error: "This role cannot be renamed" });
+      }
+      if (currentRole !== nextRole) {
+        await renameRole(currentRole, nextRole);
+      }
+
+      const matrix = await getRolePermissionMatrix(nextRole);
+      return reply.send({ matrix });
+    } catch (error) {
+      app.log.error(error);
+      const message = error instanceof Error ? error.message : "Failed to rename role";
+      return reply.status(message.includes("already exists") ? 409 : 500).send({
+        error: message,
+      });
+    }
+  });
+
+  app.delete("/:role", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+
+    try {
+      const roleParsed = roleSchema.safeParse(
+        (request.params as { role?: string }).role
+      );
+      if (!roleParsed.success) {
+        return reply.status(400).send({ error: "Invalid role" });
+      }
+      if (protectedRoles.has(roleParsed.data)) {
+        return reply.status(400).send({ error: "This role cannot be deleted" });
+      }
+
+      await deleteRole(roleParsed.data);
+      return reply.send({ success: true, reassignedRole: "admin" });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: error instanceof Error ? error.message : "Failed to delete role",
       });
     }
   });
