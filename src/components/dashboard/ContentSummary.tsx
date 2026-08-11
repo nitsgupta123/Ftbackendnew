@@ -5,6 +5,7 @@ interface SummaryItem {
   value: number;
   icon: string;
   iconColor: string;
+  key?: string;
 }
 
 interface ContentSummaryProps {
@@ -26,7 +27,7 @@ export default function ContentSummary({ items, loading = false }: ContentSummar
           key: `summary-${index}`,
         })) : items).map((item, index) => (
           <div
-            key={"key" in item ? item.key : item.label}
+            key={"key" in item ? (item.key as string) : item.label}
             className="flex items-center gap-3 p-3 rounded-lg bg-[#F9FAFB] hover:bg-gray-100 transition-colors"
           >
             <Icon name={item.icon} size={20} className={item.iconColor} />
