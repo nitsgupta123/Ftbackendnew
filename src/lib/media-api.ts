@@ -9,9 +9,10 @@ function apiUrl(path: string) {
 
 export type MediaUploadResult = {
   url: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "document";
   filename: string;
   mimetype: string;
+  size?: number;
 };
 
 export async function uploadMediaFile(file: File): Promise<MediaUploadResult> {

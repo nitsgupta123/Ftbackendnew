@@ -1,9 +1,28 @@
 import type { SupplierQuoteToolData } from "./package-types";
 import { SGT_TIME_ZONE } from "./format-date";
+import { formatRoleLabel } from "./user-types";
 
 export interface SupplierQuoteEmailContext {
   destination?: string;
   budgetLabel?: string;
+}
+
+export interface QuoteEmailSignature {
+  name?: string | null;
+  position?: string | null;
+  role?: string | null;
+}
+
+const GENERIC_ROLES = new Set(["admin", "super_admin"]);
+
+export function packageAttachmentFilename(title?: string | null): string {
+  const cleaned = (title?.trim() || "package-details")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+  return `${cleaned || "package-details"}.html`;
 }
 
 export function buildQuoteEmailSubject(data: SupplierQuoteToolData): string {
@@ -48,7 +67,9 @@ export function buildQuoteEmailBody(
     lines.push(`Requested changes: ${data.requestedChanges.trim()}`);
   }
 
-  if (data.includeDayByDayItinerary) {
+  if (data.attachPackage !== false) {
+    lines.push("Package details: please see the attached package file");
+  } else if (data.includeDayByDayItinerary) {
     lines.push("Itinerary: Day-by-day itinerary attached / available on request");
   }
 
@@ -69,9 +90,48 @@ export function buildQuoteEmailBody(
     }
   }
 
-  lines.push("", "Kind regards,", "Fayyaz Travels");
+  lines.push("", "Kind regards,");
 
   return lines.join("\n");
+}
+
+export function quoteSenderPosition(role?: string | null): string | undefined {
+  const key = String(role ?? "").trim().toLowerCase();
+  if (!key || GENERIC_ROLES.has(key)) return undefined;
+  return formatRoleLabel(role!);
+}
+
+export function buildQuoteEmailSignature(input: QuoteEmailSignature = {}): string {
+  const name = input.name?.trim();
+  const position = input.position?.trim() || quoteSenderPosition(input.role);
+  const lines: string[] = [];
+  if (name) lines.push(name);
+  if (position && position !== name) lines.push(position);
+  if (lines[lines.length - 1] !== "Fayyaz Travels") {
+    lines.push("Fayyaz Travels");
+  }
+  return lines.join("\n");
+}
+
+export function stripQuoteEmailSignature(body: string): string {
+  return body
+    .replace(/\r\n/g, "\n")
+    .replace(/\n*(?:Kind regards,?\s*\n)(?:[^\n]+\n){0,4}Fayyaz Travels\s*$/i, "")
+    .trimEnd();
+}
+
+export function withQuoteEmailSignature(
+  body: string,
+  input: QuoteEmailSignature & { text?: string } = {}
+): string {
+  const signature = input.text?.trim() || buildQuoteEmailSignature(input);
+  const unsigned = stripQuoteEmailSignature(body).trimEnd();
+  if (!signature) return unsigned;
+  if (!unsigned) return `Kind regards,\n${signature}`;
+  if (/kind regards,?\s*$/i.test(unsigned)) {
+    return `${unsigned}\n${signature}`;
+  }
+  return `${unsigned}\n\nKind regards,\n${signature}`;
 }
 
 function quoteTypeLabel(type?: string): string {

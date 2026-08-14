@@ -248,6 +248,7 @@ export async function sendSupplierQuoteEmail(
     additionalTo?: string[];
     subject: string;
     body: string;
+    emailSignature?: string;
     quoteData?: Record<string, unknown>;
   }
 ) {
@@ -266,6 +267,7 @@ export async function sendSupplierQuoteEmail(
     previewUrl?: string;
     package: PackageRecord;
     recipients: { to: string[]; cc: string[]; bcc: string[] };
+    attachments?: string[];
   }>(response);
 }
 

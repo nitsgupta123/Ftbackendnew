@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import { Icon } from "../ui/icons";
 import {
   normalizeSupplierFormValues,
   serializeSupplierFormValues,
   supplierFormSchema,
   type SupplierFormValues,
+  type SupplierPackageFile,
 } from "@/lib/validation";
+import { uploadMediaFile } from "@/lib/media-api";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +38,7 @@ const FIELD_HELP: Record<string, string> = {
   contactPerson: "Primary contact for quotes, confirmations, and follow-ups.",
   supplierEmails: "Add one or more emails for sales, operations, or general enquiries.",
   supplierWhatsapp: "WhatsApp number for quick supplier communication (include country code).",
-  quotationUpload: "Attach the supplier quotation, brochure, or rate sheet for internal reference.",
+  quotationUpload: "Upload the supplier quotation, brochure, or rate sheet. This file is attached automatically when sending a supplier quote email.",
   internalSupplierNotes: "Internal notes only — not shown on the client-facing website.",
 };
 
@@ -93,6 +96,7 @@ export default function SupplierForm({
   isSaving = false,
 }: SupplierFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const {
     register,
     handleSubmit,
@@ -106,6 +110,7 @@ export default function SupplierForm({
   });
 
   const emails = watch("supplierEmails") ?? [""];
+  const quotationFiles = watch("quotationFiles") ?? [];
 
   useEffect(() => {
     reset(normalizeSupplierFormValues(initialData ?? null));
@@ -124,6 +129,53 @@ export default function SupplierForm({
     setValue(
       "supplierEmails",
       emails.filter((_, i) => i !== index),
+      { shouldDirty: true, shouldValidate: true }
+    );
+  };
+
+  function createFileId() {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `file-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  const handleChooseFiles = async (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    setUploading(true);
+    const uploaded: SupplierPackageFile[] = [];
+    try {
+      for (const file of Array.from(fileList)) {
+        const result = await uploadMediaFile(file);
+        uploaded.push({
+          id: createFileId(),
+          url: result.url,
+          filename: result.filename || file.name,
+          mimetype: result.mimetype || file.type,
+          size: result.size ?? file.size,
+        });
+      }
+      setValue("quotationFiles", [...quotationFiles, ...uploaded], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      toast.success(
+        uploaded.length === 1
+          ? `${uploaded[0].filename} uploaded`
+          : `${uploaded.length} files uploaded`
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload file");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeQuotationFile = (id: string) => {
+    setValue(
+      "quotationFiles",
+      quotationFiles.filter((file) => file.id !== id),
       { shouldDirty: true, shouldValidate: true }
     );
   };
@@ -273,17 +325,46 @@ export default function SupplierForm({
                     multiple
                     className="hidden"
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                    onChange={(event) => handleChooseFiles(event.target.files)}
                   />
                   <Button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#111827] rounded-[6px] hover:bg-[#1F2937] transition-colors"
+                    disabled={uploading}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#111827] rounded-[6px] hover:bg-[#1F2937] transition-colors disabled:opacity-60"
                   >
-                    Choose files
+                    {uploading ? "Uploading..." : "Choose files"}
                   </Button>
                   <p className="text-sm text-gray-400 mt-3">
-                    Future logic can read this and pre-fill draft fields for human review.
+                    These files are attached automatically when a supplier quote email is sent.
                   </p>
+                  {quotationFiles.length > 0 && (
+                    <ul className="mt-4 space-y-2">
+                      {quotationFiles.map((file) => (
+                        <li
+                          key={file.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2"
+                        >
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="min-w-0 truncate text-sm text-[#1F2A44] hover:text-[#B48A2C]"
+                          >
+                            {file.filename}
+                          </a>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${file.filename}`}
+                            className="shrink-0 text-gray-400 hover:text-red-500"
+                            onClick={() => removeQuotationFile(file.id)}
+                          >
+                            <Icon name="X" size={14} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
 

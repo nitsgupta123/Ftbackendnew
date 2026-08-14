@@ -6,6 +6,16 @@ const optionalEmail = z
   .email("Invalid email address")
   .or(z.literal(""));
 
+export const supplierPackageFileSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().min(1),
+  filename: z.string().min(1),
+  mimetype: z.string().optional(),
+  size: z.number().int().nonnegative().optional(),
+});
+
+export type SupplierPackageFile = z.infer<typeof supplierPackageFileSchema>;
+
 export const supplierFormSchema = z.object({
   supplierName: z.string().min(1, "Supplier name is required"),
   supplierPackageName: z.string().min(1, "Supplier package name is required"),
@@ -13,6 +23,7 @@ export const supplierFormSchema = z.object({
   contactPerson: z.string().optional(),
   supplierEmails: z.array(optionalEmail).min(1),
   supplierWhatsapp: z.string().optional(),
+  quotationFiles: z.array(supplierPackageFileSchema).optional(),
   internalSupplierNotes: z.string().optional(),
 });
 
@@ -38,6 +49,9 @@ export function normalizeSupplierFormValues(
     contactPerson: data?.contactPerson ?? "",
     supplierEmails: emails.length > 0 ? emails : [""],
     supplierWhatsapp: data?.supplierWhatsapp ?? "",
+    quotationFiles: normalizeQuotationFiles(
+      (data as { quotationFiles?: unknown } | null | undefined)?.quotationFiles
+    ),
     internalSupplierNotes: data?.internalSupplierNotes ?? "",
   };
 }
@@ -52,14 +66,24 @@ export function serializeSupplierFormValues(data: SupplierFormValues): SupplierF
     contactPerson: data.contactPerson?.trim() || undefined,
     supplierEmails: emails,
     supplierWhatsapp: data.supplierWhatsapp?.trim() || undefined,
+    quotationFiles: normalizeQuotationFiles(data.quotationFiles),
     internalSupplierNotes: data.internalSupplierNotes?.trim() || undefined,
   };
+}
+
+function normalizeQuotationFiles(value: unknown): SupplierPackageFile[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const parsed = supplierPackageFileSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 export const packageBasicsSchema = z.object({
   packageTitle: z.string().min(1, "Package title is required"),
   slug: z.string().min(1, "Slug is required"),
   shortIntro: z.string().optional(),
+  packageOverview: z.string().optional(),
   packageMode: z.string().min(1, "Package mode is required"),
   tourType: z.string().min(1, "Tour type is required"),
   runs: z.string().min(1, "Runs is required"),

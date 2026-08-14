@@ -13,7 +13,7 @@ export default function BrandLogo({ variant = "full", className = "" }: BrandLog
         aria-hidden
       >
         <Image
-          src="/fayyaz-logo.png"
+          src="/panel/fayyaz-logo.png"
           alt=""
           width={160}
           height={53}
@@ -26,7 +26,7 @@ export default function BrandLogo({ variant = "full", className = "" }: BrandLog
 
   return (
     <Image
-      src="/fayyaz-logo.png"
+      src="/panel/fayyaz-logo.png"
       alt="Fayyaz Travels"
       width={160}
       height={53}

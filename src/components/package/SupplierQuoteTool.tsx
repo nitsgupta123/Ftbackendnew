@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "../ui/icons";
 import type { SupplierQuoteToolData } from "@/lib/package-types";
+import type { SupplierPackageFile } from "@/lib/validation";
 import {
   saveButtonLabel,
   stepPreviousButtonClass,
@@ -18,9 +19,13 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { getSettings } from "@/lib/settings-api";
 import { sendSupplierQuoteEmail } from "@/lib/package-api";
 import { isValidEmail, parseEmailList } from "@/lib/email-list";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
   buildQuoteEmailBody,
+  buildQuoteEmailSignature,
   buildQuoteEmailSubject,
+  packageAttachmentFilename,
+  stripQuoteEmailSignature,
 } from "@/lib/supplier-quote-email";
 import { formatPackageDateTime } from "@/lib/format-date";
 
@@ -29,6 +34,7 @@ interface SupplierSourceEmails {
   supplierPackageName?: string;
   contactPerson?: string;
   supplierEmails?: string[];
+  quotationFiles?: SupplierPackageFile[];
 }
 
 interface SupplierQuoteToolProps extends StepFormBaseProps {
@@ -37,6 +43,7 @@ interface SupplierQuoteToolProps extends StepFormBaseProps {
   initialData?: SupplierQuoteToolData | null;
   supplierSource?: SupplierSourceEmails | null;
   packageId?: number | null;
+  packageTitle?: string;
   destination?: string;
 }
 
@@ -58,12 +65,14 @@ type QuoteFormState = Required<
     | "negotiationNote"
     | "includeDayByDayItinerary"
     | "includeClientBudget"
+    | "attachPackage"
   >
 > & {
   toEmails: string[];
   additionalEmails: string[];
   emailSubject: string;
   emailBody: string;
+  emailSignature: string;
 };
 
 function ToggleCard({
@@ -108,7 +117,8 @@ function supplierEmailsFromSource(source?: SupplierSourceEmails | null): string[
 function buildInitialForm(
   initialData?: SupplierQuoteToolData | null,
   supplierSource?: SupplierSourceEmails | null,
-  destination?: string
+  destination?: string,
+  defaultSignature = ""
 ): QuoteFormState {
   const supplierEmails = supplierEmailsFromSource(supplierSource);
   const savedTo = (initialData?.toEmails ?? []).filter(isValidEmail);
@@ -135,16 +145,18 @@ function buildInitialForm(
     negotiationNote: initialData?.negotiationNote || "",
     includeDayByDayItinerary: initialData?.includeDayByDayItinerary ?? true,
     includeClientBudget: initialData?.includeClientBudget ?? false,
+    attachPackage: initialData?.attachPackage ?? true,
     toEmails,
     additionalEmails: (initialData?.additionalEmails ?? []).filter(isValidEmail),
     emailSubject: "",
     emailBody: "",
+    emailSignature: initialData?.emailSignature?.trim() || defaultSignature,
   };
 
   base.emailSubject =
     initialData?.emailSubject?.trim() || buildQuoteEmailSubject(base);
   base.emailBody =
-    initialData?.emailBody?.trim() ||
+    stripQuoteEmailSignature(initialData?.emailBody ?? "").trim() ||
     buildQuoteEmailBody(base, { destination });
 
   return base;
@@ -157,16 +169,29 @@ export default function SupplierQuoteTool({
   initialData,
   supplierSource,
   packageId,
+  packageTitle = "",
   destination = "",
 }: SupplierQuoteToolProps) {
+  const { user } = useAuth();
+  const loginSignature = useMemo(
+    () =>
+      buildQuoteEmailSignature({
+        name: user?.fullName,
+        role: user?.role,
+      }),
+    [user?.fullName, user?.role]
+  );
   const [formData, setFormData] = useState<QuoteFormState>(() =>
-    buildInitialForm(initialData, supplierSource, destination)
+    buildInitialForm(initialData, supplierSource, destination, loginSignature)
   );
   const [bodyEdited, setBodyEdited] = useState(
-    Boolean(initialData?.emailBody?.trim())
+    Boolean(stripQuoteEmailSignature(initialData?.emailBody ?? "").trim())
   );
   const [subjectEdited, setSubjectEdited] = useState(
     Boolean(initialData?.emailSubject?.trim())
+  );
+  const [signatureEdited, setSignatureEdited] = useState(
+    Boolean(initialData?.emailSignature?.trim())
   );
   const [additionalDraft, setAdditionalDraft] = useState("");
   const [managementCc, setManagementCc] = useState<string[]>([]);
@@ -175,18 +200,46 @@ export default function SupplierQuoteTool({
   const [lastSentAt, setLastSentAt] = useState(initialData?.lastSentAt ?? "");
   const [lastSentBy, setLastSentBy] = useState(initialData?.lastSentBy ?? "");
 
+  const sourceFiles = useMemo(
+    () => supplierSource?.quotationFiles ?? [],
+    [supplierSource]
+  );
+  const attachmentNames = useMemo(() => {
+    if (sourceFiles.length > 0) {
+      return sourceFiles.map((file) => file.filename);
+    }
+    return [
+      packageAttachmentFilename(
+        packageTitle || formData.basedOnPackage || "package-details"
+      ),
+    ];
+  }, [sourceFiles, packageTitle, formData.basedOnPackage]);
+
   const supplierEmails = useMemo(
     () => supplierEmailsFromSource(supplierSource),
     [supplierSource]
   );
 
   useEffect(() => {
-    setFormData(buildInitialForm(initialData, supplierSource, destination));
-    setBodyEdited(Boolean(initialData?.emailBody?.trim()));
+    setFormData(
+      buildInitialForm(initialData, supplierSource, destination, loginSignature)
+    );
+    setBodyEdited(Boolean(stripQuoteEmailSignature(initialData?.emailBody ?? "").trim()));
     setSubjectEdited(Boolean(initialData?.emailSubject?.trim()));
+    setSignatureEdited(Boolean(initialData?.emailSignature?.trim()));
     setLastSentAt(initialData?.lastSentAt ?? "");
     setLastSentBy(initialData?.lastSentBy ?? "");
+    // loginSignature is applied separately so a late user load does not reset the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [initialData, supplierSource, destination]);
+
+  useEffect(() => {
+    if (signatureEdited) return;
+    if (!loginSignature) return;
+    setFormData((prev) =>
+      prev.emailSignature.trim() ? prev : { ...prev, emailSignature: loginSignature }
+    );
+  }, [loginSignature, signatureEdited]);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +283,7 @@ export default function SupplierQuoteTool({
     if (
       field === "emailSubject" ||
       field === "emailBody" ||
+      field === "emailSignature" ||
       field === "toEmails" ||
       field === "additionalEmails"
     ) {
@@ -301,10 +355,12 @@ export default function SupplierQuoteTool({
     negotiationNote: formData.negotiationNote,
     includeDayByDayItinerary: formData.includeDayByDayItinerary,
     includeClientBudget: formData.includeClientBudget,
+    attachPackage: formData.attachPackage,
     toEmails: formData.toEmails,
     additionalEmails: formData.additionalEmails,
     emailSubject: formData.emailSubject,
     emailBody: formData.emailBody,
+    emailSignature: formData.emailSignature,
     lastSentAt: lastSentAt || undefined,
     lastSentBy: lastSentBy || null,
     lastSentTo: initialData?.lastSentTo,
@@ -338,12 +394,16 @@ export default function SupplierQuoteTool({
         additionalTo,
         subject: formData.emailSubject.trim(),
         body: formData.emailBody.trim(),
+        emailSignature: formData.emailSignature,
         quoteData: toPayload() as unknown as Record<string, unknown>,
       });
 
       if (result.package?.supplier_quote_tool) {
         const sent = result.package.supplier_quote_tool;
-        setFormData(buildInitialForm(sent, supplierSource, destination));
+        setFormData(
+          buildInitialForm(sent, supplierSource, destination, loginSignature)
+        );
+        setSignatureEdited(Boolean(sent.emailSignature?.trim()));
         setLastSentAt(sent.lastSentAt ?? "");
         setLastSentBy(sent.lastSentBy ?? "");
       }
@@ -356,9 +416,13 @@ export default function SupplierQuoteTool({
         result.recipients.bcc.length > 0
           ? ` BCC: ${result.recipients.bcc.join(", ")}`
           : "";
+      const attachNote =
+        result.attachments && result.attachments.length > 0
+          ? ` Attached: ${result.attachments.join(", ")}`
+          : "";
       if (result.mode === "ethereal" && result.previewUrl) {
         toast.success(
-          `Quote email captured (dev preview).${ccNote}${bccNote}`,
+          `Quote email captured (dev preview).${ccNote}${bccNote}${attachNote}`,
           {
             description: "Open preview to view the message — not delivered to a real inbox.",
             action: {
@@ -369,11 +433,11 @@ export default function SupplierQuoteTool({
           }
         );
       } else if (result.mode === "graph") {
-        toast.success(`Quote email sent.${ccNote}${bccNote}`, {
+        toast.success(`Quote email sent.${ccNote}${bccNote}${attachNote}`, {
           description: "Delivered via Microsoft Graph.",
         });
       } else {
-        toast.success(`Quote email sent.${ccNote}${bccNote}`);
+        toast.success(`Quote email sent.${ccNote}${bccNote}${attachNote}`);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send email");
@@ -610,7 +674,17 @@ export default function SupplierQuoteTool({
                 active={formData.includeClientBudget}
                 onChange={(value) => updateField("includeClientBudget", value)}
               />
+              <ToggleCard
+                label="Package attachment"
+                active={formData.attachPackage}
+                onChange={(value) => updateField("attachPackage", value)}
+              />
             </div>
+            <p className="text-xs text-gray-500 -mt-2">
+              Attaches the quotation, brochure, or rate sheet uploaded in Supplier
+              Source (Step 1). If no file is saved there, a package summary is
+              attached instead.
+            </p>
 
             <div className="rounded-[12px] border border-[#E5E7EB] bg-[#FAFBFC] p-5 space-y-4">
               <div>
@@ -728,7 +802,7 @@ export default function SupplierQuoteTool({
                     Editable email preview
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Edit subject and body before sending.
+                    Edit subject, body, and signature before sending.
                   </p>
                 </div>
                 <Button
@@ -770,7 +844,61 @@ export default function SupplierQuoteTool({
                     updateField("emailBody", e.target.value);
                   }}
                 />
+                <div className="mt-2 rounded-lg border border-[#BFDBFE] bg-white px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label
+                      htmlFor="emailSignature"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]"
+                    >
+                      Email signature
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSignatureEdited(false);
+                        updateField("emailSignature", loginSignature);
+                        toast.success("Signature reset to your login details");
+                      }}
+                      className="h-7 px-2 text-[11px] rounded-md border-[#BFDBFE] bg-white"
+                    >
+                      Use login details
+                    </Button>
+                  </div>
+                  <Textarea
+                    id="emailSignature"
+                    rows={4}
+                    className="mt-1.5 min-h-[88px] rounded-lg bg-white border-[#E5E7EB] text-sm font-mono leading-relaxed"
+                    value={formData.emailSignature}
+                    onChange={(e) => {
+                      setSignatureEdited(true);
+                      updateField("emailSignature", e.target.value);
+                    }}
+                  />
+                  <p className="mt-1.5 text-[11px] text-gray-500">
+                    Filled from your login. Edit it if you want a different name or title.
+                  </p>
+                </div>
               </div>
+
+              {formData.attachPackage && (
+                <div className="rounded-lg border border-[#BFDBFE] bg-white px-3 py-2 text-xs text-[#1F2A44] space-y-1.5">
+                  {sourceFiles.length === 0 ? (
+                    <p className="text-amber-700">
+                      No package file in Supplier Source. A generated summary will be attached. Upload the file in Step 1 to send the original document.
+                    </p>
+                  ) : (
+                    attachmentNames.map((name) => (
+                      <div key={name} className="flex items-center gap-2">
+                        <Icon name="FileText" size={14} className="text-[#B48A2C] shrink-0" />
+                        <span className="truncate">
+                          Will attach <strong>{name}</strong>
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
 
               {lastSentAt && (
                 <p className="text-xs text-gray-500">

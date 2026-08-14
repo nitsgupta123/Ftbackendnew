@@ -5,9 +5,11 @@ import {
   useReducer,
   useRef,
   useState,
+  type PointerEvent,
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { Node, Extension, mergeAttributes } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -50,6 +52,7 @@ import {
   Quote,
   Table2,
   Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { uploadMediaFile } from "@/lib/media-api";
 
@@ -57,6 +60,12 @@ interface BlogRichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Starting height of the writing area in pixels. */
+  defaultHeight?: number;
+  /** Smallest height the user can drag the box to. */
+  minHeight?: number;
+  /** Largest height the user can drag the box to. */
+  maxHeight?: number;
 }
 
 const TEXT_STYLES = [
@@ -604,6 +613,8 @@ function GoogleDocsToolbar({
   onImageClick,
   onVideoClick,
   uploading,
+  isMaximized,
+  onToggleMaximize,
 }: {
   editor: Editor;
   zoom: number;
@@ -611,6 +622,8 @@ function GoogleDocsToolbar({
   onImageClick: () => void;
   onVideoClick: () => void;
   uploading: boolean;
+  isMaximized: boolean;
+  onToggleMaximize: () => void;
 }) {
   useEditorRefresh(editor);
 
@@ -1031,21 +1044,41 @@ function GoogleDocsToolbar({
             </div>
           )}
         </div>
+
+        <div className="ml-auto flex items-center">
+          <ToolbarIconButton
+            title={isMaximized ? "Exit full screen (Esc)" : "Maximize editor"}
+            active={isMaximized}
+            onClick={onToggleMaximize}
+          >
+            {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </ToolbarIconButton>
+        </div>
       </div>
     </div>
   );
 }
 
+const DEFAULT_EDITOR_HEIGHT = 320;
+const DEFAULT_MIN_HEIGHT = 120;
+const DEFAULT_MAX_HEIGHT = 900;
+
 export default function BlogRichTextEditor({
   value,
   onChange,
   placeholder = "Write your blog content...",
+  defaultHeight = DEFAULT_EDITOR_HEIGHT,
+  minHeight = DEFAULT_MIN_HEIGHT,
+  maxHeight = DEFAULT_MAX_HEIGHT,
 }: BlogRichTextEditorProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(100);
+  const [editorHeight, setEditorHeight] = useState(defaultHeight);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -1105,7 +1138,7 @@ export default function BlogRichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "blog-editor-content min-h-[320px] px-6 py-4 text-sm text-gray-900 focus:outline-none max-w-none",
+          "blog-editor-content h-full min-h-full px-6 py-3 text-sm text-gray-900 focus:outline-none max-w-none",
       },
     },
     onUpdate({ editor: currentEditor }) {
@@ -1120,6 +1153,56 @@ export default function BlogRichTextEditor({
       editor.commands.setContent(value || "", { emitUpdate: false });
     }
   }, [editor, value]);
+
+  useEffect(() => {
+    setEditorHeight(defaultHeight);
+  }, [defaultHeight]);
+
+  useEffect(() => {
+    if (!isMaximized) return;
+
+    const html = document.documentElement;
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMaximized(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isMaximized]);
+
+  function clampHeight(next: number) {
+    return Math.min(maxHeight, Math.max(minHeight, next));
+  }
+
+  function handleResizeStart(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    resizeRef.current = { startY: event.clientY, startHeight: editorHeight };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleResizeMove(event: PointerEvent<HTMLButtonElement>) {
+    if (!resizeRef.current) return;
+    const delta = event.clientY - resizeRef.current.startY;
+    setEditorHeight(clampHeight(resizeRef.current.startHeight + delta));
+  }
+
+  function handleResizeEnd(event: PointerEvent<HTMLButtonElement>) {
+    resizeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
 
   async function handleMediaUpload(file: File, expectedKind: "image" | "video") {
     if (!editor) return;
@@ -1147,8 +1230,14 @@ export default function BlogRichTextEditor({
     );
   }
 
-  return (
-    <div className="blog-rich-text-editor rounded-lg border border-[#DADCE0] bg-white shadow-sm">
+  const editorUi = (
+    <div
+      className={
+        isMaximized
+          ? "blog-rich-text-editor fixed inset-0 z-[80] flex h-dvh flex-col overflow-hidden rounded-none border-0 bg-white shadow-none"
+          : "blog-rich-text-editor overflow-hidden rounded-lg border border-[#DADCE0] bg-white shadow-sm"
+      }
+    >
       <input
         ref={imageInputRef}
         type="file"
@@ -1177,6 +1266,8 @@ export default function BlogRichTextEditor({
         zoom={zoom}
         onZoomChange={setZoom}
         uploading={uploading}
+        isMaximized={isMaximized}
+        onToggleMaximize={() => setIsMaximized((value) => !value)}
         onImageClick={() => imageInputRef.current?.click()}
         onVideoClick={() => videoInputRef.current?.click()}
       />
@@ -1187,9 +1278,44 @@ export default function BlogRichTextEditor({
         </p>
       )}
 
-      <div style={{ zoom: zoom / 100 }}>
-        <EditorContent editor={editor} />
+      <div
+        className={isMaximized ? "min-h-0 flex-1 overflow-y-auto" : "overflow-y-auto"}
+        style={isMaximized ? undefined : { height: editorHeight, minHeight, maxHeight }}
+      >
+        <div style={{ zoom: zoom / 100 }} className="h-full">
+          <EditorContent editor={editor} className="h-full" />
+        </div>
       </div>
+      {!isMaximized && (
+        <button
+          type="button"
+          aria-label="Resize editor"
+          title="Drag to resize. Double-click to maximize."
+          className="flex h-4 w-full cursor-ns-resize touch-none items-center justify-center border-t border-[#E8EAED] bg-[#F8F9FA] select-none hover:bg-[#EEF1F4]"
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+          onPointerCancel={handleResizeEnd}
+          onDoubleClick={() => setIsMaximized(true)}
+        >
+          <span className="h-1 w-10 rounded-full bg-[#C4C7C5]" />
+        </button>
+      )}
     </div>
   );
+
+  if (isMaximized) {
+    return (
+      <>
+        <div
+          aria-hidden
+          className="rounded-lg border border-dashed border-[#DADCE0] bg-[#F8F9FA]"
+          style={{ height: editorHeight + 52 }}
+        />
+        {createPortal(editorUi, document.body)}
+      </>
+    );
+  }
+
+  return editorUi;
 }

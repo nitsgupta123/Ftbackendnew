@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Plus } from "lucide-react";
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Icon } from "../ui/icons";
 
 import type { InclusionsData } from "@/lib/package-types";
@@ -44,29 +44,123 @@ function inclusionsSyncKey(data: InclusionsData | null | undefined): string | nu
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Tag Item Chip (used in Excluded & Optional add-ons columns)               */
+/*  Tag Item Chip — inline edit + delete                                      */
 /* -------------------------------------------------------------------------- */
+const tagIconBtnClass =
+  "inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-gray-400 hover:text-[#1F2A44] hover:bg-gray-100 transition-colors";
+
 function TagItem({
   label,
+  onEdit,
   onRemove,
 }: {
   label: string;
+  onEdit: (next: string) => void;
   onRemove: () => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(label);
+  const [error, setError] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isEditing) setDraft(label);
+  }, [label, isEditing]);
+
+  const commit = () => {
+    const trimmed = (inputRef.current?.value ?? draft).trim();
+    if (!trimmed) {
+      setError(true);
+      inputRef.current?.focus();
+      return;
+    }
+    setError(false);
+    if (trimmed !== label) onEdit(trimmed);
+    setIsEditing(false);
+  };
+
+  const cancel = () => {
+    setDraft(label);
+    setError(false);
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
+          <Input
+            ref={inputRef}
+            type="text"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (error) setError(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+            aria-invalid={error || undefined}
+            autoFocus
+            className="flex-1 h-[38px] px-3 text-sm border border-[#E5E7EB] rounded-[8px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C]"
+          />
+          <button
+            type="button"
+            onClick={commit}
+            className={`${tagIconBtnClass} text-[#16A34A] hover:text-[#15803D] hover:bg-green-50`}
+            aria-label="Save"
+            title="Save"
+          >
+            <Check size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={cancel}
+            className={tagIconBtnClass}
+            aria-label="Cancel"
+            title="Cancel"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        {error && (
+          <p className="text-xs text-red-600">Enter a value before saving.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between bg-white border border-[#E5E7EB] rounded-[8px] px-4 py-[10px] transition-all duration-200 hover:border-gray-300 group">
-      <span className="text-sm text-[#1F2A44] font-medium truncate pr-2">
+    <div className="flex items-center justify-between gap-2 bg-white border border-[#E5E7EB] rounded-[8px] px-3 py-[8px] transition-all duration-200 hover:border-gray-300">
+      <span className="text-sm text-[#1F2A44] font-medium truncate pr-1">
         {label}
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onRemove}
-        className="flex-shrink-0 w-[22px] h-[22px] flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-        aria-label={`Remove ${label}`}
-      >
-        <X size={12} />
-      </Button>
+      <div className="flex items-center gap-0.5 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className={tagIconBtnClass}
+          aria-label={`Edit ${label}`}
+          title="Edit"
+        >
+          <Pencil size={13} />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className={`${tagIconBtnClass} hover:text-red-500 hover:bg-red-50`}
+          aria-label={`Delete ${label}`}
+          title="Delete"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -77,10 +171,12 @@ function TagItem({
 function IncludedColumn({
   items,
   onAdd,
+  onEdit,
   onRemove,
 }: {
   items: string[];
   onAdd: (value: string) => void;
+  onEdit: (index: number, value: string) => void;
   onRemove: (index: number) => void;
 }) {
   const [inputValue, setInputValue] = useState("");
@@ -142,6 +238,7 @@ function IncludedColumn({
             <TagItem
               key={`${item}-${idx}`}
               label={item}
+              onEdit={(value) => onEdit(idx, value)}
               onRemove={() => onRemove(idx)}
             />
           ))}
@@ -158,15 +255,17 @@ function TagColumnCard({
   title,
   items,
   onAdd,
+  onEdit,
   onRemove,
-  placeholder
-
-
-
-
-
-
-}: {title: string;items: string[];onAdd: (value: string) => void;onRemove: (index: number) => void;placeholder: string;}) {
+  placeholder,
+}: {
+  title: string;
+  items: string[];
+  onAdd: (value: string) => void;
+  onEdit: (index: number, value: string) => void;
+  onRemove: (index: number) => void;
+  placeholder: string;
+}) {
   const [isAdding, setIsAdding] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
@@ -196,13 +295,14 @@ function TagColumnCard({
 
       {/* Tag stack */}
       <div className="flex-1 space-y-2.5">
-        {items.map((item, idx) =>
-        <TagItem
-          key={`${item}-${idx}`}
-          label={item}
-          onRemove={() => onRemove(idx)} />
-
-        )}
+        {items.map((item, idx) => (
+          <TagItem
+            key={`${item}-${idx}`}
+            label={item}
+            onEdit={(value) => onEdit(idx, value)}
+            onRemove={() => onRemove(idx)}
+          />
+        ))}
 
         {/* Inline quick-add input — revealed when "+ Add" is clicked */}
         {isAdding &&
@@ -424,6 +524,9 @@ export default function InclusionsForm({
         <IncludedColumn
           items={included}
           onAdd={(value) => setIncluded((prev) => [...prev, value])}
+          onEdit={(index, value) =>
+            setIncluded((prev) => prev.map((item, i) => (i === index ? value : item)))
+          }
           onRemove={(index) =>
             setIncluded((prev) => prev.filter((_, i) => i !== index))
           }
@@ -434,6 +537,9 @@ export default function InclusionsForm({
           items={excluded}
           placeholder="Add exclusion"
           onAdd={(value) => setExcluded((prev) => [...prev, value])}
+          onEdit={(index, value) =>
+            setExcluded((prev) => prev.map((item, i) => (i === index ? value : item)))
+          }
           onRemove={(index) =>
             setExcluded((prev) => prev.filter((_, i) => i !== index))
           }
@@ -444,6 +550,9 @@ export default function InclusionsForm({
           items={optionalAddons}
           placeholder="Add optional"
           onAdd={(value) => setOptionalAddons((prev) => [...prev, value])}
+          onEdit={(index, value) =>
+            setOptionalAddons((prev) => prev.map((item, i) => (i === index ? value : item)))
+          }
           onRemove={(index) =>
             setOptionalAddons((prev) => prev.filter((_, i) => i !== index))
           }

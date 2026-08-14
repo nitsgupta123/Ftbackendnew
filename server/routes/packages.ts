@@ -25,6 +25,8 @@ import { z } from "zod";
 import { getAdminSettings } from "../../src/lib/settings-repository";
 import { isEmailConfigured, sendMail } from "../../src/lib/email";
 import { isValidEmail, parseEmailList } from "../../src/lib/email-list";
+import { buildQuoteEmailAttachments } from "../../src/lib/package-quote-attachment";
+import { withQuoteEmailSignature } from "../../src/lib/supplier-quote-email";
 
 const VALID_STATUSES: PackageStatus[] = [
   "draft",
@@ -53,6 +55,7 @@ const sendSupplierQuoteSchema = z.object({
   additionalTo: z.array(z.string().trim().email()).optional().default([]),
   subject: z.string().trim().min(1, "Subject is required").max(500),
   body: z.string().trim().min(1, "Email body is required").max(20000),
+  emailSignature: z.string().max(2000).optional(),
   quoteData: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -270,19 +273,36 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(400).send({ error: "At least one recipient is required" });
       }
 
+      const existingQuote =
+        (pkg.supplier_quote_tool as SupplierQuoteToolData | null) ?? {};
+      const quotePayload = (parsed.data.quoteData ?? {}) as SupplierQuoteToolData;
+      const editedSignature =
+        parsed.data.emailSignature?.trim() ||
+        (typeof quotePayload.emailSignature === "string"
+          ? quotePayload.emailSignature.trim()
+          : "");
+      const attachments = await buildQuoteEmailAttachments(pkg, {
+        attachPackage: quotePayload.attachPackage !== false,
+        includeItinerary: quotePayload.includeDayByDayItinerary !== false,
+      });
+
+      const signedBody = withQuoteEmailSignature(parsed.data.body, {
+        name: request.user?.name,
+        role: request.user?.role,
+        text: editedSignature || undefined,
+      });
+
       const mailResult = await sendMail({
         to: toEmails,
         cc: managementCc,
         bcc: managementBcc,
         subject: parsed.data.subject,
-        text: parsed.data.body,
+        text: signedBody,
         replyTo: settings.support_email || undefined,
+        attachments,
       });
 
       const audit = getRequestAudit(request);
-      const existingQuote =
-        (pkg.supplier_quote_tool as SupplierQuoteToolData | null) ?? {};
-      const quotePayload = (parsed.data.quoteData ?? {}) as SupplierQuoteToolData;
 
       const nextQuote: SupplierQuoteToolData = {
         ...existingQuote,
@@ -291,6 +311,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
         additionalEmails: parsed.data.additionalTo,
         emailSubject: parsed.data.subject,
         emailBody: parsed.data.body,
+        emailSignature: editedSignature || quotePayload.emailSignature,
         lastSentAt: new Date().toISOString(),
         lastSentBy: audit.user ?? request.user?.name ?? null,
         lastSentTo: toEmails,
@@ -313,6 +334,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
           cc: managementCc,
           bcc: managementBcc,
         },
+        attachments: attachments.map((file) => file.filename),
       });
     } catch (error) {
       app.log.error(error);

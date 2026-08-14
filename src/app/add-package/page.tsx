@@ -454,6 +454,11 @@ export default function AddPackagePage() {
             initialData={packageData?.supplier_quote_tool ?? undefined}
             supplierSource={packageData?.supplier_source ?? undefined}
             packageId={packageData?.id ?? null}
+            packageTitle={
+              packageData?.package_basics?.packageTitle ||
+              packageData?.package_title ||
+              ""
+            }
             destination={
               [
                 packageData?.package_basics?.countriesCovered,

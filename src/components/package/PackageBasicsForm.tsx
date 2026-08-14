@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
+import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import {
   Popover,
@@ -74,6 +75,9 @@ const COUNTRY_OPTIONS = [
 
 const SHORT_INTRO_HELP =
   "This appears on category pages, related package sections and package cards where clients only see a short description before clicking in.";
+
+const PACKAGE_OVERVIEW_HELP =
+  "The full package description shown on the package page. Use this for the main story, highlights and what travellers can expect.";
 
 interface PackageBasicsFormProps extends StepFormBaseProps {
   onNext: (data: PackageBasicsValues) => void;
@@ -295,6 +299,7 @@ export default function PackageBasicsForm({
       packageTitle: "",
       slug: "",
       shortIntro: "",
+      packageOverview: "",
       packageMode: "Enquiry first",
       tourType: "Group tour",
       runs: "Every day",
@@ -478,6 +483,30 @@ export default function PackageBasicsForm({
                 <p className={errorClass}>{errors.packageMode.message}</p>
               )}
             </div>
+          </div>
+
+          {/* Package Overview */}
+          <div className="mb-5">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Label className="text-sm font-semibold text-[#334155]">
+                Package Overview
+              </Label>
+              <FieldHelp text={PACKAGE_OVERVIEW_HELP} />
+            </div>
+            <Controller
+              control={control}
+              name="packageOverview"
+              render={({ field }) => (
+                <BlogRichTextEditor
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="Write the full package overview — destinations, experiences, and what makes this trip special…"
+                  defaultHeight={140}
+                  minHeight={100}
+                  maxHeight={800}
+                />
+              )}
+            />
           </div>
 
           {/* Tour type + Runs */}

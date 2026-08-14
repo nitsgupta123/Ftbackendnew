@@ -25,6 +25,10 @@ function isImageUrl(value: string): boolean {
 
 }
 
+function isHtmlContent(value: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(value);
+}
+
 function formatScalar(value: unknown): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (value === null || value === undefined) return "";
@@ -70,6 +74,18 @@ function DetailField({ label, value }: {label: string;value: unknown;}) {
   }
 
   if (typeof value === "string") {
+    if (isHtmlContent(value)) {
+      return (
+        <div className="sm:col-span-2">
+          <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</dt>
+          <dd
+            className="blog-editor-content blog-content-preview mt-1 text-sm text-gray-900 break-words"
+            dangerouslySetInnerHTML={{ __html: value }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div>
         <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</dt>

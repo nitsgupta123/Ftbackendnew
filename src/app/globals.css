@@ -300,6 +300,10 @@ a[class*="bg-[#B48A2C]"]:hover:not([class*="bg-[#B48A2C]/"]) {
   height: 0;
 }
 
+.blog-rich-text-editor .ProseMirror {
+  min-height: 100%;
+}
+
 .blog-rich-text-editor .ProseMirror:focus {
   outline: none;
 }
@@ -309,6 +313,53 @@ a[class*="bg-[#B48A2C]"]:hover:not([class*="bg-[#B48A2C]/"]) {
   border-radius: 2px;
   padding: 0 1px;
   color: inherit;
+}
+
+.blog-editor-content h1,
+.blog-content-preview h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0.85rem 0 0.4rem;
+  color: #1f2a44;
+}
+
+.blog-editor-content h2,
+.blog-content-preview h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0.7rem 0 0.35rem;
+  color: #1f2a44;
+}
+
+.blog-editor-content h3,
+.blog-content-preview h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.55rem 0 0.25rem;
+  color: #1f2a44;
+}
+
+.blog-editor-content h4,
+.blog-content-preview h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.45rem 0 0.2rem;
+  color: #334155;
+}
+
+.blog-editor-content h1:first-child,
+.blog-editor-content h2:first-child,
+.blog-editor-content h3:first-child,
+.blog-editor-content h4:first-child,
+.blog-content-preview h1:first-child,
+.blog-content-preview h2:first-child,
+.blog-content-preview h3:first-child,
+.blog-content-preview h4:first-child {
+  margin-top: 0;
 }
 
 /* Restore list markers removed by Tailwind preflight */

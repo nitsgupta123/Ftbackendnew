@@ -5,6 +5,7 @@ import { Icon } from "../ui/icons";
 import type { ItineraryData, ItineraryDay } from "@/lib/package-types";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { Button } from "@/components/ui/button";
+import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +47,7 @@ function normalizeDay(day: ItineraryDay, dayNumber: number): ItineraryDay {
     ...createEmptyDay(dayNumber),
     ...day,
     dayNumber,
+    description: toEditorHtml(day.description),
     dietaryNotes: day.dietaryNotes ?? day.halalFoodNote ?? "",
   };
 }
@@ -92,6 +94,24 @@ function PillTag({ label }: { label: string }) {
       {label}
     </span>
   );
+}
+
+function isEmptyRichText(html: string): boolean {
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").trim() === "";
+}
+
+function storeRichText(html: string): string {
+  return isEmptyRichText(html) ? "" : html;
+}
+
+function toEditorHtml(value: string | undefined): string {
+  const raw = value ?? "";
+  if (!raw.trim()) return "";
+  if (/<\/?[a-z][\s\S]*>/i.test(raw)) return raw;
+  return raw
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
+    .join("");
 }
 
 interface DayCardProps {
@@ -150,13 +170,17 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
 
           <div>
             <Label className={labelClass}>Description</Label>
-            <Textarea
-              placeholder="Describe this day for clients..."
-              rows={5}
-              className={textareaClass}
+            <BlogRichTextEditor
               value={day.description ?? ""}
-              onChange={(e) => update({ description: e.target.value })}
+              onChange={(html) => update({ description: storeRichText(html) })}
+              placeholder="Structure this day for clients — morning, afternoon, evening, transfers, and what they will see…"
+              defaultHeight={180}
+              minHeight={120}
+              maxHeight={640}
             />
+            <p className="mt-1.5 text-xs italic text-gray-400">
+              Use headings, bullets, and emphasis so the day reads clearly for consultants and clients.
+            </p>
           </div>
 
           <div>

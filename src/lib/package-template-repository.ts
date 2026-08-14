@@ -494,6 +494,7 @@ function sanitizeAppliedSupplier(
     contactPerson: supplier.contactPerson ?? "",
     supplierEmails: emails,
     supplierWhatsapp: supplier.supplierWhatsapp ?? "",
+    quotationFiles: supplier.quotationFiles ?? [],
     internalSupplierNotes: supplier.internalSupplierNotes ?? "",
   };
 }

@@ -2,6 +2,12 @@ import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import type { Transporter } from "nodemailer";
 
+export interface MailAttachment {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+}
+
 export interface SendMailInput {
   to: string[];
   cc?: string[];
@@ -15,6 +21,7 @@ export interface SendMailInput {
   /** When true, render a CTA button in the branded template. */
   isBtn?: boolean;
   btnUrl?: string;
+  attachments?: MailAttachment[];
 }
 
 export interface SendMailResult {
@@ -226,6 +233,37 @@ function toGraphRecipients(emails: string[] = []) {
     .map((address) => ({ emailAddress: { address } }));
 }
 
+function toGraphAttachments(attachments: MailAttachment[]) {
+  return attachments.map((file) => ({
+    "@odata.type": "#microsoft.graph.fileAttachment",
+    name: file.filename,
+    contentType: file.contentType,
+    contentBytes: file.content.toString("base64"),
+  }));
+}
+
+function toNodemailerAttachments(attachments?: MailAttachment[]) {
+  if (!attachments?.length) return undefined;
+  return attachments.map((file) => ({
+    filename: file.filename,
+    content: file.content,
+    contentType: file.contentType,
+  }));
+}
+
+const GRAPH_INLINE_ATTACHMENT_LIMIT = Math.floor(2.5 * 1024 * 1024);
+
+async function graphFetch(
+  url: string,
+  accessToken: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${accessToken}`);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  return fetch(url, { ...init, headers });
+}
+
 async function sendViaGraph(input: SendMailInput): Promise<SendMailResult> {
   const config = graphConfig();
   if (!config) {
@@ -239,6 +277,21 @@ async function sendViaGraph(input: SendMailInput): Promise<SendMailResult> {
     isBtn: input.isBtn,
     btnUrl: input.btnUrl,
   });
+
+  const attachments = input.attachments ?? [];
+  const totalSize = attachments.reduce((sum, file) => sum + file.content.length, 0);
+  const userPath = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.fromEmail)}`;
+
+  if (attachments.length > 0 && totalSize > GRAPH_INLINE_ATTACHMENT_LIMIT) {
+    return sendViaGraphDraft({
+      config,
+      accessToken,
+      userPath,
+      input,
+      finalHtml,
+      attachments,
+    });
+  }
 
   const message = {
     message: {
@@ -261,24 +314,19 @@ async function sendViaGraph(input: SendMailInput): Promise<SendMailResult> {
             replyTo: [{ emailAddress: { address: input.replyTo } }],
           }
         : {}),
+      ...(attachments.length
+        ? { attachments: toGraphAttachments(attachments) }
+        : {}),
     },
   };
 
-  const response = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.fromEmail)}/sendMail`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(message),
-    }
-  );
+  const response = await graphFetch(`${userPath}/sendMail`, accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(message),
+  });
 
   if (!response.ok) {
-    // Force token refresh on next attempt for auth failures
     if (response.status === 401 || response.status === 403) {
       cachedGraphToken = null;
     }
@@ -290,6 +338,164 @@ async function sendViaGraph(input: SendMailInput): Promise<SendMailResult> {
     messageId: `graph-${Date.now()}`,
     mode: "graph",
   };
+}
+
+async function sendViaGraphDraft(options: {
+  config: NonNullable<ReturnType<typeof graphConfig>>;
+  accessToken: string;
+  userPath: string;
+  input: SendMailInput;
+  finalHtml: string;
+  attachments: MailAttachment[];
+}): Promise<SendMailResult> {
+  const { config, accessToken, userPath, input, finalHtml, attachments } = options;
+
+  const createResponse = await graphFetch(`${userPath}/messages`, accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      subject: input.subject,
+      body: {
+        contentType: "HTML",
+        content: finalHtml,
+      },
+      toRecipients: toGraphRecipients(input.to),
+      ccRecipients: toGraphRecipients(input.cc),
+      bccRecipients: toGraphRecipients(input.bcc),
+      from: {
+        emailAddress: {
+          address: config.fromEmail,
+          name: config.fromName,
+        },
+      },
+      ...(input.replyTo
+        ? { replyTo: [{ emailAddress: { address: input.replyTo } }] }
+        : {}),
+    }),
+  });
+
+  if (!createResponse.ok) {
+    if (createResponse.status === 401 || createResponse.status === 403) {
+      cachedGraphToken = null;
+    }
+    const errText = await createResponse.text();
+    throw new Error(
+      `Graph draft create failed: ${createResponse.status} ${errText}. Large package attachments need Mail.ReadWrite in addition to Mail.Send.`
+    );
+  }
+
+  const draft = (await createResponse.json()) as { id?: string };
+  if (!draft.id) {
+    throw new Error("Graph draft create did not return a message id.");
+  }
+
+  try {
+    for (const file of attachments) {
+      if (file.content.length <= GRAPH_INLINE_ATTACHMENT_LIMIT) {
+        const attachResponse = await graphFetch(
+          `${userPath}/messages/${encodeURIComponent(draft.id)}/attachments`,
+          accessToken,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              name: file.filename,
+              contentType: file.contentType,
+              contentBytes: file.content.toString("base64"),
+            }),
+          }
+        );
+        if (!attachResponse.ok) {
+          throw new Error(
+            `Graph attachment failed: ${attachResponse.status} ${await attachResponse.text()}`
+          );
+        }
+      } else {
+        await uploadLargeGraphAttachment(accessToken, config.fromEmail, draft.id, file);
+      }
+    }
+
+    const sendResponse = await graphFetch(
+      `${userPath}/messages/${encodeURIComponent(draft.id)}/send`,
+      accessToken,
+      { method: "POST" }
+    );
+    if (!sendResponse.ok) {
+      throw new Error(
+        `Graph draft send failed: ${sendResponse.status} ${await sendResponse.text()}`
+      );
+    }
+  } catch (error) {
+    await graphFetch(
+      `${userPath}/messages/${encodeURIComponent(draft.id)}`,
+      accessToken,
+      { method: "DELETE" }
+    ).catch(() => undefined);
+    throw error;
+  }
+
+  return {
+    messageId: draft.id,
+    mode: "graph",
+  };
+}
+
+async function uploadLargeGraphAttachment(
+  accessToken: string,
+  userEmail: string,
+  messageId: string,
+  file: MailAttachment
+): Promise<void> {
+  const sessionResponse = await graphFetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/messages/${encodeURIComponent(messageId)}/attachments/createUploadSession`,
+    accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        AttachmentItem: {
+          attachmentType: "file",
+          name: file.filename,
+          size: file.content.length,
+          contentType: file.contentType,
+        },
+      }),
+    }
+  );
+
+  if (!sessionResponse.ok) {
+    throw new Error(
+      `Graph createUploadSession failed: ${sessionResponse.status} ${await sessionResponse.text()}`
+    );
+  }
+
+  const session = (await sessionResponse.json()) as { uploadUrl?: string };
+  if (!session.uploadUrl) {
+    throw new Error("Graph createUploadSession did not return an uploadUrl.");
+  }
+
+  const chunkSize = 327_680 * 10;
+  let offset = 0;
+  while (offset < file.content.length) {
+    const end = Math.min(offset + chunkSize, file.content.length);
+    const chunk = file.content.subarray(offset, end);
+    const putResponse = await fetch(session.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.contentType,
+        "Content-Length": String(chunk.length),
+        "Content-Range": `bytes ${offset}-${end - 1}/${file.content.length}`,
+      },
+      body: new Uint8Array(chunk),
+    });
+    if (!putResponse.ok) {
+      throw new Error(
+        `Graph attachment upload failed: ${putResponse.status} ${await putResponse.text()}`
+      );
+    }
+    offset = end;
+  }
 }
 
 async function getEtherealTransporter(): Promise<{
@@ -345,6 +551,7 @@ async function sendViaSmtpOrEthereal(
       text: input.text,
       html,
       replyTo: input.replyTo,
+      attachments: toNodemailerAttachments(input.attachments),
     });
 
     return { messageId: info.messageId, mode: "smtp" };
@@ -366,6 +573,7 @@ async function sendViaSmtpOrEthereal(
     text: input.text,
     html,
     replyTo: input.replyTo,
+    attachments: toNodemailerAttachments(input.attachments),
   });
 
   const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;

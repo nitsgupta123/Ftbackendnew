@@ -207,6 +207,7 @@ export interface PricingData {
 export interface ItineraryDay {
   dayNumber: number;
   title?: string;
+  /** Client-facing day copy. Stored as HTML from the itinerary rich text editor. */
   description?: string;
   activitiesIncluded?: string;
   highlights?: string;
@@ -311,12 +312,16 @@ export interface SupplierQuoteToolData {
   negotiationNote?: string;
   includeDayByDayItinerary?: boolean;
   includeClientBudget?: boolean;
+  /** Attach a supplier-safe package summary to the quote email */
+  attachPackage?: boolean;
   /** Supplier emails selected as To recipients */
   toEmails?: string[];
   /** Extra To recipients added manually */
   additionalEmails?: string[];
   emailSubject?: string;
   emailBody?: string;
+  /** Editable closing signature appended to the quote email */
+  emailSignature?: string;
   lastSentAt?: string;
   lastSentBy?: string | null;
   lastSentTo?: string[];
