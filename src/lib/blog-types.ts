@@ -1,4 +1,9 @@
-export type BlogPostStatus = "draft" | "scheduled" | "published" | "archived";
+export type BlogPostStatus =
+  | "draft"
+  | "pending_review"
+  | "scheduled"
+  | "published"
+  | "archived";
 
 export interface BlogPostRecord {
   id: number;
@@ -14,6 +19,7 @@ export interface BlogPostRecord {
   is_featured: boolean;
   published_at: string | null;
   tags: string[];
+  related_package_ids: number[];
   seo_meta_title: string | null;
   seo_meta_description: string | null;
   created_by: string | null;
@@ -34,6 +40,7 @@ export interface CreateBlogPostInput {
   is_featured?: boolean;
   published_at?: string | null;
   tags?: string[];
+  related_package_ids?: number[];
   seo_meta_title?: string | null;
   seo_meta_description?: string | null;
 }
@@ -50,6 +57,7 @@ export interface UpdateBlogPostInput {
   is_featured?: boolean;
   published_at?: string | null;
   tags?: string[];
+  related_package_ids?: number[];
   seo_meta_title?: string | null;
   seo_meta_description?: string | null;
 }
@@ -77,6 +85,7 @@ export interface ListBlogPostsResult {
 export interface BlogStats {
   total: number;
   draft: number;
+  pending_review: number;
   scheduled: number;
   published: number;
   archived: number;
@@ -86,6 +95,7 @@ export interface BlogStats {
 export const BLOG_STATUS_FILTER_OPTIONS = [
   { value: "all", label: "All statuses" },
   { value: "draft", label: "Draft" },
+  { value: "pending_review", label: "Pending Review" },
   { value: "scheduled", label: "Scheduled" },
   { value: "published", label: "Published" },
   { value: "archived", label: "Archived" },
@@ -99,3 +109,7 @@ export const BLOG_SORT_OPTIONS = [
   { value: "title", label: "Title" },
   { value: "author_name", label: "Author" },
 ] as const;
+
+export function formatBlogStatusLabel(status: string): string {
+  return status.replace(/_/g, " ");
+}

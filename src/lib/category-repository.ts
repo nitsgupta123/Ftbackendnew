@@ -326,15 +326,26 @@ export async function getPackageCategoryIds(packageId: number): Promise<number[]
 }
 
 export async function getPackageCategoryNames(packageId: number): Promise<string[]> {
+  const { names } = await getPackageCategorySummary(packageId);
+  return names;
+}
+
+export async function getPackageCategorySummary(packageId: number): Promise<{
+  ids: number[];
+  names: string[];
+}> {
   const rows = await query<RowDataPacket[]>(
-    `SELECT c.name
+    `SELECT m.category_id, c.name
      FROM ${MAP_TABLE} m
      INNER JOIN ${CATEGORIES_TABLE} c ON c.id = m.category_id
      WHERE m.package_id = ?
      ORDER BY c.display_order ASC, c.name ASC`,
     [packageId]
   );
-  return rows.map((r) => r.name as string);
+  return {
+    ids: rows.map((r) => Number(r.category_id)).sort((a, b) => a - b),
+    names: rows.map((r) => String(r.name)),
+  };
 }
 
 export async function listActiveCategoryOptions(): Promise<

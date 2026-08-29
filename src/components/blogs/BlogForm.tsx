@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Icon } from "@/components/ui/icons";
 import { createBlogPostSchema, type CreateBlogPostFormValues } from "@/lib/validation";
-import { fromDatetimeLocalValue, toDatetimeLocalValue } from "@/lib/format-date";
+import { fromDatetimeLocalValue, toDatetimeLocalValue, toValidDate } from "@/lib/format-date";
 import { slugify } from "@/lib/slug";
 import type { BlogPostRecord } from "@/lib/blog-types";
 import { listActiveBlogCategories } from "@/lib/blog-category-api";
 import type { BlogCategoryRecord } from "@/lib/blog-category-types";
+import { listPackages } from "@/lib/package-api";
+import type { PackageRecord } from "@/lib/package-types";
 import { uploadMediaFile } from "@/lib/media-api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,8 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
 import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
+import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 const GOLD = "#A68231";
+const MAX_RELATED_PACKAGES = 20;
 
 const inputClass =
   "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
@@ -31,8 +35,6 @@ interface BlogFormProps {
   onSubmit: (data: CreateBlogPostFormValues) => Promise<void>;
   onCancel: () => void;
 }
-
-import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 function FeaturedToggleField({
   label,
@@ -59,6 +61,9 @@ export default function BlogForm({
 }: BlogFormProps) {
   const isEdit = Boolean(initialData);
   const [categories, setCategories] = useState<Pick<BlogCategoryRecord, "id" | "name">[]>([]);
+  const [packages, setPackages] = useState<PackageRecord[]>([]);
+  const [packagesLoading, setPackagesLoading] = useState(false);
+  const [packageSearch, setPackageSearch] = useState("");
   const [tagsInput, setTagsInput] = useState(initialData?.tags.join(", ") ?? "");
   const [imageUploading, setImageUploading] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
@@ -87,6 +92,7 @@ export default function BlogForm({
       seo_meta_title: initialData?.seo_meta_title ?? "",
       seo_meta_description: initialData?.seo_meta_description ?? "",
       tags: initialData?.tags ?? [],
+      related_package_ids: initialData?.related_package_ids ?? [],
     },
   });
 
@@ -94,6 +100,7 @@ export default function BlogForm({
   const slugValue = useWatch({ control, name: "slug" }) ?? "";
   const featuredImagePath = useWatch({ control, name: "featured_image_path" }) ?? "";
   const statusValue = useWatch({ control, name: "status" }) ?? "draft";
+  const relatedPackageIds = useWatch({ control, name: "related_package_ids" }) ?? [];
   const [slugTouched, setSlugTouched] = useState(false);
 
   async function handleFeaturedImageUpload(file: File) {
@@ -116,6 +123,16 @@ export default function BlogForm({
   }, []);
 
   useEffect(() => {
+    setPackagesLoading(true);
+    listPackages()
+      .then((result) =>
+        setPackages(result.packages.filter((pkg) => pkg.status !== "deleted"))
+      )
+      .catch(() => setPackages([]))
+      .finally(() => setPackagesLoading(false));
+  }, []);
+
+  useEffect(() => {
     if (initialData) {
       reset({
         title: initialData.title,
@@ -131,6 +148,7 @@ export default function BlogForm({
         seo_meta_title: initialData.seo_meta_title ?? "",
         seo_meta_description: initialData.seo_meta_description ?? "",
         tags: initialData.tags,
+        related_package_ids: initialData.related_package_ids ?? [],
       });
       setTagsInput(initialData.tags.join(", "));
       queueMicrotask(() => setSlugTouched(true));
@@ -143,11 +161,64 @@ export default function BlogForm({
     }
   }, [nameValue, slugTouched, setValue, isEdit]);
 
+  const selectedRelatedPackages = useMemo(() => {
+    const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
+    return relatedPackageIds.map((id) => {
+      const pkg = byId.get(id);
+      return {
+        id,
+        title: pkg?.package_title || `Package #${id}`,
+      };
+    });
+  }, [packages, relatedPackageIds]);
+
+  const packageChoices = useMemo(() => {
+    const q = packageSearch.trim().toLowerCase();
+    const selected = new Set(relatedPackageIds);
+    return packages
+      .filter((pkg) => pkg.status === "published")
+      .filter((pkg) => !selected.has(pkg.id))
+      .filter((pkg) => {
+        if (!q) return true;
+        const title = (pkg.package_title ?? "").toLowerCase();
+        const slug = (pkg.slug ?? "").toLowerCase();
+        return title.includes(q) || slug.includes(q) || String(pkg.id).includes(q);
+      })
+      .slice(0, 12);
+  }, [packages, packageSearch, relatedPackageIds]);
+
+  function toggleRelatedPackage(packageId: number) {
+    const current = relatedPackageIds;
+    if (current.includes(packageId)) {
+      setValue(
+        "related_package_ids",
+        current.filter((id) => id !== packageId),
+        { shouldDirty: true, shouldValidate: true }
+      );
+      return;
+    }
+    if (current.length >= MAX_RELATED_PACKAGES) {
+      window.alert(`You can link at most ${MAX_RELATED_PACKAGES} related packages.`);
+      return;
+    }
+    setValue("related_package_ids", [...current, packageId], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
+
   async function handleFormSubmit(data: CreateBlogPostFormValues) {
     const tags = tagsInput
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
+    const publishedAt = fromDatetimeLocalValue(data.published_at);
+    const requestedStatus = data.status ?? "draft";
+    const publishDate = toValidDate(publishedAt);
+    const status =
+      requestedStatus === "published" && publishDate && publishDate.getTime() > Date.now()
+        ? "scheduled"
+        : requestedStatus;
     await onSubmit({
       ...data,
       title: data.title.trim(),
@@ -157,9 +228,10 @@ export default function BlogForm({
       featured_image_path: data.featured_image_path?.trim() || null,
       author_name: data.author_name?.trim() || null,
       category_id: data.category_id ?? null,
-      status: data.status ?? "draft",
-      published_at: fromDatetimeLocalValue(data.published_at),
+      status,
+      published_at: publishedAt,
       tags,
+      related_package_ids: data.related_package_ids ?? [],
     });
   }
 
@@ -221,15 +293,85 @@ export default function BlogForm({
               control={control}
               name="content"
               render={({ field }) => (
-                <>
-                  <BlogRichTextEditor
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    placeholder="Write your blog content. HTML is supported."
-                  />
-                </>
+                <BlogRichTextEditor
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="Write your blog content. HTML is supported."
+                />
               )}
             />
+          </div>
+
+          <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-[#1F2A44]">Related Packages</h3>
+              <p className="mt-1 text-xs text-gray-400">
+                Link published packages shown with this blog post (max {MAX_RELATED_PACKAGES}).
+              </p>
+            </div>
+
+            {selectedRelatedPackages.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedRelatedPackages.map((pkg) => (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => toggleRelatedPackage(pkg.id)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#E5E7EB] bg-[#FFFCF7] px-3 py-1.5 text-xs font-medium text-[#334155] hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                    title="Remove package"
+                  >
+                    <span className="max-w-[200px] truncate">{pkg.title}</span>
+                    <Icon name="X" size={12} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div>
+              <Input
+                type="search"
+                value={packageSearch}
+                onChange={(e) => setPackageSearch(e.target.value)}
+                placeholder="Search packages by title or slug…"
+                className={inputClass}
+              />
+            </div>
+
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-[#E5E7EB] divide-y divide-[#F1F5F9]">
+              {packagesLoading ? (
+                <p className="px-3 py-4 text-xs text-gray-400">Loading packages…</p>
+              ) : packageChoices.length === 0 ? (
+                <p className="px-3 py-4 text-xs text-gray-400">
+                  {packageSearch.trim()
+                    ? "No matching packages found."
+                    : relatedPackageIds.length
+                      ? "All matching packages are already selected."
+                      : "No published packages available."}
+                </p>
+              ) : (
+                packageChoices.map((pkg) => (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => toggleRelatedPackage(pkg.id)}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-[#FFFCF7] transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[#1F2A44] truncate">
+                        {pkg.package_title || `Package #${pkg.id}`}
+                      </p>
+                      <p className="text-xs text-gray-400 font-mono truncate">
+                        {pkg.slug ? `/${pkg.slug}` : `#${pkg.id}`}
+                      </p>
+                    </div>
+                    <Icon name="Plus" size={14} className="shrink-0 text-[#A68231]" />
+                  </button>
+                ))
+              )}
+            </div>
+            {errors.related_package_ids && (
+              <p className="text-xs text-red-600">{errors.related_package_ids.message}</p>
+            )}
           </div>
         </div>
 
@@ -243,10 +385,16 @@ export default function BlogForm({
               </Label>
               <NativeSelect id="status" className={inputClass} {...register("status")}>
                 <option value="draft">Draft</option>
+                <option value="pending_review">Pending Review</option>
                 <option value="scheduled">Scheduled</option>
                 <option value="published">Published</option>
                 <option value="archived">Archived</option>
               </NativeSelect>
+              {statusValue === "pending_review" && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Submitted for approval. An approver can publish or return it to draft.
+                </p>
+              )}
             </div>
 
             <div>
@@ -324,14 +472,26 @@ export default function BlogForm({
                 id="published_at"
                 type="datetime-local"
                 className={inputClass}
-                {...register("published_at")}
+                {...register("published_at", {
+                  onChange: (event) => {
+                    const value = String(event.target.value ?? "");
+                    const publishDate = toValidDate(fromDatetimeLocalValue(value));
+                    if (
+                      publishDate &&
+                      publishDate.getTime() > Date.now() &&
+                      (statusValue === "published" || statusValue === "draft")
+                    ) {
+                      setValue("status", "scheduled", { shouldDirty: true });
+                    }
+                  },
+                })}
               />
               <p className="mt-1 text-xs text-gray-400">
                 {statusValue === "scheduled"
-                  ? "Required. Cron will publish this post automatically at this Singapore (SGT) time."
+                  ? "Required. Cron will publish this post automatically at this Singapore (SGT) time. It will appear under Scheduled Posts."
                   : statusValue === "published"
-                    ? "Times are Singapore (SGT). Leave blank to publish now, or set a future date/time."
-                    : "Times are Singapore (SGT). Set status to Scheduled and pick a date/time for auto-publish."}
+                    ? "Times are Singapore (SGT). Leave blank to publish now. A future date switches status to Scheduled."
+                    : "Times are Singapore (SGT). Pick a future date/time to auto-set status to Scheduled for auto-publish."}
               </p>
               {errors.published_at && (
                 <p className="mt-1 text-xs text-red-600">{errors.published_at.message}</p>

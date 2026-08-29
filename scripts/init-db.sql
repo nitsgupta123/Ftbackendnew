@@ -44,6 +44,7 @@ CREATE TABLE add_package (
   KEY idx_add_package_status (status),
   KEY idx_add_package_current_step (current_step),
   KEY idx_add_package_created_at (created_at),
+  KEY idx_add_package_updated_at (updated_at),
   KEY idx_add_package_created_by (created_by),
   KEY idx_add_package_updated_by (updated_by),
   CONSTRAINT fk_add_package_tbl_packages

@@ -237,7 +237,9 @@ function mapPackageStatus(status: string): DashboardActivity["status"] {
 
 function mapBlogStatus(status: string): DashboardActivity["status"] {
   if (status === "published") return "Published";
-  if (status === "archived") return "Pending";
+  if (status === "pending_review" || status === "scheduled" || status === "archived") {
+    return "Pending";
+  }
   return "Draft";
 }
 

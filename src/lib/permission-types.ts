@@ -288,6 +288,8 @@ export const NAV_HREF_MODULE: Record<string, string> = {
   "/blogs/all": "blogs",
   "/blogs/new": "blogs",
   "/blogs/drafts": "blogs",
+  "/blogs/pending-review": "blogs",
+  "/blogs/scheduled": "blogs",
   "/blogs/published": "blogs",
   "/blogs/categories": "blog_categories",
   "/pages/all": "pages",

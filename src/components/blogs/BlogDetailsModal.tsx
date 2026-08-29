@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Icon } from "@/components/ui/icons";
-import type { BlogPostRecord } from "@/lib/blog-types";
+import { formatBlogStatusLabel, type BlogPostRecord } from "@/lib/blog-types";
+import { listPackages } from "@/lib/package-api";
 import { formatPackageDateTime, formatPackageDateTimeSgt } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -13,6 +15,30 @@ interface BlogDetailsModalProps {
 }
 
 export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProps) {
+  const [relatedLabels, setRelatedLabels] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!post?.related_package_ids?.length) {
+      queueMicrotask(() => setRelatedLabels([]));
+      return;
+    }
+
+    const ids = new Set(post.related_package_ids);
+    listPackages()
+      .then((result) => {
+        const labels = result.packages
+          .filter((pkg) => ids.has(pkg.id))
+          .map((pkg) => pkg.package_title || `Package #${pkg.id}`);
+        const missing = post.related_package_ids
+          .filter((id) => !result.packages.some((pkg) => pkg.id === id))
+          .map((id) => `Package #${id}`);
+        setRelatedLabels([...labels, ...missing]);
+      })
+      .catch(() => {
+        setRelatedLabels(post.related_package_ids.map((id) => `Package #${id}`));
+      });
+  }, [post]);
+
   if (!post) return null;
 
   return (
@@ -64,7 +90,9 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase">Status</dt>
-              <dd className="mt-0.5 capitalize text-gray-900">{post.status}</dd>
+              <dd className="mt-0.5 capitalize text-gray-900">
+                {formatBlogStatusLabel(post.status)}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-medium text-gray-500 uppercase">Category</dt>
@@ -103,6 +131,24 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
                     className="inline-flex px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700"
                   >
                     {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {relatedLabels.length > 0 && (
+            <div>
+              <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">
+                Related Packages
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {relatedLabels.map((label) => (
+                  <span
+                    key={label}
+                    className="inline-flex px-2.5 py-0.5 rounded-full text-xs bg-[#FFFCF7] text-[#334155] ring-1 ring-[#E5E7EB]"
+                  >
+                    {label}
                   </span>
                 ))}
               </div>

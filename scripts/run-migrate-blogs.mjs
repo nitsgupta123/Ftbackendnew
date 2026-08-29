@@ -27,6 +27,7 @@ async function main() {
   try {
     await runSql(connection, "migrate-add-blogs.sql");
     await runSql(connection, "migrate-alter-blog-scheduled-status.sql");
+    await runSql(connection, "migrate-blog-related-packages-and-approval.sql");
     await runSql(connection, "seed-blogs.sql");
     console.log("Blog tables and seed data are ready.");
   } finally {

@@ -182,16 +182,22 @@ export async function archivePackage(id: number) {
 }
 
 export async function duplicatePackage(source: PackageRecord) {
-  const baseTitle = source.package_title?.trim() || "Draft Package";
+  const loaded =
+    source.source === "legacy"
+      ? source
+      : (await getPackage(source.id)).package;
+  const full = loaded ?? source;
+
+  const baseTitle = full.package_title?.trim() || "Draft Package";
   const title = baseTitle.toLowerCase().startsWith("copy of ")
     ? baseTitle
     : `Copy of ${baseTitle}`;
-  const slugSeed = source.slug?.trim() || "draft";
+  const slugSeed = full.slug?.trim() || "draft";
   const slug = `${slugSeed}-copy-${Date.now()}`;
 
-  const packageBasics = source.package_basics
+  const packageBasics = full.package_basics
     ? {
-        ...source.package_basics,
+        ...full.package_basics,
         packageTitle: title,
         slug,
       }
@@ -199,26 +205,26 @@ export async function duplicatePackage(source: PackageRecord) {
 
   return createPackage({
     status: "draft",
-    current_step: source.current_step || 1,
+    current_step: full.current_step || 1,
     package_title: title,
     slug,
-    supplier_name: source.supplier_name,
-    supplier_source: source.supplier_source,
+    supplier_name: full.supplier_name,
+    supplier_source: full.supplier_source,
     package_basics: packageBasics,
-    media_frontend: source.media_frontend,
-    pricing: source.pricing,
-    itinerary: source.itinerary,
-    hotels: source.hotels,
-    inclusions: source.inclusions,
-    booking_policy: source.booking_policy,
-    consultant_view: source.consultant_view,
-    supplier_quote_tool: source.supplier_quote_tool,
-    frontend_faqs: source.frontend_faqs,
-    sales_ads_assets: source.sales_ads_assets,
-    seo: source.seo,
-    review_publish: source.review_publish
+    media_frontend: full.media_frontend,
+    pricing: full.pricing,
+    itinerary: full.itinerary,
+    hotels: full.hotels,
+    inclusions: full.inclusions,
+    booking_policy: full.booking_policy,
+    consultant_view: full.consultant_view,
+    supplier_quote_tool: full.supplier_quote_tool,
+    frontend_faqs: full.frontend_faqs,
+    sales_ads_assets: full.sales_ads_assets,
+    seo: full.seo,
+    review_publish: full.review_publish
       ? {
-          ...source.review_publish,
+          ...full.review_publish,
           submitAction: "save",
           publishedAt: null,
         }

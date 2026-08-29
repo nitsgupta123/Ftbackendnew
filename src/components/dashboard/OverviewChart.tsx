@@ -6,6 +6,19 @@ import type { ChartDataPoint } from "@/lib/dashboard-data";
 
 const PERIODS = ["Last 7 Days", "Last 30 Days", "Last 90 Days"] as const;
 
+const PERIOD_DAYS: Record<(typeof PERIODS)[number], number> = {
+  "Last 7 Days": 7,
+  "Last 30 Days": 30,
+  "Last 90 Days": 90,
+};
+
+/** Space x-axis labels so 7/30/90-day ranges stay readable. */
+function labelStepForDays(days: number): number {
+  if (days <= 7) return 1;
+  if (days <= 30) return 5;
+  return 15;
+}
+
 interface OverviewChartProps {
   data: ChartDataPoint[];
   period?: (typeof PERIODS)[number];
@@ -20,12 +33,14 @@ export default function OverviewChart({
   loading = false,
 }: OverviewChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const width = 560;
+  const days = PERIOD_DAYS[period];
+  const labelStep = labelStepForDays(days);
+  const width = days > 30 ? 720 : days > 7 ? 640 : 560;
   const height = 220;
   const padding = {
     top: 20,
     right: 16,
-    bottom: 32,
+    bottom: 36,
     left: 44,
   };
   const chartW = width - padding.left - padding.right;
@@ -50,6 +65,11 @@ export default function OverviewChart({
   const segmentWidth = pointCount > 1 ? chartW / (pointCount - 1) : chartW;
   const toX = (i: number) => padding.left + (i / (pointCount - 1 || 1)) * chartW;
   const toY = (v: number) => padding.top + chartH - (v / maxValue) * chartH;
+
+  const shouldShowLabel = (index: number) =>
+    index === 0 ||
+    index === data.length - 1 ||
+    index % labelStep === 0;
 
   const makePath = (key: "visitors" | "pageViews") =>
     data
@@ -105,7 +125,7 @@ export default function OverviewChart({
 
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-auto min-w-[520px] w-full"
+          className={`h-auto w-full ${days > 30 ? "min-w-[680px]" : days > 7 ? "min-w-[600px]" : "min-w-[520px]"}`}
           onMouseLeave={() => setHoveredIndex(null)}
         >
           {yTicks.map((tick) => (
@@ -148,14 +168,16 @@ export default function OverviewChart({
                 fill="transparent"
                 onMouseEnter={() => setHoveredIndex(i)}
               />
-              <text
-                x={toX(i)}
-                y={height - 8}
-                textAnchor="middle"
-                className="fill-gray-400 text-[10px]"
-              >
-                {d.date}
-              </text>
+              {shouldShowLabel(i) ? (
+                <text
+                  x={toX(i)}
+                  y={height - 10}
+                  textAnchor="middle"
+                  className="fill-gray-400 text-[11px]"
+                >
+                  {d.date}
+                </text>
+              ) : null}
             </g>
           ))}
 

@@ -12,7 +12,13 @@ import type { BlogPostStatus, ListBlogPostsParams } from "../../src/lib/blog-typ
 import { createBlogPostSchema, updateBlogPostSchema } from "../../src/lib/validation";
 import { getRequestAudit, requireSuperAdmin } from "../lib/audit";
 
-const VALID_STATUSES: BlogPostStatus[] = ["draft", "scheduled", "published", "archived"];
+const VALID_STATUSES: BlogPostStatus[] = [
+  "draft",
+  "pending_review",
+  "scheduled",
+  "published",
+  "archived",
+];
 
 function parseStatus(value?: string): BlogPostStatus | "all" | undefined {
   if (!value || value === "all") return value === "all" ? "all" : undefined;

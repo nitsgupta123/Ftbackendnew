@@ -15,6 +15,7 @@ function blogModuleIcon(slug: string, endpoint?: string): string {
   if (slug === "scheduled") return "Calendar";
   if (slug === "published") return "CheckCircle";
   if (slug === "drafts") return "Pencil";
+  if (slug === "pending-review") return "Eye";
   if (slug === "archived") return "Archive";
   return "FileText";
 }

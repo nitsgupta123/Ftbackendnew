@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/icons";
 import type { ItineraryData, ItineraryDay } from "@/lib/package-types";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
@@ -112,6 +112,26 @@ function toEditorHtml(value: string | undefined): string {
     .split(/\n{2,}/)
     .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
     .join("");
+}
+
+function dayHasUserContent(day: ItineraryDay): boolean {
+  return Boolean(
+    day.title?.trim() ||
+      !isEmptyRichText(day.description ?? "") ||
+      day.activitiesIncluded?.trim() ||
+      day.highlights?.trim() ||
+      day.internalNotes?.trim() ||
+      day.mobilityWarning?.trim() ||
+      day.supplierNotes?.trim() ||
+      day.dietaryNotes?.trim() ||
+      day.breakfast ||
+      day.lunch ||
+      day.dinner
+  );
+}
+
+function savedDaysKey(days: ItineraryDay[] | null | undefined): string {
+  return JSON.stringify(days ?? []);
 }
 
 interface DayCardProps {
@@ -283,24 +303,55 @@ export default function ItineraryForm({
   packageDurationDays,
 }: ItineraryFormProps) {
   const duration = parseDurationDays(packageDurationDays);
+  const incomingDays = initialData?.days;
+  const incomingKey = savedDaysKey(incomingDays);
+  const lastIncomingKey = useRef(incomingKey);
+  const lastDuration = useRef(duration);
+
   const [days, setDays] = useState<ItineraryDay[]>(() =>
-    buildDaysForDuration(duration, initialData?.days)
+    buildDaysForDuration(duration, incomingDays)
   );
   const [openDayNumber, setOpenDayNumber] = useState<number | null>(() =>
     duration >= 1 ? 1 : null
   );
 
   useEffect(() => {
+    const savedChanged = lastIncomingKey.current !== incomingKey;
+    const durationChanged = lastDuration.current !== duration;
+    lastIncomingKey.current = incomingKey;
+    lastDuration.current = duration;
+
+    if (!savedChanged && !durationChanged) return;
+
     setDays((prev) => {
-      const next = buildDaysForDuration(duration, prev.length ? prev : initialData?.days);
-      return next;
+      const incomingHasContent = (incomingDays ?? []).some(dayHasUserContent);
+      const prevHasContent = prev.some(dayHasUserContent);
+
+      // Empty generated tabs must yield to saved itinerary when it arrives later.
+      if (savedChanged && incomingHasContent && !prevHasContent) {
+        return buildDaysForDuration(duration, incomingDays);
+      }
+
+      if (durationChanged) {
+        return buildDaysForDuration(
+          duration,
+          prev.length || prevHasContent ? prev : incomingDays
+        );
+      }
+
+      // Keep in-progress edits when parent re-stamps the same package.
+      if (prevHasContent) return prev;
+      return buildDaysForDuration(duration, incomingDays ?? prev);
     });
+
+    if (!durationChanged) return;
+
     setOpenDayNumber((prev) => {
       if (duration < 1) return null;
       if (prev != null && prev <= duration) return prev;
       return 1;
     });
-  }, [duration, initialData?.days]);
+  }, [duration, incomingKey, incomingDays]);
 
   const updateDay = (index: number, day: ItineraryDay) => {
     setDays((prev) => prev.map((d, i) => (i === index ? day : d)));

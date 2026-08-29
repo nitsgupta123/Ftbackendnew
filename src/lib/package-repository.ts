@@ -1,6 +1,6 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { PackageAuditContext } from "./audit-context";
-import { getPackageCategoryIds, getPackageCategoryNames, syncPackageCategories } from "./category-repository";
+import { getPackageCategorySummary, syncPackageCategories } from "./category-repository";
 import { query, type QueryParam } from "./db";
 import type {
   CreatePackageInput,
@@ -54,13 +54,59 @@ function legacyUserLabel(userId: unknown): string | null {
   return `Legacy User #${id}`;
 }
 
+const ADD_PACKAGE_FROM = `
+  FROM ${ADD_PACKAGE_TABLE} ap
+  INNER JOIN ${TBL_PACKAGES} tp ON tp.id = ap.package_id
+`;
+
 const ADD_PACKAGE_SELECT = `
   SELECT
     ap.*,
     tp.p_name AS package_title,
     tp.p_slug AS slug
-  FROM ${ADD_PACKAGE_TABLE} ap
-  INNER JOIN ${TBL_PACKAGES} tp ON tp.id = ap.package_id
+  ${ADD_PACKAGE_FROM}
+`;
+
+/** List views only need identity, status, and a few JSON blobs — not itinerary/hotels/etc. */
+const ADD_PACKAGE_LIST_SELECT = `
+  SELECT
+    ap.id,
+    ap.package_id,
+    ap.status,
+    ap.current_step,
+    ap.supplier_source,
+    ap.package_basics,
+    ap.media_frontend,
+    ap.review_publish,
+    ap.created_by,
+    ap.updated_by,
+    ap.created_at,
+    ap.updated_at,
+    tp.p_name AS package_title,
+    tp.p_slug AS slug
+  ${ADD_PACKAGE_FROM}
+`;
+
+const TBL_PACKAGE_LIST_COLUMNS = `
+  id, p_name, p_slug, country_id, day_night, feature_img, desti_image,
+  desti_list, package_currency, insert_date, edit_date, user_id,
+  is_publish, is_archive, status
+`;
+
+const VALIDITY_TO_EXPR = `STR_TO_DATE(
+  NULLIF(JSON_UNQUOTE(JSON_EXTRACT(ap.supplier_source, '$.validityTo')), ''),
+  '%Y-%m-%d'
+)`;
+
+const EXPIRING_RATES_WHERE = `
+  ap.supplier_source IS NOT NULL
+  AND ${VALIDITY_TO_EXPR} BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+`;
+
+const NOT_PLACEHOLDER_PACKAGE_SQL = `
+  TRIM(IFNULL(tp.p_name, '')) != ''
+  AND TRIM(tp.p_name) != 'Draft Package'
+  AND IFNULL(tp.p_slug, '') NOT REGEXP '^draft-[0-9]+$'
 `;
 
 function parsePackageRow(row: RowDataPacket): PackageRecord {
@@ -68,6 +114,10 @@ function parsePackageRow(row: RowDataPacket): PackageRecord {
 
   for (const column of JSON_COLUMNS) {
     const value = row[column];
+    if (value === undefined) {
+      parsed[column] = null;
+      continue;
+    }
     if (typeof value === "string") {
       try {
         parsed[column] = JSON.parse(value);
@@ -229,15 +279,15 @@ async function syncTblPackage(
 
 export async function listTblPackages(): Promise<PackageRecord[]> {
   const rows = await query<RowDataPacket[]>(
-    `SELECT * FROM ${TBL_PACKAGES} ORDER BY edit_date DESC`
+    `SELECT ${TBL_PACKAGE_LIST_COLUMNS} FROM ${TBL_PACKAGES} ORDER BY edit_date DESC`
   );
   return rows.map(mapTblPackageRow);
 }
 
 export async function listPackages(status?: PackageStatus): Promise<PackageRecord[]> {
   const sql = status
-    ? `${ADD_PACKAGE_SELECT} WHERE ap.status = ? ORDER BY ap.updated_at DESC`
-    : `${ADD_PACKAGE_SELECT} WHERE ap.status != 'deleted' ORDER BY ap.updated_at DESC`;
+    ? `${ADD_PACKAGE_LIST_SELECT} WHERE ap.status = ? ORDER BY ap.updated_at DESC`
+    : `${ADD_PACKAGE_LIST_SELECT} WHERE ap.status != 'deleted' ORDER BY ap.updated_at DESC`;
 
   const rows = await query<RowDataPacket[]>(sql, status ? [status] : []);
   return rows.map(parsePackageRow);
@@ -252,8 +302,7 @@ export async function getPackageById(id: number): Promise<PackageRecord | null> 
   if (!rows.length) return null;
 
   const record = parsePackageRow(rows[0]);
-  const categoryIds = await getPackageCategoryIds(id);
-  const categoryNames = await getPackageCategoryNames(id);
+  const { ids: categoryIds, names: categoryNames } = await getPackageCategorySummary(id);
   if (record.package_basics) {
     record.package_basics = {
       ...record.package_basics,
@@ -266,6 +315,21 @@ export async function getPackageById(id: number): Promise<PackageRecord | null> 
   }
 
   return record;
+}
+
+async function getPackageUpdateTarget(
+  id: number
+): Promise<{ id: number; package_id: number; status: PackageStatus } | null> {
+  const rows = await query<RowDataPacket[]>(
+    `SELECT id, package_id, status FROM ${ADD_PACKAGE_TABLE} WHERE id = ? LIMIT 1`,
+    [id]
+  );
+  if (!rows.length) return null;
+  return {
+    id: Number(rows[0].id),
+    package_id: Number(rows[0].package_id),
+    status: rows[0].status as PackageStatus,
+  };
 }
 
 export async function createPackage(
@@ -328,7 +392,7 @@ export async function updatePackage(
   input: UpdatePackageInput,
   audit?: PackageAuditContext
 ): Promise<PackageRecord | null> {
-  const existing = await getPackageById(id);
+  const existing = await getPackageUpdateTarget(id);
   if (!existing) return null;
 
   const fields: string[] = [];
@@ -412,7 +476,7 @@ export async function deletePackage(
   id: number,
   audit?: PackageAuditContext
 ): Promise<boolean> {
-  const existing = await getPackageById(id);
+  const existing = await getPackageUpdateTarget(id);
   if (!existing) return false;
 
   const result = audit?.user
@@ -481,19 +545,30 @@ function isPlaceholderPublishedPackage(pkg: PackageRecord): boolean {
 }
 
 export async function listRecentlyPublishedPackages(limit = 5): Promise<PackageRecord[]> {
+  const fetchLimit = Math.max(limit * 6, 30);
   const [wizardRows, legacyRows] = await Promise.all([
-    query<RowDataPacket[]>(`
-      ${ADD_PACKAGE_SELECT}
+    query<RowDataPacket[]>(
+      `
+      ${ADD_PACKAGE_LIST_SELECT}
       WHERE ap.status = 'published'
+        AND ${NOT_PLACEHOLDER_PACKAGE_SQL}
       ORDER BY ap.updated_at DESC
-    `),
-    query<RowDataPacket[]>(`
-      SELECT * FROM ${TBL_PACKAGES}
-      WHERE IFNULL(is_archive, 0) = 0
-        AND IFNULL(is_publish, 0) != 2
-        AND IFNULL(status, 0) != 2
+      LIMIT ?
+    `,
+      [fetchLimit]
+    ),
+    query<RowDataPacket[]>(
+      `
+      SELECT ${TBL_PACKAGE_LIST_COLUMNS} FROM ${TBL_PACKAGES} tp
+      WHERE IFNULL(tp.is_archive, 0) = 0
+        AND IFNULL(tp.is_publish, 0) != 2
+        AND IFNULL(tp.status, 0) != 2
+        AND ${NOT_PLACEHOLDER_PACKAGE_SQL}
       ORDER BY edit_date DESC
-    `),
+      LIMIT ?
+    `,
+      [fetchLimit]
+    ),
   ]);
 
   const wizardPublished = wizardRows
@@ -517,7 +592,7 @@ export async function listRecentlyPublishedPackages(limit = 5): Promise<PackageR
 
 export async function listAllPackages(): Promise<PackageRecord[]> {
   const [wizardPackages, legacyPackages] = await Promise.all([
-    query<RowDataPacket[]>(`${ADD_PACKAGE_SELECT} ORDER BY ap.updated_at DESC`).then(
+    query<RowDataPacket[]>(`${ADD_PACKAGE_LIST_SELECT} ORDER BY ap.updated_at DESC`).then(
       (rows) => rows.map(parsePackageRow)
     ),
     listTblPackages(),
@@ -532,37 +607,87 @@ export async function listAllPackages(): Promise<PackageRecord[]> {
 }
 
 export async function getPackageStats(): Promise<PackageStats> {
-  const expiring = await listExpiringPackages();
-  const quotes = await listSupplierQuoteRequests();
-  const combined = await listAllPackages();
-  const visible = combined.filter((pkg) => pkg.status !== "deleted");
+  const [wizardStatusRows, legacyStatusRows, expiringRows, quoteRows] = await Promise.all([
+    query<RowDataPacket[]>(`
+      SELECT status, COUNT(*) AS cnt
+      FROM ${ADD_PACKAGE_TABLE}
+      WHERE status != 'deleted'
+      GROUP BY status
+    `),
+    query<RowDataPacket[]>(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN IFNULL(tp.is_archive, 0) = 1 THEN 1 ELSE 0 END) AS archived,
+        SUM(CASE
+          WHEN IFNULL(tp.is_archive, 0) = 0 AND IFNULL(tp.is_publish, 0) = 2 THEN 1
+          ELSE 0 END) AS draft,
+        SUM(CASE
+          WHEN IFNULL(tp.is_archive, 0) = 0
+           AND IFNULL(tp.is_publish, 0) != 2
+           AND IFNULL(tp.status, 0) = 2 THEN 1
+          ELSE 0 END) AS pending_review,
+        SUM(CASE
+          WHEN IFNULL(tp.is_archive, 0) = 0
+           AND IFNULL(tp.is_publish, 0) != 2
+           AND IFNULL(tp.status, 0) != 2 THEN 1
+          ELSE 0 END) AS published
+      FROM ${TBL_PACKAGES} tp
+      LEFT JOIN ${ADD_PACKAGE_TABLE} ap ON ap.package_id = tp.id
+      WHERE ap.id IS NULL
+    `),
+    query<RowDataPacket[]>(`
+      SELECT COUNT(*) AS cnt
+      FROM ${ADD_PACKAGE_TABLE} ap
+      WHERE ${EXPIRING_RATES_WHERE}
+    `),
+    query<RowDataPacket[]>(`
+      SELECT COUNT(*) AS cnt
+      FROM ${ADD_PACKAGE_TABLE}
+      WHERE supplier_quote_tool IS NOT NULL
+        AND JSON_LENGTH(supplier_quote_tool) > 0
+    `),
+  ]);
 
-  const countByStatus = (status: PackageStatus) =>
-    visible.filter((pkg) => pkg.status === status).length;
+  const wizard: Record<PackageStatus, number> = {
+    draft: 0,
+    pending_review: 0,
+    published: 0,
+    archived: 0,
+    deleted: 0,
+  };
+  for (const row of wizardStatusRows) {
+    const status = row.status as PackageStatus;
+    if (status in wizard) {
+      wizard[status] = Number(row.cnt ?? 0);
+    }
+  }
+
+  const legacy = legacyStatusRows[0];
+  const legacyDraft = Number(legacy?.draft ?? 0);
+  const legacyPending = Number(legacy?.pending_review ?? 0);
+  const legacyPublished = Number(legacy?.published ?? 0);
+  const legacyArchived = Number(legacy?.archived ?? 0);
+  const wizardTotal =
+    wizard.draft + wizard.pending_review + wizard.published + wizard.archived;
+  const legacyTotal = Number(legacy?.total ?? 0);
 
   return {
-    total: visible.length,
-    draft: countByStatus("draft"),
-    pending_review: countByStatus("pending_review"),
-    published: countByStatus("published"),
-    archived: countByStatus("archived"),
-    expiring_rates: expiring.length,
-    supplier_quotes: quotes.length,
-    legacy_total: visible.filter((pkg) => pkg.source === "legacy").length,
-    wizard_total: visible.filter((pkg) => pkg.source === "wizard").length,
+    total: wizardTotal + legacyTotal,
+    draft: wizard.draft + legacyDraft,
+    pending_review: wizard.pending_review + legacyPending,
+    published: wizard.published + legacyPublished,
+    archived: wizard.archived + legacyArchived,
+    expiring_rates: Number(expiringRows[0]?.cnt ?? 0),
+    supplier_quotes: Number(quoteRows[0]?.cnt ?? 0),
+    legacy_total: legacyTotal,
+    wizard_total: wizardTotal,
   };
 }
 
 export async function listExpiringPackages(): Promise<PackageRecord[]> {
   const rows = await query<RowDataPacket[]>(`
-    ${ADD_PACKAGE_SELECT}
-    WHERE ap.supplier_source IS NOT NULL
-      AND JSON_UNQUOTE(JSON_EXTRACT(ap.supplier_source, '$.validityTo')) IS NOT NULL
-      AND JSON_UNQUOTE(JSON_EXTRACT(ap.supplier_source, '$.validityTo')) != ''
-      AND STR_TO_DATE(
-        JSON_UNQUOTE(JSON_EXTRACT(ap.supplier_source, '$.validityTo')),
-        '%Y-%m-%d'
-      ) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+    ${ADD_PACKAGE_LIST_SELECT}
+    WHERE ${EXPIRING_RATES_WHERE}
     ORDER BY ap.updated_at DESC
   `);
 
@@ -571,7 +696,7 @@ export async function listExpiringPackages(): Promise<PackageRecord[]> {
 
 export async function listSupplierQuoteRequests(): Promise<PackageRecord[]> {
   const rows = await query<RowDataPacket[]>(`
-    ${ADD_PACKAGE_SELECT}
+    ${ADD_PACKAGE_LIST_SELECT}
     WHERE ap.supplier_quote_tool IS NOT NULL
       AND JSON_LENGTH(ap.supplier_quote_tool) > 0
     ORDER BY ap.updated_at DESC

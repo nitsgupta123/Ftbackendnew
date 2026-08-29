@@ -268,7 +268,13 @@ const slugFieldSchema = z
     "Slug must be lowercase with hyphens only"
   );
 
-export const blogPostStatusSchema = z.enum(["draft", "scheduled", "published", "archived"]);
+export const blogPostStatusSchema = z.enum([
+  "draft",
+  "pending_review",
+  "scheduled",
+  "published",
+  "archived",
+]);
 
 const blogPostFieldsSchema = z.object({
   title: z.string().min(1, "Blog title is required"),
@@ -289,6 +295,10 @@ const blogPostFieldsSchema = z.object({
   is_featured: z.boolean().optional(),
   published_at: z.string().optional().nullable(),
   tags: z.array(z.string()).optional(),
+  related_package_ids: z
+    .array(z.number().int().positive())
+    .max(20, "You can link at most 20 related packages")
+    .optional(),
   seo_meta_title: z.string().optional().nullable(),
   seo_meta_description: z.string().optional().nullable(),
 });

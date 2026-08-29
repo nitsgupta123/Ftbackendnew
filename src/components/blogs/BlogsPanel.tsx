@@ -203,10 +203,27 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
       return [
         { label: "Draft Posts", value: busy ? "—" : total, icon: "FileText" },
         {
-          label: "Scheduled",
-          value: busy ? "—" : (stats?.scheduled ?? 0),
-          icon: "Clock",
+          label: "Pending Review",
+          value: busy ? "—" : (stats?.pending_review ?? 0),
+          icon: "Eye",
         },
+        {
+          label: "Published",
+          value: busy ? "—" : (stats?.published ?? 0),
+          icon: "CheckCircle",
+          accent: "#27AE60",
+        },
+      ];
+    }
+
+    if (defaultStatus === "pending_review") {
+      return [
+        {
+          label: "Pending Review",
+          value: busy ? "—" : total,
+          icon: "Eye",
+        },
+        { label: "Draft Posts", value: busy ? "—" : (stats?.draft ?? 0), icon: "FileText" },
         {
           label: "Published",
           value: busy ? "—" : (stats?.published ?? 0),
@@ -251,9 +268,9 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
         accent: "#27AE60",
       },
       {
-        label: "Scheduled",
-        value: busy ? "—" : (stats?.scheduled ?? 0),
-        icon: "Clock",
+        label: "Pending Review",
+        value: busy ? "—" : (stats?.pending_review ?? 0),
+        icon: "Eye",
       },
     ];
   }, [defaultStatus, loading, statsLoading, total, stats, featuredOnPage]);

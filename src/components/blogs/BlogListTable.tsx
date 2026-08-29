@@ -5,7 +5,7 @@ import Link from "next/link";
 import WriteNewBlogLink from "@/components/blogs/WriteNewBlogLink";
 import { Icon } from "@/components/ui/icons";
 import { deleteBlogPost } from "@/lib/blog-api";
-import type { BlogPostRecord } from "@/lib/blog-types";
+import { formatBlogStatusLabel, type BlogPostRecord } from "@/lib/blog-types";
 import { formatPackageDateTime, formatPackageDateTimeSgt } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +17,10 @@ const STATUS_STYLES: Record<string, { badge: string; dot: string }> = {
   draft: {
     badge: "bg-amber-50 text-amber-700 ring-amber-600/20",
     dot: "bg-amber-500",
+  },
+  pending_review: {
+    badge: "bg-orange-50 text-orange-700 ring-orange-600/20",
+    dot: "bg-orange-500",
   },
   scheduled: {
     badge: "bg-sky-50 text-sky-700 ring-sky-600/20",
@@ -228,7 +232,7 @@ export default function BlogListTable({
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium capitalize ring-1 ring-inset ${statusStyle.badge}`}
                   >
                     <span className={`size-1.5 rounded-full ${statusStyle.dot}`} />
-                    {post.status}
+                    {formatBlogStatusLabel(post.status)}
                   </span>
                 </TableCell>
                 <TableCell className="px-4 py-3.5 text-gray-500 text-xs hidden sm:table-cell">

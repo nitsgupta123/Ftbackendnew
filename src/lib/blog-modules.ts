@@ -24,13 +24,25 @@ export const BLOG_MODULES: Record<string, BlogModuleConfig> = {
   drafts: {
     slug: "drafts",
     title: "Draft Posts",
-    description: "Blog posts still being written or awaiting review.",
+    description: "Blog posts still being written.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
       { label: "Blogs", href: "/blogs/all" },
       { label: "Drafts" },
     ],
     status: "draft",
+    endpoint: "list",
+  },
+  "pending-review": {
+    slug: "pending-review",
+    title: "Pending Review",
+    description: "Blog posts submitted for approval before publishing.",
+    breadcrumbs: [
+      { label: "Dashboard", href: "/" },
+      { label: "Blogs", href: "/blogs/all" },
+      { label: "Pending Review" },
+    ],
+    status: "pending_review",
     endpoint: "list",
   },
   scheduled: {

@@ -1,7 +1,7 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { PackageAuditContext } from "./audit-context";
 import { query } from "./db";
-import { nowMysqlDateTimeSgt } from "./format-date";
+import { nowMysqlDateTimeSgt, toValidDate } from "./format-date";
 import { slugify, uniqueSlug } from "./slug";
 import type {
   BlogPostRecord,
@@ -31,6 +31,25 @@ function parseTags(value: unknown): string[] {
   return [];
 }
 
+function parseRelatedPackageIds(value: unknown): number[] {
+  if (!value) return [];
+  let raw: unknown[] = [];
+  if (Array.isArray(value)) {
+    raw = value;
+  } else if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      raw = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  const ids = raw
+    .map((item) => (typeof item === "number" ? item : Number(item)))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return [...new Set(ids)];
+}
+
 function parsePostRow(row: RowDataPacket): BlogPostRecord {
   return {
     id: Number(row.id),
@@ -51,6 +70,7 @@ function parsePostRow(row: RowDataPacket): BlogPostRecord {
           ? String(row.published_at)
           : null,
     tags: parseTags(row.tags),
+    related_package_ids: parseRelatedPackageIds(row.related_package_ids),
     seo_meta_title: row.seo_meta_title ?? null,
     seo_meta_description: row.seo_meta_description ?? null,
     created_by: row.created_by ?? null,
@@ -197,6 +217,7 @@ export async function getBlogStats(): Promise<BlogStats> {
     `SELECT
       COUNT(*) AS total,
       SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft,
+      SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) AS pending_review,
       SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) AS scheduled,
       SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) AS published,
       SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END) AS archived,
@@ -208,6 +229,7 @@ export async function getBlogStats(): Promise<BlogStats> {
   return {
     total: Number(row.total ?? 0),
     draft: Number(row.draft ?? 0),
+    pending_review: Number(row.pending_review ?? 0),
     scheduled: Number(row.scheduled ?? 0),
     published: Number(row.published ?? 0),
     archived: Number(row.archived ?? 0),
@@ -222,6 +244,28 @@ function assertScheduledHasPublishAt(
   if (status === "scheduled" && !publishedAt) {
     throw new Error("Schedule date/time (SGT) is required for scheduled posts");
   }
+}
+
+/** True when the SGT wall-clock datetime is strictly after now (SGT). */
+function isFuturePublishAt(publishedAt: string | null | undefined): boolean {
+  const date = toValidDate(publishedAt);
+  if (!date) return false;
+  return date.getTime() > Date.now();
+}
+
+/**
+ * Posts with a future publish time must be `scheduled` so they appear on the
+ * Scheduled Posts page and the cron can publish them later.
+ */
+function resolveBlogPostStatus(
+  status: string | undefined,
+  publishedAt: string | null | undefined
+): string {
+  const resolved = status ?? "draft";
+  if (resolved === "published" && isFuturePublishAt(publishedAt)) {
+    return "scheduled";
+  }
+  return resolved;
 }
 
 function resolvePublishedAt(
@@ -255,18 +299,22 @@ export async function createBlogPost(
   }
 
   const slug = await resolveBlogPostSlug(title, input.slug);
-  const status = input.status ?? "draft";
   const auditUser = audit?.user ?? null;
-  const publishedAt = resolvePublishedAt(status, input.published_at, null);
+  const preliminaryStatus = input.status ?? "draft";
+  const publishedAt = resolvePublishedAt(preliminaryStatus, input.published_at, null);
+  const status = resolveBlogPostStatus(preliminaryStatus, publishedAt);
   assertScheduledHasPublishAt(status, publishedAt);
   const tagsJson = JSON.stringify(input.tags ?? []);
+  const relatedPackageIdsJson = JSON.stringify(
+    parseRelatedPackageIds(input.related_package_ids ?? [])
+  );
 
   const result = await query<ResultSetHeader>(
     `INSERT INTO ${POSTS_TABLE} (
       title, slug, excerpt, content, featured_image_path, category_id, author_name,
-      status, is_featured, published_at, tags,
+      status, is_featured, published_at, tags, related_package_ids,
       seo_meta_title, seo_meta_description, created_by, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       title,
       slug,
@@ -279,6 +327,7 @@ export async function createBlogPost(
       input.is_featured ? 1 : 0,
       publishedAt,
       tagsJson,
+      relatedPackageIdsJson,
       input.seo_meta_title?.trim() || null,
       input.seo_meta_description?.trim() || null,
       auditUser,
@@ -340,10 +389,6 @@ export async function updateBlogPost(
     fields.push("author_name = ?");
     values.push(input.author_name?.trim() || null);
   }
-  if (input.status !== undefined) {
-    fields.push("status = ?");
-    values.push(input.status);
-  }
   if (input.is_featured !== undefined) {
     fields.push("is_featured = ?");
     values.push(input.is_featured ? 1 : 0);
@@ -351,6 +396,10 @@ export async function updateBlogPost(
   if (input.tags !== undefined) {
     fields.push("tags = ?");
     values.push(JSON.stringify(input.tags ?? []));
+  }
+  if (input.related_package_ids !== undefined) {
+    fields.push("related_package_ids = ?");
+    values.push(JSON.stringify(parseRelatedPackageIds(input.related_package_ids)));
   }
   if (input.seo_meta_title !== undefined) {
     fields.push("seo_meta_title = ?");
@@ -361,14 +410,21 @@ export async function updateBlogPost(
     values.push(input.seo_meta_description?.trim() || null);
   }
 
-  const nextStatus = input.status ?? existing.status;
+  const preliminaryStatus = input.status ?? existing.status;
   if (input.status !== undefined || input.published_at !== undefined) {
-    const publishedAt = resolvePublishedAt(nextStatus, input.published_at, existing.published_at);
+    const publishedAt = resolvePublishedAt(
+      preliminaryStatus,
+      input.published_at,
+      existing.published_at
+    );
+    const nextStatus = resolveBlogPostStatus(preliminaryStatus, publishedAt);
     assertScheduledHasPublishAt(nextStatus, publishedAt);
+    fields.push("status = ?");
+    values.push(nextStatus);
     fields.push("published_at = ?");
     values.push(publishedAt);
   } else {
-    assertScheduledHasPublishAt(nextStatus, existing.published_at);
+    assertScheduledHasPublishAt(existing.status, existing.published_at);
   }
 
   if (!fields.length) {

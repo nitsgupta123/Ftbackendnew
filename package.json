@@ -25,6 +25,7 @@
     "db:migrate:user-permissions": "node scripts/run-migrate-user-permissions.mjs",
     "db:migrate:blogs": "node scripts/run-migrate-blogs.mjs",
     "db:migrate:blog-scheduled": "node scripts/run-migrate-blog-scheduled.mjs",
+    "db:migrate:blog-related-approval": "node scripts/run-migrate-blog-related-packages-and-approval.mjs",
     "db:migrate:pages": "node scripts/run-migrate-pages.mjs",
     "db:migrate:suppliers": "node scripts/run-migrate-suppliers.mjs",
     "db:seed:suppliers": "node scripts/seed-suppliers-from-sheet.mjs",
