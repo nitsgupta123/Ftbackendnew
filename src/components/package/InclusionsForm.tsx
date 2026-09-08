@@ -249,7 +249,7 @@ function IncludedColumn({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Column 2 / 3: Tag stack + bottom "+ Add" button (reveals inline input)    */
+/*  Column 2 / 3: Always-visible input + "+ Add" on top (like Included)       */
 /* -------------------------------------------------------------------------- */
 function TagColumnCard({
   title,
@@ -266,95 +266,73 @@ function TagColumnCard({
   onRemove: (index: number) => void;
   placeholder: string;
 }) {
-  const [isAdding, setIsAdding] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleConfirmAdd = () => {
-    const trimmed = inputValue.trim();
-    if (trimmed) {
-      onAdd(trimmed);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const trimmed = (inputRef.current?.value ?? inputValue).trim();
+    if (!trimmed) {
+      setError(true);
+      inputRef.current?.focus();
+      return;
     }
+    setError(false);
+    onAdd(trimmed);
     setInputValue("");
-    setIsAdding(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleConfirmAdd();
-    } else if (e.key === "Escape") {
-      setInputValue("");
-      setIsAdding(false);
+    if (inputRef.current) {
+      inputRef.current.value = "";
     }
   };
 
   return (
     <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-6 flex flex-col h-full">
-      {/* Title */}
       <h3 className="text-sm font-bold text-[#1F2A44] mb-4">{title}</h3>
 
-      {/* Tag stack */}
-      <div className="flex-1 space-y-2.5">
-        {items.map((item, idx) => (
-          <TagItem
-            key={`${item}-${idx}`}
-            label={item}
-            onEdit={(value) => onEdit(idx, value)}
-            onRemove={() => onRemove(idx)}
-          />
-        ))}
-
-        {/* Inline quick-add input — revealed when "+ Add" is clicked */}
-        {isAdding &&
-        <div className="flex items-center gap-2">
-            <Input
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Input
+            ref={inputRef}
             type="text"
             placeholder={placeholder}
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            autoFocus
-            className="flex-1 h-[40px] px-3 text-sm border border-[#E5E7EB] rounded-[8px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300" />
-          
-            <Button
-            type="button"
-            onClick={handleConfirmAdd}
-            className="h-[40px] px-3 text-sm font-medium text-white bg-[#1F2A44] rounded-[8px] hover:bg-[#283556] active:bg-[#1A2338] transition-all duration-200 flex items-center gap-1.5 flex-shrink-0 shadow-sm">
-            
-              <Plus size={13} />
-              Add
-            </Button>
-          </div>
-        }
-      </div>
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              if (error) setError(false);
+            }}
+            aria-invalid={error || undefined}
+            className="w-full h-[44px] px-4 text-sm border border-[#E5E7EB] rounded-[10px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300"
+          />
+          {error && (
+            <p className="mt-1.5 text-xs text-red-600">Enter an item before adding.</p>
+          )}
+        </div>
 
-      {/* "+ Add" button at the bottom */}
-      {!isAdding &&
-      <Button
-        type="button"
-        onClick={() => setIsAdding(true)}
-        className="w-fit h-[42px] px-4 mt-5 text-sm font-medium text-white bg-[#1F2A44] rounded-md hover:bg-[#283556] active:bg-[#1A2338] transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
-        
-          <Plus size={15} />
+        <button
+          type="submit"
+          className="w-fit h-[42px] px-4 text-sm font-medium text-white bg-[#1F2A44] border border-[#B48A2C] rounded-md hover:bg-[#283556] active:bg-[#1A2338] transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+        >
+          <Plus size={15} aria-hidden />
           Add
-        </Button>
-      }
+        </button>
+      </form>
 
-      {/* Cancel adding when input is visible */}
-      {isAdding &&
-      <Button
-        type="button"
-        onClick={() => {
-          setInputValue("");
-          setIsAdding(false);
-        }}
-        className="w-full h-[36px] mt-2 text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors duration-150">
-        
-          Cancel
-        </Button>
-      }
-    </div>);
-
+      {items.length > 0 && (
+        <div className="space-y-2.5 mt-4">
+          {items.map((item, idx) => (
+            <TagItem
+              key={`${item}-${idx}`}
+              label={item}
+              onEdit={(value) => onEdit(idx, value)}
+              onRemove={() => onRemove(idx)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */

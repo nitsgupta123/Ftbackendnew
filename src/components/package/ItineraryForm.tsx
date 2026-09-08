@@ -142,6 +142,23 @@ interface DayCardProps {
 }
 
 function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const wasOpen = useRef(isOpen);
+
+  useEffect(() => {
+    const justOpened = isOpen && !wasOpen.current;
+    wasOpen.current = isOpen;
+    if (!justOpened) return;
+
+    // Wait a frame so the expanded panel is in the DOM before scrolling.
+    const frame = window.requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      titleInputRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen]);
+
   const update = (patch: Partial<ItineraryDay>) => {
     onChange({ ...day, ...patch });
   };
@@ -155,7 +172,10 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
   const labelClass = "block text-xs font-medium text-gray-600 mb-1.5";
 
   return (
-    <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden">
+    <div
+      ref={cardRef}
+      className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden scroll-mt-6"
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -180,6 +200,7 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
           <div>
             <Label className={labelClass}>Day title</Label>
             <Input
+              ref={titleInputRef}
               type="text"
               placeholder="e.g., Arrival in Singapore"
               className={inputClass}

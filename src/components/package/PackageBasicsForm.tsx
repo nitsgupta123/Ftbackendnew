@@ -26,6 +26,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  PACKAGE_COUNTRIES,
+  getCityOptionsForCountries,
+  splitDestinationList,
+} from "@/lib/package-destinations";
 
 const CATEGORY_LANDING_OPTIONS = [
   "Family holidays",
@@ -49,28 +54,6 @@ const CATEGORY_LANDING_OPTIONS = [
   "Group tours",
   "City breaks",
   "Island escapes",
-];
-const COUNTRY_OPTIONS = [
-  "South Africa",
-  "Kenya",
-  "Tanzania",
-  "United Arab Emirates",
-  "Maldives",
-  "Thailand",
-  "Singapore",
-  "Malaysia",
-  "Indonesia",
-  "Sri Lanka",
-  "Turkey",
-  "United Kingdom",
-  "France",
-  "Italy",
-  "Spain",
-  "United States",
-  "Australia",
-  "New Zealand",
-  "India",
-  "Japan",
 ];
 
 const SHORT_INTRO_HELP =
@@ -135,6 +118,7 @@ function SearchableMultiSelect({
   loading,
   placeholder = "Search and select…",
   emptyMessage = "No options found.",
+  required,
 }: {
   label: string;
   options: { value: string; label: string }[];
@@ -144,6 +128,7 @@ function SearchableMultiSelect({
   loading?: boolean;
   placeholder?: string;
   emptyMessage?: string;
+  required?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -177,7 +162,10 @@ function SearchableMultiSelect({
 
   return (
     <div>
-      <p className="text-sm font-semibold text-[#334155] mb-2.5">{label}</p>
+      <p className="text-sm font-semibold text-[#334155] mb-2.5">
+        {label}
+        {required ? <span className="text-red-400 ml-0.5">*</span> : null}
+      </p>
 
       {selectedLabels.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2.5">
@@ -292,6 +280,7 @@ export default function PackageBasicsForm({
     control,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<PackageBasicsValues>({
     resolver: zodResolver(packageBasicsSchema),
@@ -301,7 +290,7 @@ export default function PackageBasicsForm({
       shortIntro: "",
       packageOverview: "",
       packageMode: "Enquiry first",
-      tourType: "Group tour",
+      tourType: "Leisure",
       runs: "Every day",
       runsCustom: "",
       countriesCovered: "",
@@ -318,6 +307,17 @@ export default function PackageBasicsForm({
       frontendNotes: "",
     },
   });
+
+  const selectedCountry = (() => {
+    const raw = watch("countriesCovered") ?? "";
+    if (!raw.includes(",")) return raw;
+    return splitDestinationList(raw)[0] ?? "";
+  })();
+  const selectedCity = (() => {
+    const raw = watch("citiesOrRegions") ?? "";
+    if (!raw.includes(",")) return raw;
+    return splitDestinationList(raw)[0] ?? "";
+  })();
 
   useEffect(() => {
     if (initialData) {
@@ -360,10 +360,23 @@ export default function PackageBasicsForm({
     [categoryOptions]
   );
 
+  const cityOptions = useMemo(
+    () => getCityOptionsForCountries(selectedCountry ? [selectedCountry] : []),
+    [selectedCountry]
+  );
+
   const landingSelectOptions = useMemo(
     () => CATEGORY_LANDING_OPTIONS.map((name) => ({ value: name, label: name })),
     []
   );
+
+  const onCountryChange = (country: string) => {
+    setValue("countriesCovered", country, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setValue("citiesOrRegions", "", { shouldDirty: true });
+  };
 
   const packageTitleRegister = register("packageTitle");
   const onSubmit = (data: PackageBasicsValues) => {
@@ -439,50 +452,21 @@ export default function PackageBasicsForm({
             {errors.slug && <p className={errorClass}>{errors.slug.message}</p>}
           </div>
 
-          {/* Short intro + Package mode */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 mb-5">
-            <div>
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Label htmlFor="shortIntro" className="text-sm font-semibold text-[#334155]">
-                  Short intro line
-                </Label>
-                <FieldHelp text={SHORT_INTRO_HELP} />
-              </div>
-              <Input
-                id="shortIntro"
-                type="text"
-                placeholder="A short package description for listing cards"
-                className={inputClass}
-                {...register("shortIntro")}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="packageMode" className={labelClass}>
-                Package mode
+          {/* Short intro — full width like slug */}
+          <div className="mb-5">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Label htmlFor="shortIntro" className="text-sm font-semibold text-[#334155]">
+                Short intro line
               </Label>
-              <div className="relative">
-                <NativeSelect
-                  id="packageMode"
-                  className={selectClass}
-                  {...register("packageMode")}
-                >
-                  <option value="Enquiry first">Enquiry first</option>
-                  <option value="Book now">Book now</option>
-                  <option value="Fixed departure">Fixed departure</option>
-                  <option value="Customizable">Customizable</option>
-                  <option value="Private">Private</option>
-                </NativeSelect>
-                <Icon
-                  name="ChevronDown"
-                  size={16}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                />
-              </div>
-              {errors.packageMode && (
-                <p className={errorClass}>{errors.packageMode.message}</p>
-              )}
+              <FieldHelp text={SHORT_INTRO_HELP} />
             </div>
+            <Input
+              id="shortIntro"
+              type="text"
+              placeholder="A short package description for listing cards, category pages and related packages"
+              className={inputClass}
+              {...register("shortIntro")}
+            />
           </div>
 
           {/* Package Overview */}
@@ -509,26 +493,23 @@ export default function PackageBasicsForm({
             />
           </div>
 
-          {/* Tour type + Runs */}
+          {/* Package mode + Runs (Package mode moved here from beside Short intro) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 mb-5">
             <div>
-              <Label htmlFor="tourType" className={labelClass}>
-                Tour type {requiredStar}
+              <Label htmlFor="packageMode" className={labelClass}>
+                Package mode
               </Label>
               <div className="relative">
                 <NativeSelect
-                  id="tourType"
+                  id="packageMode"
                   className={selectClass}
-                  {...register("tourType")}
+                  {...register("packageMode")}
                 >
-                  <option value="">Select type</option>
-                  <option value="Leisure">Leisure</option>
-                  <option value="Adventure">Adventure</option>
-                  <option value="Safari">Safari</option>
-                  <option value="Honeymoon">Honeymoon</option>
-                  <option value="Family">Family</option>
-                  <option value="Cruise">Cruise</option>
-                  <option value="MICE">MICE</option>
+                  <option value="Enquiry first">Enquiry first</option>
+                  <option value="Book now">Book now</option>
+                  <option value="Fixed departure">Fixed departure</option>
+                  <option value="Customizable">Customizable</option>
+                  <option value="Private">Private</option>
                 </NativeSelect>
                 <Icon
                   name="ChevronDown"
@@ -536,8 +517,8 @@ export default function PackageBasicsForm({
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
                 />
               </div>
-              {errors.tourType && (
-                <p className={errorClass}>{errors.tourType.message}</p>
+              {errors.packageMode && (
+                <p className={errorClass}>{errors.packageMode.message}</p>
               )}
             </div>
 
@@ -575,50 +556,78 @@ export default function PackageBasicsForm({
             </div>
           </div>
 
-          {/* Countries covered */}
-          <div className="mb-5 rounded-[8px] border border-[#E5E7EB] bg-[#FAFAFA] p-4">
-            <Label htmlFor="countriesCovered" className={labelClass}>
-              Countries covered {requiredStar}
-            </Label>
-            <div className="relative">
-              <NativeSelect
-                id="countriesCovered"
-                className={selectClass}
-                {...register("countriesCovered")}
-              >
-                <option value="">Add country</option>
-                {COUNTRY_OPTIONS.map((country) => (
-                  <option key={country} value={country}>
-                    {country}
-                  </option>
-                ))}
-              </NativeSelect>
-              <Icon
-                name="ChevronDown"
-                size={16}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-              />
+          {/* Countries + cascading Cities/Regions */}
+          <div className="mb-5 rounded-[8px] border border-[#E5E7EB] bg-[#FAFAFA] p-4 space-y-4">
+            <div>
+              <Label htmlFor="countriesCovered" className={labelClass}>
+                Countries covered {requiredStar}
+              </Label>
+              <div className="relative">
+                <NativeSelect
+                  id="countriesCovered"
+                  className={selectClass}
+                  value={selectedCountry}
+                  onChange={(e) => onCountryChange(e.target.value)}
+                >
+                  <option value="">Select country</option>
+                  {PACKAGE_COUNTRIES.map((country) => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <Icon
+                  name="ChevronDown"
+                  size={16}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+              </div>
             </div>
-            <p className="text-xs text-gray-400 mt-2">
-              Use this for single-country and multi-country packages.
-            </p>
-          </div>
 
-          {/* Cities, Starting point, Ending point */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5 mb-5">
             <div>
               <Label htmlFor="citiesOrRegions" className={labelClass}>
                 Cities or regions
               </Label>
-              <Input
-                id="citiesOrRegions"
-                type="text"
-                placeholder="Cape Town, Kruger"
-                className={inputClass}
-                {...register("citiesOrRegions")}
-              />
+              <div className="relative">
+                <NativeSelect
+                  id="citiesOrRegions"
+                  className={selectClass}
+                  value={selectedCity}
+                  disabled={!selectedCountry}
+                  onChange={(e) =>
+                    setValue("citiesOrRegions", e.target.value, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <option value="">
+                    {selectedCountry
+                      ? "Select city or region"
+                      : "Select a country first"}
+                  </option>
+                  {cityOptions.map((city) => (
+                    <option key={city.value} value={city.value}>
+                      {city.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <Icon
+                  name="ChevronDown"
+                  size={16}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                {selectedCountry
+                  ? `Showing cities and regions for ${selectedCountry}.`
+                  : "Pick a country above — this list fills automatically."}
+              </p>
             </div>
+          </div>
 
+          {/* Starting point, Ending point */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 mb-5">
             <div>
               <Label htmlFor="startingPoint" className={labelClass}>
                 Starting point
@@ -708,29 +717,60 @@ export default function PackageBasicsForm({
             />
           </div>
 
-          {/* Landing pages */}
+          {/* Package themes (stored as landingPages — separate from Package Categories) */}
           <div className="mb-6">
             <Controller
               control={control}
               name="landingPages"
               render={({ field }) => (
                 <SearchableMultiSelect
-                  label="Landing pages"
+                  label="Package themes"
                   options={landingSelectOptions}
                   selectedValues={field.value || []}
                   onChange={field.onChange}
-                  placeholder="Search landing pages…"
-                  helperText="Optional merchandising landing pages beyond managed categories."
+                  placeholder="Search themes…"
+                  helperText="Audience / style themes for merchandising. Separate from Package Categories."
                 />
               )}
             />
           </div>
 
-          {/* Important Info + Frontend Notes */}
+          {/* Tour type — below themes */}
+          <div className="mb-6 max-w-md">
+            <Label htmlFor="tourType" className={labelClass}>
+              Tour type {requiredStar}
+            </Label>
+            <div className="relative">
+              <NativeSelect
+                id="tourType"
+                className={selectClass}
+                {...register("tourType")}
+              >
+                <option value="">Select type</option>
+                <option value="Leisure">Leisure</option>
+                <option value="Adventure">Adventure</option>
+                <option value="Safari">Safari</option>
+                <option value="Honeymoon">Honeymoon</option>
+                <option value="Family">Family</option>
+                <option value="Cruise">Cruise</option>
+                <option value="MICE">MICE</option>
+              </NativeSelect>
+              <Icon
+                name="ChevronDown"
+                size={16}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              />
+            </div>
+            {errors.tourType && (
+              <p className={errorClass}>{errors.tourType.message}</p>
+            )}
+          </div>
+
+          {/* Important Notes + Frontend Notes */}
           <div className="grid grid-cols-1 gap-y-5 mb-6">
             <div>
               <Label htmlFor="importantInfo" className={labelClass}>
-                Important Info
+                Important Notes
               </Label>
               <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
                 Rates subject to availability, visa not included, seasonal surcharge,

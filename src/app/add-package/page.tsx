@@ -504,6 +504,7 @@ export default function AddPackagePage() {
         return (
           <ReviewPublishForm
             initialData={packageData?.review_publish ?? undefined}
+            packageData={packageData}
             onNext={handleReviewPublish}
             onPrevious={handlePrevious}
             onPreview={handlePreview}

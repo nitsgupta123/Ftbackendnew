@@ -276,7 +276,7 @@ Ad headlines, short/long copy, selling points, sales-card snapshot text for cons
 
 Meta title, meta description, focus keyword, index/noindex style flags. Synced to `tbl_packages.meta_title`, `meta_keywords`, `meta_description`.
 
-#### Step 14 — Review & Publish (Final Approver) — Live (actions) / Partial (health cards)
+#### Step 14 — Review & Publish (Final Approver) — Live
 
 **Real actions**
 
@@ -286,7 +286,7 @@ Meta title, meta description, focus keyword, index/noindex style flags. Synced t
 
 Reviewers / sign-off names can be stored on `review_publish` JSON.
 
-**Display-only:** the “health checks” and section cards on this step are **static illustrations** (images/pricing/SEO warnings). They do not currently scan the other 13 JSON blobs.
+**Health checks** scan saved section JSON and treat a step as complete when it has real saved details (including older field names). Images (any hero/card/gallery image, plus alt text on gallery assets), Pricing (hotel category rates or booking dates, plus older pax/display-price fields), SEO (meta title, description or focus keyword), and supplier contacts. Section cards and readiness % follow the same completeness rules. Publish and Submit stay clickable regardless of these flags.
 
 ---
 
@@ -634,7 +634,7 @@ Super Admin sees every nav item and can manage users and roles.
 | Signup | Live | First user = Super Admin |
 | Dashboard | Live | Mix of admin + legacy counts |
 | Package wizard (14 steps) | Live | JSON in `add_package` |
-| Step 14 health cards | Partial | Static UI, not real validation |
+| Step 14 health cards | Live | Reads saved section JSON (images, pricing, SEO, supplier) |
 | Templates / categories / pricing rules | Live | Rules not auto-applied to Step 4 |
 | Package archive / soft-delete | Live | Needs `deleted` ENUM migration |
 | Legacy package list / archive / delete | Live | No wizard edit |

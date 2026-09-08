@@ -1,187 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/icons";
 
-import type { ReviewPublishData } from "@/lib/package-types";
-import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";import { Label } from "@/components/ui/label";import { Input } from "@/components/ui/input";import { Textarea } from "@/components/ui/textarea";import { Button } from "@/components/ui/button";
+import type { PackageRecord, ReviewPublishData } from "@/lib/package-types";
+import {
+  getPackageReadiness,
+  type ReadinessSectionCard,
+  type ReadinessSignOffItem,
+  type ReadinessStatus,
+} from "@/lib/package-readiness";
+import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 
 interface ReviewPublishFormProps extends StepFormBaseProps {
   onNext: (data: ReviewPublishData) => void;
   onPrevious: () => void;
   onPreview?: () => void;
   initialData?: ReviewPublishData | null;
+  packageData?: PackageRecord | null;
 }
-
-type SectionStatus = "complete" | "warning";
-
-interface SectionCard {
-  title: string;
-  owner?: string;
-  lastEdited?: string;
-  description?: string;
-  status: SectionStatus;
-}
-
-interface HealthCheckItem {
-  title: string;
-  description: string;
-  status: SectionStatus;
-}
-
-interface SignOffItem {
-  stage: string;
-  responsible: string;
-  lastAction: string;
-  badge: string;
-  badgeStyle: "ready" | "needs" | "draft" | "blocked";
-}
-
-const HEALTH_CHECKS: HealthCheckItem[] = [
-{
-  title: "Images",
-  description: "Hero image source and alt text required",
-  status: "warning"
-},
-{
-  title: "Pricing",
-  description:
-  "Check hotel category pricing, booking ranges or departures, adult/child tiers and promotions",
-  status: "warning"
-},
-{
-  title: "SEO",
-  description: "SEO team sign-off required",
-  status: "warning"
-},
-{
-  title: "Supplier contacts",
-  description: "Supplier name and contact emails recorded",
-  status: "complete"
-}];
-
-
-const SECTION_CARDS: SectionCard[] = [
-{
-  title: "Permissions",
-  description: "SEO approval limited to users with SEO access",
-  status: "complete"
-},
-{
-  title: "Promotion",
-  description: "Slashed rates require promo start, end and approval",
-  status: "warning"
-},
-{
-  title: "Supplier Source",
-  owner: "Product",
-  lastEdited: "Current user",
-  status: "complete"
-},
-{
-  title: "Package Basics",
-  owner: "Product",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Media & Front-End",
-  owner: "Product + Marketing",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Pricing",
-  owner: "Product + Finance",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Itinerary",
-  owner: "Product",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Hotels",
-  owner: "Product + Ops",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Inclusions",
-  owner: "Product",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Booking Policy",
-  owner: "Ops + Finance",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Consultant View",
-  owner: "Sales Lead",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Supplier Quote Tool",
-  owner: "Consultants",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Front-End FAQs",
-  owner: "Product + SEO",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "Sales & Ads Assets",
-  owner: "Marketing + Sales",
-  lastEdited: "Not started",
-  status: "warning"
-},
-{
-  title: "SEO",
-  owner: "SEO Team",
-  lastEdited: "Not started",
-  status: "warning"
-}];
-
-
-const SIGN_OFF_TRAIL: SignOffItem[] = [
-{
-  stage: "Supplier Source",
-  responsible: "Product",
-  lastAction: "Last edited by User A",
-  badge: "Ready",
-  badgeStyle: "ready"
-},
-{
-  stage: "Media & Front-End",
-  responsible: "Product + Marketing",
-  lastAction: "Last edited by User B",
-  badge: "Needs image source",
-  badgeStyle: "needs"
-},
-{
-  stage: "SEO",
-  responsible: "SEO Team",
-  lastAction: "Not reviewed",
-  badge: "Draft",
-  badgeStyle: "draft"
-},
-{
-  stage: "Final Approval",
-  responsible: "Admin",
-  lastAction: "Pending",
-  badge: "Blocked",
-  badgeStyle: "blocked"
-}];
-
 
 const ACTIVITY_LOG = [
 {
@@ -206,14 +48,14 @@ const WORKFLOW_STEPS = [
 "Final approval and publish"];
 
 
-const BADGE_STYLES: Record<SignOffItem["badgeStyle"], string> = {
+const BADGE_STYLES: Record<ReadinessSignOffItem["badgeStyle"], string> = {
   ready: "bg-[#DCFCE7] text-[#166534]",
   needs: "bg-[#FEF3C7] text-[#92400E]",
   draft: "bg-[#F1F5F9] text-[#475569]",
   blocked: "bg-[#FEE2E2] text-[#991B1B]"
 };
 
-function StatusIcon({ status }: {status: SectionStatus;}) {
+function StatusIcon({ status }: {status: ReadinessStatus;}) {
   if (status === "complete") {
     return (
       <div className="w-7 h-7 rounded-[6px] bg-[#10B981] flex items-center justify-center flex-shrink-0">
@@ -229,7 +71,7 @@ function StatusIcon({ status }: {status: SectionStatus;}) {
 
 }
 
-function SectionStatusCard({ card }: {card: SectionCard;}) {
+function SectionStatusCard({ card }: {card: ReadinessSectionCard;}) {
   return (
     <div className="bg-white rounded-[12px] border border-[#E5E7EB] p-4 flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -257,8 +99,10 @@ export default function ReviewPublishForm({
   onPrevious,
   onPreview,
   initialData,
+  packageData,
   isSaving = false
 }: ReviewPublishFormProps) {
+  const readiness = useMemo(() => getPackageReadiness(packageData), [packageData]);
   const [productReviewer, setProductReviewer] = useState(
     initialData?.productReviewer ?? ""
   );
@@ -315,7 +159,7 @@ export default function ReviewPublishForm({
         <div className="rounded-[12px] bg-[#1F2A44] p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <p className="text-sm text-white/70">Package readiness</p>
-            <p className="text-4xl font-bold text-white mt-1">8%</p>
+            <p className="text-4xl font-bold text-white mt-1">{readiness.readinessPercent}%</p>
           </div>
           <ol className="space-y-1.5">
             {WORKFLOW_STEPS.map((step, index) =>
@@ -337,7 +181,7 @@ export default function ReviewPublishForm({
             Package health check
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {HEALTH_CHECKS.map((item) =>
+            {readiness.healthChecks.map((item) =>
             <div
               key={item.title}
               className="rounded-[12px] border border-[#E5E7EB] p-4 flex items-start justify-between gap-3">
@@ -360,7 +204,7 @@ export default function ReviewPublishForm({
       {/* Section status grid */}
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {SECTION_CARDS.map((card) =>
+          {readiness.sectionCards.map((card) =>
           <SectionStatusCard key={card.title} card={card} />
           )}
         </div>
@@ -373,7 +217,7 @@ export default function ReviewPublishForm({
             Change log and sign-off trail
           </h3>
           <div className="space-y-3">
-            {SIGN_OFF_TRAIL.map((item) =>
+            {readiness.signOffTrail.map((item) =>
             <div
               key={item.stage}
               className="rounded-[12px] border border-[#E5E7EB] px-4 py-3 grid grid-cols-1 sm:grid-cols-[1.2fr_1fr_1.2fr_auto] gap-3 items-center">
