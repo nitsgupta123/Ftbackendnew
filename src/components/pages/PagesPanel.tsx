@@ -78,7 +78,7 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
   const [order, setOrder] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const [viewingPage, setViewingPage] = useState<CmsPageRecord | null>(null);
-  const limit = 20;
+  const limit = 10;
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);

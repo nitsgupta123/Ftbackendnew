@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/layout/AdminShell";
 import ListPageHeader from "@/components/layout/ListPageHeader";
 import PackageStatsGrid from "@/components/packages/PackageStatsGrid";
 import PackageListTable from "@/components/packages/PackageListTable";
 import PackageOverviewSection from "@/components/packages/PackageOverviewSection";
+import { Icon } from "@/components/ui/icons";
+import { Button } from "@/components/ui/button";
 import { getPackageStats, listAllPackages, listRecentlyPublishedPackages } from "@/lib/package-api";
 import type { PackageRecord, PackageStats } from "@/lib/package-types";
+
+const PAGE_SIZE = 10;
 
 export default function PackageDashboardPage() {
   const [stats, setStats] = useState<PackageStats | null>(null);
@@ -15,6 +19,13 @@ export default function PackageDashboardPage() {
   const [recentPublished, setRecentPublished] = useState<PackageRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(packages.length / PAGE_SIZE));
+  const pagedPackages = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return packages.slice(start, start + PAGE_SIZE);
+  }, [packages, page]);
 
   useEffect(() => {
     async function load() {
@@ -36,6 +47,10 @@ export default function PackageDashboardPage() {
 
     load();
   }, []);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <AdminShell
@@ -71,12 +86,46 @@ export default function PackageDashboardPage() {
         <PackageOverviewSection packages={packages} recentPublished={recentPublished} />
       </div>
 
+      {!loading && packages.length > 0 && (
+        <p className="mb-3 text-xs text-gray-400">
+          Showing {pagedPackages.length} of {packages.length} packages
+        </p>
+      )}
+
       <PackageListTable
-        packages={packages}
+        packages={pagedPackages}
         loading={loading}
         variant="dashboard"
         emptyMessage="No packages found."
       />
+
+      {totalPages > 1 && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[#E8ECF0] bg-[#FAFBFC] px-4 py-3">
+          <span className="text-sm text-gray-500">
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => p - 1)}
+              className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 shadow-sm"
+            >
+              <Icon name="ChevronLeft" size={16} className="mr-1" />
+              Previous
+            </Button>
+            <Button
+              type="button"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((p) => p + 1)}
+              className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 shadow-sm"
+            >
+              Next
+              <Icon name="ChevronRight" size={16} className="ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </AdminShell>
   );
 }

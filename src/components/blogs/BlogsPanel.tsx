@@ -79,7 +79,7 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [viewingPost, setViewingPost] = useState<BlogPostRecord | null>(null);
-  const limit = 20;
+  const limit = 10;
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);

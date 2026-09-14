@@ -27,7 +27,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Browse wizard packages and legacy catalogue from the API.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "All Packages" },
     ],
     endpoint: "tbl-list",
@@ -38,7 +38,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Packages still being built across the 14-step wizard.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Draft Packages" },
     ],
     status: "draft",
@@ -50,7 +50,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Packages submitted and waiting for final approval.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Pending Reviews" },
     ],
     status: "pending_review",
@@ -62,7 +62,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Supplier rates expiring within the next 30 days.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Expiring Rates" },
     ],
     endpoint: "expiring-rates",
@@ -73,7 +73,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Packages with supplier quote tool data saved.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Supplier Quote Requests" },
     ],
     endpoint: "supplier-quotes",
@@ -84,7 +84,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Organize travel packages into categories for landing pages and merchandising.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Package Categories" },
     ],
     endpoint: "categories",
@@ -95,7 +95,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Global markup, exchange rate, and finance approval rules.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Pricing Rules" },
     ],
     endpoint: "pricing-rules",
@@ -106,7 +106,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Reusable package skeletons for faster product uploads.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Package Templates" },
     ],
     endpoint: "templates",
@@ -117,7 +117,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Internal guides for pricing, images, slugs, and SEO.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Package Guide" },
     ],
     endpoint: "guide",
@@ -128,7 +128,7 @@ export const PACKAGE_MODULES: Record<string, PackageModuleConfig> = {
     description: "Packages removed from active sales but kept for reference.",
     breadcrumbs: [
       { label: "Dashboard", href: "/" },
-      { label: "Packages", href: "/packages" },
+      { label: "Package Dashboard", href: "/packages" },
       { label: "Archived Packages" },
     ],
     status: "archived",

@@ -17,9 +17,12 @@ import { GUIDE_ITEMS } from "@/lib/constants";
 import { isSamePackageRecord, listAllPackages, listExpiringPackages, listPackages, listSupplierQuoteRequests } from "@/lib/package-api";
 import { PACKAGE_MODULES } from "@/lib/package-modules";
 import { PACKAGE_STATUS_FILTER_OPTIONS, packageAllPackagesHref, parsePackageStatusFilter, type PackageRecord, type PackageStatusFilter } from "@/lib/package-types";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+
+const PAGE_SIZE = 10;
 
 function packageModuleIcon(slug: string, endpoint?: string): string {
   if (endpoint === "categories") return "Tags";
@@ -68,11 +71,19 @@ export default function PackageModulePage({
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<PackageStatusFilter>("all");
+  const [page, setPage] = useState(1);
   const config = moduleSlug ? PACKAGE_MODULES[moduleSlug] : null;
   const displayedPackages = useMemo(() => {
     if (config?.endpoint !== "tbl-list") return packages;
     return filterPackages(packages, search, statusFilter);
   }, [packages, search, statusFilter, config?.endpoint]);
+  const listPackagesForTable =
+    config?.endpoint === "tbl-list" ? displayedPackages : packages;
+  const totalPages = Math.max(1, Math.ceil(listPackagesForTable.length / PAGE_SIZE));
+  const pagedPackages = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return listPackagesForTable.slice(start, start + PAGE_SIZE);
+  }, [listPackagesForTable, page]);
   useEffect(() => {
     params.then(p => {
       if (p.module === "dashboard") {
@@ -87,8 +98,15 @@ export default function PackageModulePage({
     queueMicrotask(() => {
       setStatusFilter(parsePackageStatusFilter(searchParams.get("status")));
       setSearch(searchParams.get("search") ?? "");
+      setPage(1);
     });
   }, [searchParams, config?.endpoint]);
+  useEffect(() => {
+    setPage(1);
+  }, [moduleSlug]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
   useEffect(() => {
     if (!config || config.slug === "dashboard") return;
     async function load() {
@@ -114,6 +132,7 @@ export default function PackageModulePage({
         } else {
           setPackages([]);
         }
+        setPage(1);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load packages");
       } finally {
@@ -166,13 +185,17 @@ export default function PackageModulePage({
         title={config.title}
         description={config.description}
         action={headerAction}
+        back={{ href: "/packages", label: "Back to Package Dashboard" }}
       />
 
       {config.endpoint === "tbl-list" && <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
           <div className="relative flex-1 max-w-md">
             <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           
-            <Input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search packages by name, slug, or ID..." className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]" />
+            <Input type="search" value={search} onChange={e => {
+          setSearch(e.target.value);
+          setPage(1);
+        }} placeholder="Search packages by name, slug, or ID..." className="w-full h-10 pl-9 pr-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]" />
           
           </div>
           <div className="flex items-center gap-2 sm:shrink-0">
@@ -182,6 +205,7 @@ export default function PackageModulePage({
             <NativeSelect id="package-status" value={statusFilter} onChange={e => {
           const next = e.target.value as PackageStatusFilter;
           setStatusFilter(next);
+          setPage(1);
           router.replace(packageAllPackagesHref(next), {
             scroll: false
           });
@@ -192,8 +216,8 @@ export default function PackageModulePage({
                 </option>)}
             </NativeSelect>
           </div>
-          {!loading && packages.length > 0 && <p className="text-xs text-gray-400 sm:ml-auto">
-              {displayedPackages.length} of {packages.length} packages
+          {!loading && listPackagesForTable.length > 0 && <p className="text-xs text-gray-400 sm:ml-auto">
+              Showing {pagedPackages.length} of {listPackagesForTable.length} packages
             </p>}
         </div>}
 
@@ -215,7 +239,29 @@ export default function PackageModulePage({
 
       {config.endpoint === "pricing-rules" && <PricingRulesPanel ref={pricingRulesRef} />}
 
-      {(config.endpoint === "list" || config.endpoint === "tbl-list") && <PackageListTable packages={config.endpoint === "tbl-list" ? displayedPackages : packages} loading={loading} showSupplier fullActions={config.endpoint === "tbl-list"} onPackageRemoved={removed => setPackages(prev => prev.filter(pkg => !isSamePackageRecord(pkg, removed)))} onPackageUpdated={updated => setPackages(prev => prev.map(pkg => isSamePackageRecord(pkg, updated) ? updated : pkg))} emptyMessage={config.endpoint === "tbl-list" && search.trim() ? `No packages match "${search.trim()}".` : config.endpoint === "tbl-list" && statusFilter !== "all" ? `No ${PACKAGE_STATUS_FILTER_OPTIONS.find(o => o.value === statusFilter)?.label.toLowerCase() ?? statusFilter} packages found.` : `No packages found for ${config.title.toLowerCase()}.`} />}
+      {(config.endpoint === "list" || config.endpoint === "tbl-list") && <>
+          {(config.endpoint === "list" && !loading && listPackagesForTable.length > 0) && <p className="mb-3 text-xs text-gray-400">
+              Showing {pagedPackages.length} of {listPackagesForTable.length} packages
+            </p>}
+          <PackageListTable packages={pagedPackages} loading={loading} showSupplier fullActions={config.endpoint === "tbl-list"} onPackageRemoved={removed => {
+          setPackages(prev => prev.filter(pkg => !isSamePackageRecord(pkg, removed)));
+        }} onPackageUpdated={updated => setPackages(prev => prev.map(pkg => isSamePackageRecord(pkg, updated) ? updated : pkg))} emptyMessage={config.endpoint === "tbl-list" && search.trim() ? `No packages match "${search.trim()}".` : config.endpoint === "tbl-list" && statusFilter !== "all" ? `No ${PACKAGE_STATUS_FILTER_OPTIONS.find(o => o.value === statusFilter)?.label.toLowerCase() ?? statusFilter} packages found.` : `No packages found for ${config.title.toLowerCase()}.`} />
+          {totalPages > 1 && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[#E8ECF0] bg-[#FAFBFC] px-4 py-3">
+              <span className="text-sm text-gray-500">
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button type="button" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)} className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 shadow-sm">
+                  <Icon name="ChevronLeft" size={16} className="mr-1" />
+                  Previous
+                </Button>
+                <Button type="button" disabled={page >= totalPages || loading} onClick={() => setPage(p => p + 1)} className="h-9 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 shadow-sm">
+                  Next
+                  <Icon name="ChevronRight" size={16} className="ml-1" />
+                </Button>
+              </div>
+            </div>}
+        </>}
 
       {config.endpoint === "expiring-rates" && <PackageListTable packages={packages} loading={loading} showSupplier showValidity emptyMessage="No packages with rates expiring in the next 30 days." />}
 
