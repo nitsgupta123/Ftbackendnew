@@ -12,7 +12,9 @@ config({ path: ".env.local" });
 config();
 
 const API_BASE = process.env.API_URL ?? "http://localhost:4000";
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "admin@ftadmin.local").trim().toLowerCase();
+const ADMIN_EMAIL = (
+  process.env.ADMIN_EMAIL ?? "neetu.inncelerator@gmail.com"
+).trim().toLowerCase();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "FtAdmin@12345";
 
 let authToken = "";

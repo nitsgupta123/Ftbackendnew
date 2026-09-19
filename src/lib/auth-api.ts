@@ -1,4 +1,9 @@
-import type { AuthResponse, LoginInput, SignupInput } from "./auth-types";
+import type {
+  AuthResponse,
+  LoginInput,
+  SignupInput,
+  SignupResult,
+} from "./auth-types";
 import { getStoredToken } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 
@@ -20,13 +25,22 @@ function authHeaders(includeJson = false): HeadersInit {
   return headers;
 }
 
-export async function signupRequest(input: SignupInput): Promise<AuthResponse> {
+export async function signupRequest(input: SignupInput): Promise<SignupResult> {
   const response = await fetch(apiUrl("/api/auth/signup"), {
     method: "POST",
     headers: authHeaders(true),
     body: JSON.stringify(input),
   });
-  return parseApiResponse<AuthResponse>(response);
+  return parseApiResponse<SignupResult>(response);
+}
+
+export async function verifyEmailRequest(token: string): Promise<AuthResponse & { message?: string }> {
+  const response = await fetch(apiUrl("/api/auth/verify-email"), {
+    method: "POST",
+    headers: authHeaders(true),
+    body: JSON.stringify({ token }),
+  });
+  return parseApiResponse<AuthResponse & { message?: string }>(response);
 }
 
 export async function loginRequest(input: LoginInput): Promise<AuthResponse> {

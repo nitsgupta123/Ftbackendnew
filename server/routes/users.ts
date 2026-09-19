@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   createAdminUserByAdmin,
   deleteAdminUser,
+  deletePendingSignupByEmail,
   findAdminByEmail,
   findAdminUserById,
   getAdminUserStats,
@@ -9,6 +10,8 @@ import {
   updateAdminUser,
 } from "../../src/lib/auth-repository";
 import { createUserSchema, updateUserSchema } from "../../src/lib/auth-validation";
+import { isEmailConfigured } from "../../src/lib/email";
+import { sendAdminVerificationEmail } from "../../src/lib/verification-email";
 import { requireSuperAdmin } from "../lib/audit";
 
 function parseRole(value?: string): string | "all" | undefined {
@@ -72,7 +75,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const user = await findAdminUserById(userId);
-      if (!user) {
+      if (!user || !user.emailVerified) {
         return reply.status(404).send({ error: "User not found" });
       }
 
@@ -98,16 +101,51 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      if (!isEmailConfigured()) {
+        return reply.status(503).send({
+          error:
+            "Email delivery is not configured. Cannot invite users until Graph/SMTP is set up.",
+        });
+      }
+
       const { email, password, fullName, role } = parsed.data;
       const existing = await findAdminByEmail(email);
-      if (existing) {
+      if (existing && Boolean(existing.email_verified)) {
         return reply.status(409).send({ error: "An account with this email already exists" });
       }
 
-      const user = await createAdminUserByAdmin({ email, password, fullName, role });
-      return reply.status(201).send({ user });
+      const pending = await createAdminUserByAdmin({ email, password, fullName, role });
+
+      try {
+        const mailResult = await sendAdminVerificationEmail({
+          ...pending,
+          invitedByAdmin: true,
+        });
+        app.log.info(
+          { email: pending.email, mailMode: mailResult.mode },
+          "Invite verification email sent"
+        );
+        return reply.status(201).send({
+          status: "pending_verification",
+          email: pending.email,
+          role: pending.role,
+          message:
+            "Verification email sent. The user will appear in User Management after they verify.",
+          previewUrl: mailResult.previewUrl,
+          mailMode: mailResult.mode,
+        });
+      } catch (mailError) {
+        app.log.error(mailError);
+        await deletePendingSignupByEmail(pending.email);
+        return reply.status(503).send({
+          error: "Could not send verification email. User was not created.",
+        });
+      }
     } catch (error) {
       app.log.error(error);
+      if (error instanceof Error && error.message.includes("already exists")) {
+        return reply.status(409).send({ error: error.message });
+      }
       return reply.status(500).send({
         error: error instanceof Error ? error.message : "Failed to create user",
       });
@@ -134,7 +172,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const existing = await findAdminUserById(userId);
-      if (!existing) {
+      if (!existing || !existing.emailVerified) {
         return reply.status(404).send({ error: "User not found" });
       }
 

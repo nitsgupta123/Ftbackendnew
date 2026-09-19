@@ -9,14 +9,24 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { fetchCurrentUser, loginRequest, signupRequest } from "@/lib/auth-api";
+import {
+  fetchCurrentUser,
+  loginRequest,
+  signupRequest,
+  verifyEmailRequest,
+} from "@/lib/auth-api";
 import {
   clearStoredAuth,
   getStoredToken,
   getStoredUser,
   setStoredAuth,
 } from "@/lib/auth-storage";
-import type { AdminUser, LoginInput, SignupInput } from "@/lib/auth-types";
+import type {
+  AdminUser,
+  LoginInput,
+  SignupInput,
+  SignupResult,
+} from "@/lib/auth-types";
 
 interface AuthContextValue {
   user: AdminUser | null;
@@ -24,7 +34,8 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (input: LoginInput) => Promise<void>;
-  signup: (input: SignupInput) => Promise<void>;
+  signup: (input: SignupInput) => Promise<SignupResult>;
+  verifyEmail: (token: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -108,6 +119,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = useCallback(
     async (input: SignupInput) => {
       const result = await signupRequest(input);
+      if (result.status === "authenticated") {
+        applySession(result.token, result.user);
+      }
+      return result;
+    },
+    [applySession]
+  );
+
+  const verifyEmail = useCallback(
+    async (verificationToken: string) => {
+      const result = await verifyEmailRequest(verificationToken);
       applySession(result.token, result.user);
     },
     [applySession]
@@ -125,10 +147,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(token && user),
       login,
       signup,
+      verifyEmail,
       logout,
       refreshUser,
     }),
-    [user, token, isLoading, login, signup, logout, refreshUser]
+    [user, token, isLoading, login, signup, verifyEmail, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

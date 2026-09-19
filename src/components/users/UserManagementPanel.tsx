@@ -47,6 +47,7 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
   const [roleFilter, setRoleFilter] = useState<UserRoleFilter>("all");
@@ -173,19 +174,25 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
   async function handleCreate(data: CreateUserFormValues) {
     setIsSaving(true);
     setError(null);
+    setSuccessMessage(null);
     try {
-      const { user: created } = await createUser(data);
-      if (created.role !== data.role) {
+      const result = await createUser(data);
+      if (result.role !== data.role) {
         setError(
           `Role "${data.role}" could not be saved correctly. Run "npm run db:migrate:admin-role-string" and try again.`
         );
+      } else {
+        setSuccessMessage(
+          result.message ||
+            `Verification email sent to ${result.email}. They will appear here after verifying.`
+        );
       }
       setCustomRoles((prev) =>
-        prev.includes(created.role) ? prev : [...prev, created.role]
+        prev.includes(result.role) ? prev : [...prev, result.role]
       );
-      rememberKnownRole(created.role);
+      rememberKnownRole(result.role);
       setCatalogRoles((prev) =>
-        prev.includes(created.role) ? prev : [...prev, created.role]
+        prev.includes(result.role) ? prev : [...prev, result.role]
       );
       setFormMode(null);
       setPage(1);
@@ -328,6 +335,12 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
           </div>
         )}
       </div>
+
+      {successMessage && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-100 text-sm">
+          {successMessage}
+        </div>
+      )}
 
       {error && <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-100 text-sm">
           {error}

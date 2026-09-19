@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/icons";
 import type { ItineraryData, ItineraryDay } from "@/lib/package-types";
+import { uploadMediaFile } from "@/lib/media-api";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { Button } from "@/components/ui/button";
 import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
@@ -33,6 +34,7 @@ function createEmptyDay(dayNumber: number): ItineraryDay {
     breakfast: false,
     lunch: false,
     dinner: false,
+    imageUrl: null,
   };
 }
 
@@ -124,9 +126,109 @@ function dayHasUserContent(day: ItineraryDay): boolean {
       day.mobilityWarning?.trim() ||
       day.supplierNotes?.trim() ||
       day.dietaryNotes?.trim() ||
+      day.imageUrl?.trim() ||
       day.breakfast ||
       day.lunch ||
       day.dinner
+  );
+}
+
+function DayImageUpload({
+  value,
+  onChange,
+}: {
+  value: string | null | undefined;
+  onChange: (url: string | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleUpload(file: File) {
+    setUploading(true);
+    setError(null);
+    try {
+      const result = await uploadMediaFile(file);
+      onChange(result.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div>
+      <Label className="block text-xs font-medium text-gray-600 mb-1.5">
+        Day image
+      </Label>
+      <div className="rounded-[12px] border border-dashed border-[#E5E7EB] bg-[#FAFAFA] p-4">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void handleUpload(file);
+          }}
+        />
+
+        {value ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="overflow-hidden rounded-[10px] border border-[#E5E7EB] bg-white shrink-0 w-full sm:w-40">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={value}
+                alt="Day"
+                className="h-28 w-full object-cover"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                disabled={uploading}
+                onClick={() => inputRef.current?.click()}
+                className="px-4 py-2 text-xs font-semibold text-[#A8832A] bg-white border border-[#E8D5A3] rounded-[8px] hover:bg-[#FFF9EB] transition-colors"
+              >
+                {uploading ? "Uploading…" : "Replace"}
+              </Button>
+              <Button
+                type="button"
+                disabled={uploading}
+                onClick={() => {
+                  setError(null);
+                  onChange(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-[#B91C1C] bg-white border border-[#FECACA] rounded-[8px] hover:bg-[#FEF2F2] transition-colors"
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center text-center py-2">
+            <div className="w-11 h-11 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center mb-2 shadow-sm">
+              <Icon name="Upload" size={18} className="text-[#A8832A]" />
+            </div>
+            <p className="text-xs text-gray-400 mb-3">
+              Optional photo for this day (JPEG, PNG, WebP)
+            </p>
+            <Button
+              type="button"
+              disabled={uploading}
+              onClick={() => inputRef.current?.click()}
+              className="px-5 py-2 text-xs font-semibold text-[#A8832A] bg-white border border-[#E8D5A3] rounded-[8px] hover:bg-[#FFF9EB] transition-colors"
+            >
+              {uploading ? "Uploading…" : "Upload image"}
+            </Button>
+          </div>
+        )}
+
+        {error ? <p className="mt-2 text-xs text-[#B91C1C]">{error}</p> : null}
+      </div>
+    </div>
   );
 }
 
@@ -208,6 +310,11 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
               onChange={(e) => update({ title: e.target.value })}
             />
           </div>
+
+          <DayImageUpload
+            value={day.imageUrl}
+            onChange={(imageUrl) => update({ imageUrl })}
+          />
 
           <div>
             <Label className={labelClass}>Description</Label>
@@ -384,6 +491,7 @@ export default function ItineraryForm({
 
   const itineraryGuideTags = [
     "Client copy",
+    "Day image",
     "Activities",
     "Highlights",
     "Meals",

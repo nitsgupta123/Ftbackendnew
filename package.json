@@ -14,6 +14,7 @@
     "db:init": "node scripts/init-db.mjs",
     "db:migrate:audit": "node scripts/run-migrate-audit.mjs",
     "db:migrate:admin": "node scripts/run-migrate-admin-users.mjs",
+    "db:migrate:email-verification": "node scripts/run-migrate-email-verification.mjs",
     "db:migrate:admin-role-string": "node scripts/run-migrate-alter-admin-role-string.mjs",
     "db:migrate:permissions-role-string": "node scripts/run-migrate-alter-role-permissions-role-string.mjs",
     "db:migrate:categories": "node scripts/run-migrate-categories.mjs",
@@ -30,6 +31,7 @@
     "db:migrate:suppliers": "node scripts/run-migrate-suppliers.mjs",
     "db:seed:suppliers": "node scripts/seed-suppliers-from-sheet.mjs",
     "admin:seed": "node scripts/seed-admin.mjs",
+    "admin:cleanup-test-users": "node scripts/cleanup-test-admin-users.mjs",
     "postinstall": "node scripts/copy-tinymce.mjs",
     "test:audit": "node scripts/test-audit-crud.mjs",
     "test:categories": "node scripts/test-categories-crud.mjs"

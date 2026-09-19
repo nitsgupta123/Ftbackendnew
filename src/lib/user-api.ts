@@ -55,13 +55,29 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
   return parseApiResponse<ListUsersResult>(response);
 }
 
-export async function createUser(input: CreateUserFormValues): Promise<{ user: AdminUser }> {
+export async function createUser(
+  input: CreateUserFormValues
+): Promise<{
+  status: "pending_verification";
+  email: string;
+  role: string;
+  message: string;
+  previewUrl?: string;
+  mailMode?: string;
+}> {
   const response = await fetch(apiUrl("/api/users"), {
     method: "POST",
     headers: requestHeaders(true),
     body: JSON.stringify(input),
   });
-  return parseApiResponse<{ user: AdminUser }>(response);
+  return parseApiResponse<{
+    status: "pending_verification";
+    email: string;
+    role: string;
+    message: string;
+    previewUrl?: string;
+    mailMode?: string;
+  }>(response);
 }
 
 export async function updateUser(

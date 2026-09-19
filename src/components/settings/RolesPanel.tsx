@@ -53,22 +53,19 @@ const GROUP_META: Record<
   },
 };
 
+/** Optional name-keyed profile seeds for known staff (company accounts only). */
 const DEFAULT_EMPLOYEE_PROFILES: Record<string, EmployeeProfile> = {
   neetu: {
     designation: "Package Manager",
     department: "Package Department",
     accessLevel: "Advanced",
   },
-  amit: {
-    designation: "Travel Consultant",
-    department: "Sales Department",
-    accessLevel: "Standard",
-  },
-  sehar: {
-    designation: "Content Manager",
-    department: "Content Department",
-    accessLevel: "Standard",
-  },
+};
+
+const FALLBACK_EMPLOYEE_PROFILE: EmployeeProfile = {
+  designation: "Executive",
+  department: "Operations",
+  accessLevel: "Standard",
 };
 
 function readLocalStorageJson<T>(key: string, fallback: T): T {
@@ -125,6 +122,7 @@ export default function RolesPanel() {
     rolePermissions: roleState.rolePermissions,
     fallbackPermissions: roleState.rolePermissions.admin ?? roleState.draft,
     defaultProfiles: DEFAULT_EMPLOYEE_PROFILES,
+    fallbackProfile: FALLBACK_EMPLOYEE_PROFILE,
     currentUserName: user?.fullName,
     currentUserId: user?.id,
     onPushActivity: pushActivity,

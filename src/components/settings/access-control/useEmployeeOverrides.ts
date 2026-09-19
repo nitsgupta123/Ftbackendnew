@@ -61,6 +61,7 @@ type UseEmployeeOverridesArgs = {
   rolePermissions: Record<string, ExtendedPermission[]>;
   fallbackPermissions: ExtendedPermission[];
   defaultProfiles: Record<string, EmployeeProfile>;
+  fallbackProfile?: EmployeeProfile;
   currentUserName?: string;
   currentUserId?: number;
   onPushActivity: (entry: Omit<ActivityItem, "id" | "createdAt">) => void;
@@ -70,12 +71,19 @@ type UseEmployeeOverridesArgs = {
   refreshMyPermissions: () => Promise<void>;
 };
 
+const DEFAULT_FALLBACK_PROFILE: EmployeeProfile = {
+  designation: "Executive",
+  department: "Operations",
+  accessLevel: "Standard",
+};
+
 export function useEmployeeOverrides({
   canManage,
   allUsers,
   rolePermissions,
   fallbackPermissions,
   defaultProfiles,
+  fallbackProfile = DEFAULT_FALLBACK_PROFILE,
   currentUserName,
   currentUserId,
   onPushActivity,
@@ -115,11 +123,7 @@ export function useEmployeeOverrides({
       for (const userRow of users) {
         if (next[userRow.id]) continue;
         const key = userRow.fullName.trim().toLowerCase();
-        next[userRow.id] = defaultProfiles[key] ?? {
-          designation: "Executive",
-          department: "Operations",
-          accessLevel: "Standard",
-        };
+        next[userRow.id] = defaultProfiles[key] ?? { ...fallbackProfile };
       }
       return next;
     });
@@ -193,7 +197,7 @@ export function useEmployeeOverrides({
     if (!canManage) return;
     setEmployeeProfiles((prev) => ({
       ...prev,
-      [userId]: { ...(prev[userId] ?? defaultProfiles.neetu), ...patch },
+      [userId]: { ...(prev[userId] ?? fallbackProfile), ...patch },
     }));
   };
 
