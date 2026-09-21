@@ -18,12 +18,12 @@ export function getMigrateDbConfig() {
   };
 }
 
-/** Rewrite hardcoded `USE fz` so migrations target DB_NAME. */
+/** Rewrite hardcoded USE targets so migrations use DB_NAME. */
 export function prepareSql(sql, database = process.env.DB_NAME ?? "fayyaz_new") {
   return sql
-    .replace(/\bUSE\s+fz\s*;/gi, `USE \`${database}\`;`)
+    .replace(/\bUSE\s+(fz|fayyaz_new)\s*;/gi, `USE \`${database}\`;`)
     .replace(
-      /CREATE\s+DATABASE\s+IF\s+NOT\s+EXISTS\s+fz\b/gi,
+      /CREATE\s+DATABASE\s+IF\s+NOT\s+EXISTS\s+(fz|fayyaz_new)\b/gi,
       `CREATE DATABASE IF NOT EXISTS \`${database}\``
     );
 }

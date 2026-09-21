@@ -1,44 +1,92 @@
-import mysql from "mysql2/promise";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import { config } from "dotenv";
+import { withMigrateConnection } from "./db-migrate-util.mjs";
 
+config({ path: ".env.production" });
 config({ path: ".env.local" });
 config();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const COLUMNS = [
+  {
+    name: "email_verified",
+    ddl: "ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0",
+  },
+  {
+    name: "email_verification_token",
+    ddl: "ADD COLUMN email_verification_token VARCHAR(64) NULL",
+  },
+  {
+    name: "email_verification_expires_at",
+    ddl: "ADD COLUMN email_verification_expires_at DATETIME NULL",
+  },
+];
+
+const INDEXES = [
+  {
+    name: "idx_tbl_user_email_verified",
+    ddl: "CREATE INDEX idx_tbl_user_email_verified ON tbl_user (email_verified)",
+  },
+  {
+    name: "idx_tbl_user_verification_token",
+    ddl: "CREATE INDEX idx_tbl_user_verification_token ON tbl_user (email_verification_token)",
+  },
+];
+
+async function columnExists(connection, database, column) {
+  const [rows] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tbl_user' AND COLUMN_NAME = ?`,
+    [database, column]
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+async function indexExists(connection, database, indexName) {
+  const [rows] = await connection.query(
+    `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tbl_user' AND INDEX_NAME = ?`,
+    [database, indexName]
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
 
 async function main() {
-  const dbName = process.env.DB_NAME ?? "fayyaz_new";
-  const connection = await mysql.createConnection({
-    host: process.env.DB_HOST ?? "localhost",
-    port: Number(process.env.DB_PORT ?? 3306),
-    user: process.env.DB_USER ?? "root",
-    password: process.env.DB_PASSWORD ?? "",
-    multipleStatements: true,
-  });
+  await withMigrateConnection(async (connection, dbConfig) => {
+    const database = dbConfig.database;
+    let added = 0;
 
-  try {
-    const [cols] = await connection.query(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tbl_user' AND COLUMN_NAME = 'email_verified'`,
-      [dbName]
-    );
-
-    if (Array.isArray(cols) && cols.length > 0) {
-      console.log("email_verified column already exists — skipping migration.");
-      return;
+    for (const column of COLUMNS) {
+      if (await columnExists(connection, database, column.name)) {
+        console.log(`Column ${column.name} already exists — skip.`);
+        continue;
+      }
+      console.log(`Adding ${column.name}...`);
+      await connection.query(`ALTER TABLE \`${database}\`.tbl_user ${column.ddl}`);
+      added += 1;
     }
 
-    const sqlPath = path.join(__dirname, "migrate-add-email-verification.sql");
-    const sql = fs.readFileSync(sqlPath, "utf8");
-    console.log("Running migrate-add-email-verification.sql...");
-    await connection.query(sql);
-    console.log("Email verification columns are ready.");
-  } finally {
-    await connection.end();
-  }
+    // Existing accounts are treated as already verified.
+    await connection.query(
+      `UPDATE \`${database}\`.tbl_user
+       SET email_verified = 1
+       WHERE email_verified = 0
+         AND email_verification_token IS NULL`
+    );
+
+    for (const index of INDEXES) {
+      if (await indexExists(connection, database, index.name)) {
+        console.log(`Index ${index.name} already exists — skip.`);
+        continue;
+      }
+      console.log(`Creating ${index.name}...`);
+      await connection.query(index.ddl.replace("ON tbl_user", `ON \`${database}\`.tbl_user`));
+    }
+
+    console.log(
+      added
+        ? `Email verification ready on ${database}.tbl_user (${added} column(s) added).`
+        : `Email verification already ready on ${database}.tbl_user.`
+    );
+  });
 }
 
 main().catch((error) => {

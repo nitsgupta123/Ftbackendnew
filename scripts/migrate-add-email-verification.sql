@@ -1,4 +1,5 @@
 -- Email verification for legacy admin accounts in tbl_user.
+-- Prefer: npm run db:migrate:email-verification (idempotent, uses DB_NAME).
 -- Unverified signups stay out of User Management until they confirm email.
 
 USE fayyaz_new;
@@ -8,7 +9,6 @@ ALTER TABLE tbl_user
   ADD COLUMN email_verification_token VARCHAR(64) NULL,
   ADD COLUMN email_verification_expires_at DATETIME NULL;
 
--- Existing accounts are treated as already verified.
 UPDATE tbl_user
 SET email_verified = 1
 WHERE email_verified = 0
