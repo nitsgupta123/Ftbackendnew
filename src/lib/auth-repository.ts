@@ -397,19 +397,27 @@ export interface CreatePendingSignupResult {
   token: string;
 }
 
-/** Admin-created users stay hidden until they verify email. */
+/** Admin-created users stay hidden until they verify email (unless activateImmediately). */
 export async function createAdminUserByAdmin(
-  input: SignupInput & { role?: AdminUser["role"] }
-): Promise<CreatePendingSignupResult & { id: number; role: AdminUser["role"] }> {
+  input: SignupInput & { role?: AdminUser["role"]; activateImmediately?: boolean }
+): Promise<
+  CreatePendingSignupResult & { id: number; role: AdminUser["role"]; activated: boolean }
+> {
   const email = input.email.trim().toLowerCase();
   const passwordHash = await hashPassword(input.password);
   const role = input.role ?? "admin";
+  const activate = Boolean(input.activateImmediately);
   const { token, expiresAt } = createEmailVerificationToken();
   const userType = await resolveRoleTypeId(role);
   const fullName = input.fullName.trim();
   const parts = fullName.split(/\s+/);
   const firstName = parts[0] ?? fullName;
   const lastName = parts.slice(1).join(" ");
+
+  const status = activate ? 1 : 0;
+  const emailVerified = activate ? 1 : 0;
+  const verificationToken = activate ? null : token;
+  const verificationExpires = activate ? null : expiresAt;
 
   const existing = await findAdminByEmail(email);
   if (existing) {
@@ -419,13 +427,30 @@ export async function createAdminUserByAdmin(
     await query(
       `UPDATE ${USERS_TABLE}
        SET password = ?, first_name = ?, last_name = ?, user_type = ?,
-           status = 0, email_verified = 0,
+           status = ?, email_verified = ?,
            email_verification_token = ?, email_verification_expires_at = ?,
            edit_date = NOW()
        WHERE id = ?`,
-      [passwordHash, firstName, lastName, userType, token, expiresAt, existing.id]
+      [
+        passwordHash,
+        firstName,
+        lastName,
+        userType,
+        status,
+        emailVerified,
+        verificationToken,
+        verificationExpires,
+        existing.id,
+      ]
     );
-    return { id: existing.id, email, fullName, token, role };
+    return {
+      id: existing.id,
+      email,
+      fullName,
+      token: activate ? "" : token,
+      role,
+      activated: activate,
+    };
   }
 
   const result = await query<ResultSetHeader>(
@@ -434,16 +459,28 @@ export async function createAdminUserByAdmin(
        country_code, phone, birthday, place_birth, gender, country, user_img,
        insert_date, edit_date, user_type, status, email_verified,
        email_verification_token, email_verification_expires_at, user_id
-     ) VALUES (?, ?, ?, ?, ?, '', '', '', '', '', '', '', NOW(), NOW(), ?, 0, 0, ?, ?, 0)`,
-    [email, passwordHash, email, firstName, lastName, userType, token, expiresAt]
+     ) VALUES (?, ?, ?, ?, ?, '', '', '', '', '', '', '', NOW(), NOW(), ?, ?, ?, ?, ?, 0)`,
+    [
+      email,
+      passwordHash,
+      email,
+      firstName,
+      lastName,
+      userType,
+      status,
+      emailVerified,
+      verificationToken,
+      verificationExpires,
+    ]
   );
 
   return {
     id: Number(result.insertId),
     email,
     fullName,
-    token,
+    token: activate ? "" : token,
     role,
+    activated: activate,
   };
 }
 

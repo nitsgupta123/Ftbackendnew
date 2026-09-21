@@ -58,12 +58,13 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
 export async function createUser(
   input: CreateUserFormValues
 ): Promise<{
-  status: "pending_verification";
+  status: "pending_verification" | "created";
   email: string;
   role: string;
   message: string;
   previewUrl?: string;
   mailMode?: string;
+  user?: AdminUser;
 }> {
   const response = await fetch(apiUrl("/api/users"), {
     method: "POST",
@@ -71,12 +72,13 @@ export async function createUser(
     body: JSON.stringify(input),
   });
   return parseApiResponse<{
-    status: "pending_verification";
+    status: "pending_verification" | "created";
     email: string;
     role: string;
     message: string;
     previewUrl?: string;
     mailMode?: string;
+    user?: AdminUser;
   }>(response);
 }
 

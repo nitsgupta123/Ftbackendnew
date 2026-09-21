@@ -108,10 +108,27 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(409).send({ error: "An account with this email already exists" });
       }
 
+      // No Graph/SMTP: create an active account immediately (admin shares the password).
       if (!isEmailConfigured()) {
-        return reply.status(503).send({
-          error:
-            "Email delivery is not configured. Cannot invite users until Graph/SMTP is set up.",
+        const created = await createAdminUserByAdmin({
+          email,
+          password,
+          fullName,
+          role,
+          activateImmediately: true,
+        });
+        const user = await findAdminUserById(created.id);
+        app.log.warn(
+          { email: created.email },
+          "Admin user created without invite email (email not configured)"
+        );
+        return reply.status(201).send({
+          status: "created",
+          email: created.email,
+          role: created.role,
+          user,
+          message:
+            "User created and activated. Share the password with them — invite email was skipped because email is not configured.",
         });
       }
 
@@ -138,8 +155,22 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
       } catch (mailError) {
         app.log.error(mailError);
         await deletePendingSignupByEmail(pending.email);
-        return reply.status(503).send({
-          error: "Could not send verification email. User was not created.",
+        // Fall back to immediate activation if mail fails
+        const created = await createAdminUserByAdmin({
+          email,
+          password,
+          fullName,
+          role,
+          activateImmediately: true,
+        });
+        const user = await findAdminUserById(created.id);
+        return reply.status(201).send({
+          status: "created",
+          email: created.email,
+          role: created.role,
+          user,
+          message:
+            "User created and activated. Invite email failed — share the password with them directly.",
         });
       }
     } catch (error) {

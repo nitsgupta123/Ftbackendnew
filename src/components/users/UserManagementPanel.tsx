@@ -183,7 +183,9 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       } else {
         setSuccessMessage(
           result.message ||
-            `Verification email sent to ${result.email}. They will appear here after verifying.`
+            (result.status === "created"
+              ? `User ${result.email} created. Share the password with them.`
+              : `Verification email sent to ${result.email}. They will appear here after verifying.`)
         );
       }
       setCustomRoles((prev) =>
