@@ -16,7 +16,7 @@ export default function AuthLayout({ title, subtitle, children, footer }: AuthLa
           <div className="flex justify-center mb-4">
             <BrandLogo className="h-12" />
           </div>
-          <h1 className="text-2xl font-semibold text-[#1F2A44]">{title}</h1>
+          <h1 className="font-heading text-2xl font-semibold text-[#1F2A44] tracking-tight">{title}</h1>
           <p className="text-sm text-gray-500 mt-2">{subtitle}</p>
         </div>
 

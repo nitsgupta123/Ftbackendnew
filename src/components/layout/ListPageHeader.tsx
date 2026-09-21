@@ -59,7 +59,7 @@ export default function ListPageHeader({
                 <Icon name={icon} size={22} />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl font-semibold tracking-tight text-[#1F2A44] sm:text-2xl">
+                <h1 className="font-heading text-xl font-semibold tracking-tight text-[#1F2A44] sm:text-2xl">
                   {title}
                 </h1>
                 <p className="mt-0.5 text-sm leading-relaxed text-gray-500">
