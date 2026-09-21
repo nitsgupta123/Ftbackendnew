@@ -8,8 +8,9 @@ services:
       SKIP_DB_INIT: "true"
       API_PORT: "4000"
       API_HOST: "0.0.0.0"
-      # Reach MySQL on the VPS (same network namespace as host)
       DB_HOST: "127.0.0.1"
+      # VPS MySQL database (must win over missing/stale env)
+      DB_NAME: "fz"
     network_mode: host
     volumes:
       - uploads:/app/uploads

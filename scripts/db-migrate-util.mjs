@@ -34,7 +34,7 @@ loadEnvFile(path.resolve(process.cwd(), ".env.local"));
 loadEnvFile(path.resolve(process.cwd(), ".env"));
 
 export function getMigrateDbConfig() {
-  const database = process.env.DB_NAME ?? "fayyaz_new";
+  const database = process.env.DB_NAME ?? "fz";
   return {
     host: process.env.DB_HOST ?? "localhost",
     port: Number(process.env.DB_PORT ?? 3306),
@@ -46,7 +46,7 @@ export function getMigrateDbConfig() {
 }
 
 /** Rewrite hardcoded USE targets so migrations use DB_NAME. */
-export function prepareSql(sql, database = process.env.DB_NAME ?? "fayyaz_new") {
+export function prepareSql(sql, database = process.env.DB_NAME ?? "fz") {
   return sql
     .replace(/\bUSE\s+(fz|fayyaz_new)\s*;/gi, `USE \`${database}\`;`)
     .replace(

@@ -2,7 +2,7 @@
 -- Prefer: npm run db:migrate:email-verification (idempotent, uses DB_NAME).
 -- Unverified signups stay out of User Management until they confirm email.
 
-USE fayyaz_new;
+USE fz;
 
 ALTER TABLE tbl_user
   ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0,

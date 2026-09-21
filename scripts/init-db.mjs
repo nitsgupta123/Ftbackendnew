@@ -11,7 +11,7 @@ config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
-  const database = process.env.DB_NAME ?? "fayyaz_new";
+  const database = process.env.DB_NAME ?? "fz";
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST ?? "localhost",
     port: Number(process.env.DB_PORT ?? 3306),
