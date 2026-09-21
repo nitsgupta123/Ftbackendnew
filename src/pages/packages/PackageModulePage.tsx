@@ -87,6 +87,13 @@ export default function PackageModulePage() {
     setModuleSlug(moduleParam);
   }, [moduleParam, navigate]);
   useEffect(() => {
+    const legacyIdRaw = searchParams.get("legacyId");
+    if (!legacyIdRaw) return;
+    const legacyId = Number(legacyIdRaw);
+    if (!Number.isFinite(legacyId) || legacyId <= 0) return;
+    navigate(`/add-package?id=${legacyId}`, { replace: true });
+  }, [searchParams, navigate]);
+  useEffect(() => {
     if (config?.endpoint !== "tbl-list") return;
     queueMicrotask(() => {
       setStatusFilter(parsePackageStatusFilter(searchParams.get("status")));

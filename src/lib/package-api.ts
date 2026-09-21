@@ -43,14 +43,13 @@ function authenticatedFetch(path: string, init: RequestInit = {}) {
 
 
 export function getPackageEditHref(pkg: PackageRecord, step?: number): string {
-  if (pkg.source === "wizard") {
-    const base = `/add-package?id=${pkg.id}`;
-    if (step != null && step >= 1 && step <= 14) {
-      return `${base}&step=${step}`;
-    }
-    return base;
+  // All catalogue rows live in tbl_packages; edit via the package wizard.
+  const id = pkg.id || pkg.package_id;
+  const base = `/add-package?id=${id}`;
+  if (step != null && step >= 1 && step <= 14) {
+    return `${base}&step=${step}`;
   }
-  return `/packages/all?legacyId=${pkg.package_id}`;
+  return base;
 }
 
 export function isWizardPackage(pkg: PackageRecord): boolean {

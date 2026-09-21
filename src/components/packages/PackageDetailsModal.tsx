@@ -511,8 +511,7 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
                       >
                         {isEmpty ? "Noted" : "Filled"}
                       </span>
-                      {isWizardPackage(details) ? (
-                        <Link
+                      <Link
                           to={getPackageEditHref(details, section.step)}
                           className="inline-flex size-7 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-[#B48A2C] hover:bg-[#B48A2C]/5 hover:border-[#B48A2C]/40 transition-colors"
                           title={`Edit ${section.title}`}
@@ -520,7 +519,6 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
                         >
                           <Icon name="Pencil" size={14} />
                         </Link>
-                      ) : null}
                     </div>
                   </div>
                   <div className="p-4">{renderSectionContent(sectionData)}</div>
