@@ -3,11 +3,11 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps
+# postinstall needs scripts/ — skip hooks until full source is present
+RUN npm ci --legacy-peer-deps --ignore-scripts
 
 COPY . .
-# Build Vite SPA (output: dist/), TinyMCE is copied via postinstall into public/
-RUN npm run build
+RUN node scripts/copy-tinymce.mjs && npm run build
 
 # ---- Runner stage ----
 FROM node:22-alpine AS runner
