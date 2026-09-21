@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   createPage,
   deletePage,
@@ -28,7 +29,7 @@ export const registerPageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load page stats",
+        error: getSafeErrorMessage(error, "Failed to load page stats"),
       });
     }
   });
@@ -58,7 +59,7 @@ export const registerPageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list pages",
+        error: getSafeErrorMessage(error, "Failed to list pages"),
       });
     }
   });
@@ -80,7 +81,7 @@ export const registerPageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch page",
+        error: getSafeErrorMessage(error, "Failed to fetch page"),
       });
     }
   });
@@ -100,7 +101,7 @@ export const registerPageRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(201).send({ page });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to create page";
+      const message = getSafeErrorMessage(error, "Failed to create page");
       return reply.status(500).send({ error: message });
     }
   });
@@ -130,7 +131,7 @@ export const registerPageRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ page });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to update page";
+      const message = getSafeErrorMessage(error, "Failed to update page");
       return reply.status(500).send({ error: message });
     }
   });
@@ -155,7 +156,7 @@ export const registerPageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete page",
+        error: getSafeErrorMessage(error, "Failed to delete page"),
       });
     }
   });

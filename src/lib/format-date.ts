@@ -1,5 +1,8 @@
 export const SGT_TIME_ZONE = "Asia/Singapore";
 export const SGT_UTC_OFFSET = "+08:00";
+/** App-wide timezone — always Singapore Standard Time. */
+export const APP_TIMEZONE = SGT_TIME_ZONE;
+export const APP_TIMEZONE_LABEL = "SGT";
 
 function getPart(
   parts: Intl.DateTimeFormatPart[],
@@ -8,18 +11,27 @@ function getPart(
   return parts.find((part) => part.type === type)?.value ?? "00";
 }
 
+function sgtParts(
+  date: Date,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormatPart[] {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: SGT_TIME_ZONE,
+    hour12: false,
+    ...options,
+  }).formatToParts(date);
+}
+
 /** Current Singapore wall-clock time as `YYYY-MM-DD HH:mm:ss` for MySQL. */
 export function nowMysqlDateTimeSgt(date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SGT_TIME_ZONE,
+  const parts = sgtParts(date, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
+  });
 
   const hourRaw = getPart(parts, "hour");
   const hour = hourRaw === "24" ? "00" : hourRaw.padStart(2, "0");
@@ -57,6 +69,65 @@ export function toValidDate(value: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * Serialize a Date/DB value as ISO-8601 with `+08:00` (never UTC `Z`).
+ * Naive strings are treated as already being Singapore wall-clock.
+ */
+export function toIsoSgt(value: Date | string | null | undefined): string | null {
+  if (value == null || value === "") return null;
+
+  const date =
+    value instanceof Date
+      ? Number.isNaN(value.getTime())
+        ? null
+        : value
+      : toValidDate(String(value));
+  if (!date) return null;
+
+  const parts = sgtParts(date, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const hourRaw = getPart(parts, "hour");
+  const hour = hourRaw === "24" ? "00" : hourRaw.padStart(2, "0");
+
+  return `${getPart(parts, "year")}-${getPart(parts, "month")}-${getPart(parts, "day")}T${hour}:${getPart(parts, "minute")}:${getPart(parts, "second")}${SGT_UTC_OFFSET}`;
+}
+
+/** Current instant as ISO-8601 with explicit SGT offset (`…+08:00`). */
+export function nowIsoSgt(date = new Date()): string {
+  return toIsoSgt(date) ?? `${nowMysqlDateTimeSgt(date).replace(" ", "T")}${SGT_UTC_OFFSET}`;
+}
+
+/** Always returns an ISO SGT string (falls back to now). */
+export function toIsoSgtOrNow(value?: Date | string | null): string {
+  return toIsoSgt(value ?? new Date()) ?? nowIsoSgt();
+}
+
+/** Calendar date `YYYY-MM-DD` in Singapore time. */
+export function toDateOnlySgt(value: Date | string | null | undefined): string | null {
+  if (value == null || value === "") return null;
+  const date =
+    value instanceof Date
+      ? Number.isNaN(value.getTime())
+        ? null
+        : value
+      : toValidDate(String(value));
+  if (!date) return null;
+
+  const parts = sgtParts(date, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return `${getPart(parts, "year")}-${getPart(parts, "month")}-${getPart(parts, "day")}`;
+}
+
 function formatWithSgt(
   value: string | null | undefined,
   options: Intl.DateTimeFormatOptions,
@@ -77,7 +148,7 @@ export function formatPackageDate(value: string | null | undefined): string {
 }
 
 export function formatPackageDateTime(value: string | null | undefined): string {
-  return formatWithSgt(value, {
+  const formatted = formatWithSgt(value, {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -85,21 +156,23 @@ export function formatPackageDateTime(value: string | null | undefined): string 
     minute: "2-digit",
     hour12: false,
   });
-}
-
-/** Same as `formatPackageDateTime`, with an explicit `SGT` suffix. */
-export function formatPackageDateTimeSgt(value: string | null | undefined): string {
-  const formatted = formatPackageDateTime(value);
   if (!value || formatted === "—") return "—";
   return formatted.endsWith(" SGT") ? formatted : `${formatted} SGT`;
 }
 
+/** Alias — all datetimes are SGT. */
+export function formatPackageDateTimeSgt(value: string | null | undefined): string {
+  return formatPackageDateTime(value);
+}
+
 export function formatPackageTime(value: string | null | undefined): string {
-  return formatWithSgt(value, {
+  const formatted = formatWithSgt(value, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
+  if (!value || formatted === "—") return "—";
+  return formatted.endsWith(" SGT") ? formatted : `${formatted} SGT`;
 }
 
 /** Format a stored datetime for `<input type="datetime-local">` in Singapore time. */
@@ -107,15 +180,13 @@ export function toDatetimeLocalValue(value: string | null | undefined): string {
   const date = toValidDate(value);
   if (!date) return "";
 
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SGT_TIME_ZONE,
+  const parts = sgtParts(date, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
+  });
 
   const hourRaw = getPart(parts, "hour");
   const hour = hourRaw === "24" ? "00" : hourRaw.padStart(2, "0");

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import { z } from "zod";
 import { getAdminSettings, updateAdminSettings } from "../../src/lib/settings-repository";
 import type { UpdateAdminSettingsInput } from "../../src/lib/settings-types";
@@ -23,7 +24,12 @@ const updateAdminSettingsSchema = z.object({
   support_email: z.string().trim().email("A valid support email is required").max(190),
   support_phone: z.string().trim().min(1, "Support phone is required").max(60),
   office_address: z.string().trim().max(300).default(""),
-  timezone: z.string().trim().min(1, "Timezone is required").max(80),
+  timezone: z
+    .string()
+    .trim()
+    .max(80)
+    .optional()
+    .transform(() => "Asia/Singapore"),
   homepage_title: z.string().trim().min(1, "Homepage title is required").max(190),
   homepage_description: z.string().trim().max(600).default(""),
   maintenance_mode: z.boolean().default(false),
@@ -41,7 +47,7 @@ export const registerSettingsRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load settings",
+        error: getSafeErrorMessage(error, "Failed to load settings"),
       });
     }
   });
@@ -64,7 +70,7 @@ export const registerSettingsRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to update settings",
+        error: getSafeErrorMessage(error, "Failed to update settings"),
       });
     }
   });

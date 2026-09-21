@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import { deleteSupplier } from "@/lib/supplier-api";

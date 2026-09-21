@@ -1,3 +1,5 @@
+import { nowIsoSgt } from "./format-date";
+
 export type PromotionDiscountType = "percentage" | "fixed_amount";
 export type PromotionStatus = "active" | "inactive";
 
@@ -28,6 +30,8 @@ export const DISCOUNT_TYPE_OPTIONS: { value: PromotionDiscountType; label: strin
   { value: "fixed_amount", label: "Fixed Amount" },
 ];
 
+const SAMPLE_NOW = nowIsoSgt();
+
 export const SAMPLE_PROMOTIONS: PromotionRecord[] = [
   {
     id: 1,
@@ -38,7 +42,7 @@ export const SAMPLE_PROMOTIONS: PromotionRecord[] = [
     value: 15,
     package_keys: ["wizard:1"],
     status: "active",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: SAMPLE_NOW,
+    updated_at: SAMPLE_NOW,
   },
 ];

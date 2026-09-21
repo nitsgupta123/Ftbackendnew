@@ -128,7 +128,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "settings",
     label: "Settings",
-    description: "General site configuration",
+    description: "Panel configuration and access",
     icon: "Settings",
     group: "panel",
     sortOrder: 80,
@@ -281,7 +281,7 @@ export const ACCESS_MODULE_BY_KEY: Record<string, AccessModuleDefinition> =
 /** Map primary nav hrefs to permission module keys. */
 export const NAV_HREF_MODULE: Record<string, string> = {
   "/": "dashboard",
-  "/settings/general": "settings",
+  "/settings/user-management": "users",
   "/settings/role-management": "roles",
   "/settings/roles": "roles",
   "/user-management": "users",

@@ -1,5 +1,3 @@
-"use client";
-
 import {
   forwardRef,
   useCallback,
@@ -8,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Link } from "react-router-dom";
 import { Icon } from "@/components/ui/icons";
 import { useAuth } from "@/components/auth/AuthProvider";
 import UserStatsGrid from "@/components/users/UserStatsGrid";
@@ -357,9 +356,18 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       {!canManage && <div className="mb-4 px-4 py-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-100 text-sm">
           You have read-only access. Only Super Admins can create or edit users.
         </div>}
-      {canManage && <div className="mb-4 px-4 py-3 rounded-lg bg-[#FFF9EB] text-[#7A6226] border border-[#F2E3B8] text-sm">
-          Roles from Role Management appear automatically when adding or editing users.
-        </div>}
+      {canManage && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-[#FFF9EB] text-[#7A6226] border border-[#F2E3B8] text-sm">
+          Roles from{" "}
+          <Link
+            to="/settings/role-management"
+            className="font-medium underline underline-offset-2 hover:text-[#1F2A44]"
+          >
+            Role Management
+          </Link>{" "}
+          appear automatically when adding or editing users.
+        </div>
+      )}
 
       <UserListTable
         users={users}

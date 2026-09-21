@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
+
 import { Icon } from "@/components/ui/icons";
 import type { StatCardData } from "@/lib/dashboard-data";
 
@@ -16,7 +17,7 @@ export default function StatCard({
 
   return (
     <Link
-      href={href}
+      to={href}
       className="block w-full min-h-[120px] rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-all hover:shadow-md hover:border-[#B48A2C]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B48A2C]/40 sm:min-h-[140px] sm:p-5"
     >
       <div className="flex items-start justify-between gap-3">

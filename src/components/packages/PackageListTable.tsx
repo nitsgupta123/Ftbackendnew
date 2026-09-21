@@ -1,7 +1,6 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useState } from "react";
-import Link from "next/link";
+
 import { Icon } from "@/components/ui/icons";
 import PackageDetailsModal from "@/components/packages/PackageDetailsModal";
 import {
@@ -136,7 +135,7 @@ function PackageRowActions({
 
   return (
     <div className="flex items-center gap-2">
-      <Link href={editHref} className={actionIconClass} title="Edit">
+      <Link to={editHref} className={actionIconClass} title="Edit">
         <Icon name="Pencil" size={16} />
       </Link>
       <Button
@@ -190,7 +189,7 @@ export default function PackageListTable({
       <div className="bg-white rounded-xl border border-[#E5E7EB] p-8 text-center">
         <p className="text-sm text-gray-500">{emptyMessage}</p>
         <Link
-          href="/add-package"
+          to="/add-package"
           className="inline-flex mt-4 h-10 px-5 items-center text-sm font-medium text-white bg-[#B48A2C] rounded-lg hover:bg-[#B48A2C]/90">
           
           Add New Package
@@ -210,7 +209,7 @@ export default function PackageListTable({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 border-b border-[#EEF2F7]">
           <h3 className="text-base font-semibold text-[#111827]">Recent Packages</h3>
           <Link
-              href="/packages/all"
+              to="/packages/all"
               className="text-xs font-medium text-[#B48A2C] hover:underline">
               
             View all packages
@@ -232,8 +231,8 @@ export default function PackageListTable({
               {packages.slice(0, 5).map((pkg) => {
                   const statusText = pkg.status.replaceAll("_", " ");
                   const destination =
-                  pkg.package_basics?.countriesCovered ||
                   pkg.package_basics?.citiesOrRegions ||
+                  pkg.package_basics?.countriesCovered ||
                   "International";
                   const editHref = getPackageEditHref(pkg);
 
@@ -275,11 +274,11 @@ export default function PackageListTable({
                     </TableCell>
                     <TableCell className="px-3 py-3">
                       <div className="flex items-center gap-2 text-[#6B7280]">
-                        <Link href={editHref} className="hover:text-[#111827]" title="Open">
+                        <Link to={editHref} className="hover:text-[#111827]" title="Open">
                           <Icon name="EyeIcon" size={14} />
                         </Link>
                         {isWizardPackage(pkg) &&
-                          <Link href={editHref} className="hover:text-[#111827]" title="Edit">
+                          <Link to={editHref} className="hover:text-[#111827]" title="Edit">
                             <Icon name="FileText" size={14} />
                           </Link>
                           }
@@ -378,7 +377,7 @@ export default function PackageListTable({
                         onPackageUpdated={onPackageUpdated} /> :
 
 
-                      <Link href={editHref} className={actionLinkClass}>
+                      <Link to={editHref} className={actionLinkClass}>
                         {wizard ? "Edit" : "View"}
                       </Link>
                       }

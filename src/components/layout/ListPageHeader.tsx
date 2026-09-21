@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Icon } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 
@@ -45,7 +43,7 @@ export default function ListPageHeader({
     <div className="mb-6">
       {back && (
         <Link
-          href={back.href}
+          to={back.href}
           className="mb-3 flex w-fit items-center gap-1.5 text-sm text-gray-400 transition-colors hover:text-gray-600"
         >
           <Icon name="ArrowLeft" size={16} />
@@ -72,7 +70,7 @@ export default function ListPageHeader({
           </div>
 
           {action?.href ? (
-            <Link href={action.href} className={headerActionClassName}>
+            <Link to={action.href} className={headerActionClassName}>
               <Icon name={actionIcon} size={16} />
               {action.label}
             </Link>

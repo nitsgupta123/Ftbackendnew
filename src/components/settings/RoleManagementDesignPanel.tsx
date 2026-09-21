@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useImperativeHandle, useMemo, useState, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
@@ -25,7 +23,7 @@ import {
 } from "@/lib/role-catalog";
 import { getUserStats, listUsers, updateUser } from "@/lib/user-api";
 import { formatRoleLabel } from "@/lib/user-types";
-import { formatPackageDateTime } from "@/lib/format-date";
+import { formatPackageDateTime, nowIsoSgt } from "@/lib/format-date";
 import type { ManageableUser, RoleMeta } from "@/components/settings/access-control/types";
 import { useAuth } from "@/components/auth/AuthProvider";
 
@@ -33,6 +31,10 @@ const GOLD = "#A68231";
 const PROTECTED_ROLES = new Set(["admin", "owner", "super_admin"]);
 const LOCAL_STORAGE_ROLE_META = "ftadmin-role-meta-v1";
 const ACTOR_ROLE_LABEL = "Super Admin";
+
+function nowIso(): string {
+  return nowIsoSgt();
+}
 
 function readLocalStorageJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -43,10 +45,6 @@ function readLocalStorageJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-function nowIso(): string {
-  return new Date().toISOString();
 }
 
 function formatSingaporeDateTime(value?: string): string {

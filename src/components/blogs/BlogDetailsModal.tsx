@@ -1,13 +1,12 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import Image from "next/image";
+
 import { Icon } from "@/components/ui/icons";
 import { formatBlogStatusLabel, type BlogPostRecord } from "@/lib/blog-types";
 import { listPackages } from "@/lib/package-api";
 import { formatPackageDateTime, formatPackageDateTimeSgt } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+
 
 interface BlogDetailsModalProps {
   post: BlogPostRecord | null;
@@ -55,7 +54,7 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
           <h2 className="text-lg font-bold text-gray-900 pr-4">{post.title}</h2>
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href={`/blogs/edit/${post.id}`}
+              to={`/blogs/edit/${post.id}`}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm text-[#B48A2C] hover:bg-gray-50"
             >
               <Icon name="Pencil" size={14} />
@@ -73,12 +72,11 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
 
         <div className="p-6 space-y-5">
           {post.featured_image_path && (
-            <Image
+            <img
               src={post.featured_image_path}
               alt={post.title}
               width={768}
               height={240}
-              unoptimized
               className="w-full h-48 object-cover rounded-xl border border-[#E5E7EB]"
             />
           )}

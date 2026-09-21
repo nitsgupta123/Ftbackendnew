@@ -4,9 +4,9 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: fz
-      MYSQL_USER: fz
-      MYSQL_PASSWORD: fz
+      MYSQL_DATABASE: fayyaz_new
+      MYSQL_USER: fayyaz
+      MYSQL_PASSWORD: fayyaz
     ports:
       - "3306:3306"
     volumes:
@@ -26,14 +26,15 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "3306"
-      DB_USER: fz
-      DB_PASSWORD: fz
-      DB_NAME: fz
+      DB_USER: fayyaz
+      DB_PASSWORD: fayyaz
+      DB_NAME: fayyaz_new
       API_PORT: "4000"
       API_HOST: "0.0.0.0"
-      CORS_ORIGIN: "http://localhost:3000,http://127.0.0.1:3000"
+      CORS_ORIGIN: "http://localhost:4000,http://127.0.0.1:4000"
+      ADMIN_PANEL_URL: "http://localhost:4000/panel"
+      ALLOW_PUBLIC_SIGNUP: "true"
     ports:
-      - "3000:3000"
       - "4000:4000"
     volumes:
       - uploads:/app/uploads

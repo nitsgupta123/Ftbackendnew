@@ -1,8 +1,7 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
-import Image from "next/image";
+
+
 import { Icon } from "@/components/ui/icons";
 import { getPackageEditHref, getPackage, isWizardPackage } from "@/lib/package-api";
 import {
@@ -59,12 +58,11 @@ function DetailField({ label, value }: {label: string;value: unknown;}) {
       <div>
         <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</dt>
         <dd className="mt-2">
-          <Image
+          <img
             src={value}
             alt={label}
             width={320}
             height={128}
-            unoptimized
             className="max-h-32 rounded-lg border border-[#E5E7EB] object-cover" />
           
           <p className="mt-1 text-xs text-gray-400 break-all">{value}</p>
@@ -407,7 +405,7 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
               Open PDF
             </Button>
             <Link
-              href={editHref}
+              to={editHref}
               className="inline-flex h-9 items-center px-3 text-sm font-medium text-[#B48A2C] border border-[#B48A2C]/30 rounded-lg hover:bg-[#B48A2C]/5">
               
               Edit package
@@ -511,11 +509,11 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
                           isEmpty ? "text-gray-400" : "text-emerald-600"
                         }`}
                       >
-                        {isEmpty ? "Not filled" : "Filled"}
+                        {isEmpty ? "Noted" : "Filled"}
                       </span>
                       {isWizardPackage(details) ? (
                         <Link
-                          href={getPackageEditHref(details, section.step)}
+                          to={getPackageEditHref(details, section.step)}
                           className="inline-flex size-7 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-[#B48A2C] hover:bg-[#B48A2C]/5 hover:border-[#B48A2C]/40 transition-colors"
                           title={`Edit ${section.title}`}
                           aria-label={`Edit ${section.title}`}

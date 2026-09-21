@@ -1,5 +1,3 @@
-"use client";
-
 import {
   createContext,
   useCallback,
@@ -59,7 +57,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const can = useCallback(
     (moduleKey: string, action: PermissionAction = "view") => {
       if (!user) return false;
-      if (user.role === "super_admin" && !permissions.length) return true;
+      if (user.role === "super_admin") return true;
       return hasModulePermission(permissions, moduleKey, action);
     },
     [permissions, user]

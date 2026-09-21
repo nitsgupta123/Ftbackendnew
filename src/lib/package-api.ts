@@ -8,7 +8,7 @@ import { AUDIT_USER_HEADER } from "./audit-context";
 import { getStoredToken, getStoredUser } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 function apiUrl(path: string) {
   return `${API_BASE}${path}`;

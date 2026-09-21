@@ -1,10 +1,8 @@
-"use client";
-
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -28,6 +26,8 @@ import type {
   SignupResult,
 } from "@/lib/auth-types";
 
+const SESSION_CHECK_TIMEOUT_MS = 8_000;
+
 interface AuthContextValue {
   user: AdminUser | null;
   token: string | null;
@@ -41,6 +41,18 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
+function isUnauthorizedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /unauthorized|invalid token|jwt|401/i.test(message);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -67,13 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { user: currentUser } = await fetchCurrentUser();
-    setStoredAuth(storedToken, currentUser);
-    setToken(storedToken);
-    setUser(currentUser);
-  }, [clearSession]);
+    applySession(storedToken, currentUser);
+  }, [applySession, clearSession]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), SESSION_CHECK_TIMEOUT_MS);
 
     async function bootstrap() {
       const storedToken = getStoredToken();
@@ -81,37 +93,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!storedToken) {
         if (!cancelled) {
+          clearSession();
           setIsLoading(false);
         }
         return;
       }
 
-      setToken(storedToken);
-      if (cachedUser) {
-        setUser(cachedUser);
-      }
-
-      try {
-        await refreshUser();
-      } catch {
-        clearSession();
-      } finally {
-        if (!cancelled) {
+      // Restore cached session before paint so RouteGuard does not stick.
+      if (!cancelled) {
+        setToken(storedToken);
+        if (cachedUser) {
+          setUser(cachedUser);
           setIsLoading(false);
         }
       }
+
+      try {
+        const { user: currentUser } = await fetchCurrentUser(controller.signal);
+        if (cancelled) return;
+        applySession(storedToken, currentUser);
+      } catch (error) {
+        if (cancelled || isAbortError(error)) {
+          return;
+        }
+        if (isUnauthorizedError(error)) {
+          clearSession();
+        }
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (!cancelled) setIsLoading(false);
+      }
     }
 
-    bootstrap();
+    void bootstrap();
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
-  }, [clearSession, refreshUser]);
+  }, [applySession, clearSession]);
 
   const login = useCallback(
     async (input: LoginInput) => {
       const result = await loginRequest(input);
       applySession(result.token, result.user);
+      setIsLoading(false);
     },
     [applySession]
   );
@@ -121,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await signupRequest(input);
       if (result.status === "authenticated") {
         applySession(result.token, result.user);
+        setIsLoading(false);
       }
       return result;
     },
@@ -131,12 +158,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (verificationToken: string) => {
       const result = await verifyEmailRequest(verificationToken);
       applySession(result.token, result.user);
+      setIsLoading(false);
     },
     [applySession]
   );
 
   const logout = useCallback(() => {
     clearSession();
+    setIsLoading(false);
   }, [clearSession]);
 
   const value = useMemo<AuthContextValue>(

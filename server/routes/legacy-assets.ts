@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 
 const MIME_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -9,7 +10,6 @@ const MIME_TYPES: Record<string, string> = {
   ".gif": "image/gif",
   ".webp": "image/webp",
   ".avif": "image/avif",
-  ".svg": "image/svg+xml",
 };
 
 function getLegacyAssetBaseUrl() {
@@ -25,10 +25,35 @@ function normalizeAssetPath(assetPath: string) {
   return decodeURIComponent(assetPath).replace(/^\/+/, "");
 }
 
+function isPathInside(root: string, candidate: string): boolean {
+  const rootResolved = path.resolve(root);
+  const absolutePath = path.resolve(candidate);
+  const rootWithSep = rootResolved.endsWith(path.sep)
+    ? rootResolved
+    : `${rootResolved}${path.sep}`;
+  return absolutePath === rootResolved || absolutePath.startsWith(rootWithSep);
+}
+
 function buildRemoteAssetUrl(assetPath: string) {
   const normalized = normalizeAssetPath(assetPath);
   const segments = normalized.split("/").map((segment) => encodeURIComponent(segment));
   return new URL(segments.join("/"), getLegacyAssetBaseUrl()).toString();
+}
+
+function isAllowedRemoteUrl(urlString: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return false;
+  }
+
+  const allowed = new URL(getLegacyAssetBaseUrl());
+  return parsed.hostname.toLowerCase() === allowed.hostname.toLowerCase();
 }
 
 async function readLocalAsset(assetPath: string) {
@@ -36,10 +61,12 @@ async function readLocalAsset(assetPath: string) {
   if (!root) return null;
 
   const normalized = normalizeAssetPath(assetPath);
-  const absolutePath = path.resolve(root, normalized);
-  const rootResolved = path.resolve(root);
+  if (!normalized || normalized.includes("\0") || normalized.split(/[/\\]/).includes("..")) {
+    return null;
+  }
 
-  if (!absolutePath.startsWith(rootResolved)) {
+  const absolutePath = path.resolve(root, normalized);
+  if (!isPathInside(root, absolutePath)) {
     return null;
   }
 
@@ -56,11 +83,16 @@ async function readLocalAsset(assetPath: string) {
 }
 
 async function fetchRemoteAsset(sourceUrl: string) {
+  if (!isAllowedRemoteUrl(sourceUrl)) {
+    return null;
+  }
+
   const response = await fetch(sourceUrl, {
     headers: {
       Accept: "image/*,*/*",
       "User-Agent": "ftadmin/1.0",
     },
+    redirect: "error",
   });
 
   if (!response.ok) {
@@ -68,6 +100,10 @@ async function fetchRemoteAsset(sourceUrl: string) {
   }
 
   const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+  if (!contentType.startsWith("image/")) {
+    return null;
+  }
+
   const buffer = Buffer.from(await response.arrayBuffer());
 
   return { buffer, contentType };
@@ -91,11 +127,12 @@ export const registerLegacyAssetRoutes: FastifyPluginAsync = async (app) => {
       return reply
         .header("Content-Type", remote.contentType)
         .header("Cache-Control", "public, max-age=3600")
+        .header("X-Content-Type-Options", "nosniff")
         .send(remote.buffer);
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch legacy asset",
+        error: getSafeErrorMessage(error, "Failed to fetch legacy asset"),
       });
     }
   });
@@ -112,6 +149,7 @@ export const registerLegacyAssetRoutes: FastifyPluginAsync = async (app) => {
         return reply
           .header("Content-Type", local.contentType)
           .header("Cache-Control", "public, max-age=3600")
+          .header("X-Content-Type-Options", "nosniff")
           .send(local.buffer);
       }
 
@@ -124,11 +162,12 @@ export const registerLegacyAssetRoutes: FastifyPluginAsync = async (app) => {
       return reply
         .header("Content-Type", remote.contentType)
         .header("Cache-Control", "public, max-age=3600")
+        .header("X-Content-Type-Options", "nosniff")
         .send(remote.buffer);
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch legacy asset",
+        error: getSafeErrorMessage(error, "Failed to fetch legacy asset"),
       });
     }
   });

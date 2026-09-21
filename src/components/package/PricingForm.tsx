@@ -1,5 +1,3 @@
-"use client";
-
 import { useRef, useState } from "react";
 import { Icon } from "../ui/icons";
 import type {
@@ -807,7 +805,7 @@ export default function PricingForm({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm px-6 pt-6 pb-5">
         <div className="flex items-center gap-2.5 mb-2">
           <h2 className="text-lg font-semibold text-[#1F2A44]">Pricing</h2>

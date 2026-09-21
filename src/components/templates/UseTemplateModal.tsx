@@ -1,7 +1,6 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import Link from "next/link";
+
 import { Icon } from "@/components/ui/icons";
 import { applyPackageTemplate, listActiveTemplates } from "@/lib/package-template-api";
 import { TEMPLATE_STEP_OPTIONS } from "@/lib/package-template-types";
@@ -94,7 +93,7 @@ export default function UseTemplateModal({
             <div className="text-center py-8">
               <p className="text-sm text-gray-500">No active templates available.</p>
               <Link
-                href="/packages/templates"
+                to="/packages/templates"
                 className="inline-flex mt-3 text-sm font-medium text-[#B48A2C] hover:underline"
               >
                 Manage templates →
@@ -153,7 +152,7 @@ export default function UseTemplateModal({
 
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-[#E5E7EB] bg-gray-50/80">
           <Link
-            href="/packages/templates"
+            to="/packages/templates"
             className="text-sm text-[#B48A2C] hover:underline"
           >
             Manage templates

@@ -3,7 +3,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 config();
 import path from "node:path";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
@@ -25,12 +25,14 @@ import { registerSettingsRoutes } from "./routes/settings";
 import { registerMediaRoutes } from "./routes/media";
 import { registerPermissionRoutes } from "./routes/permissions";
 import { registerSupplierRoutes } from "./routes/suppliers";
-import { isDbConnectionError, verifyDbConnection } from "../src/lib/db";
+import { getDbConfig, isDbConnectionError, verifyDbConnection } from "../src/lib/db";
+import { getSafeErrorMessage } from "./lib/errors";
 import { startBlogPublishScheduler } from "./jobs/blog-publish-scheduler";
 
 const PORT = Number(process.env.API_PORT ?? 4000);
 const HOST = process.env.API_HOST ?? "0.0.0.0";
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
+const DIST_ROOT = path.join(process.cwd(), "dist");
 
 async function buildServer() {
   mkdirSync(UPLOAD_ROOT, { recursive: true });
@@ -41,11 +43,19 @@ async function buildServer() {
     },
   });
 
+  const defaultCorsOrigins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ];
+  const envCorsOrigins =
+    process.env.CORS_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? [];
+
   await app.register(cors, {
-    origin: process.env.CORS_ORIGIN?.split(",") ?? [
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-    ],
+    origin: [...new Set([...defaultCorsOrigins, ...envCorsOrigins])],
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   });
 
@@ -60,12 +70,21 @@ async function buildServer() {
     root: UPLOAD_ROOT,
     prefix: "/uploads/",
     decorateReply: false,
+    setHeaders: (reply) => {
+      reply.header("X-Content-Type-Options", "nosniff");
+      reply.header("X-Frame-Options", "DENY");
+      reply.header("Referrer-Policy", "no-referrer");
+      reply.header(
+        "X-Robots-Tag",
+        "noindex, nofollow, noarchive, nosnippet, noimageindex"
+      );
+    },
   });
 
   app.get("/health", async () => ({
     ok: true,
     service: "ftbackend",
-    database: process.env.DB_NAME ?? "fz",
+    database: getDbConfig().database,
   }));
 
   await registerAuthPlugin(app);
@@ -86,6 +105,58 @@ async function buildServer() {
   await app.register(registerSupplierRoutes, { prefix: "/api/suppliers" });
   await app.register(registerLegacyAssetRoutes, { prefix: "/api/legacy-assets" });
 
+  if (existsSync(DIST_ROOT)) {
+    await app.register(fastifyStatic, {
+      root: DIST_ROOT,
+      prefix: "/panel/",
+      decorateReply: false,
+      wildcard: false,
+      setHeaders: (reply) => {
+        reply.header(
+          "X-Robots-Tag",
+          "noindex, nofollow, noarchive, nosnippet, noimageindex"
+        );
+      },
+    });
+
+    const spaIndex = readFileSync(path.join(DIST_ROOT, "index.html"));
+
+    app.get("/", async (_request, reply) => reply.redirect("/panel/"));
+    app.get("/panel", async (_request, reply) => reply.redirect("/panel/"));
+
+    app.setNotFoundHandler(async (request, reply) => {
+      const url = request.url.split("?")[0] ?? "";
+      if (
+        url.startsWith("/api") ||
+        url.startsWith("/uploads") ||
+        url === "/health"
+      ) {
+        return reply.status(404).send({ error: "Not found" });
+      }
+      if (url === "/panel" || url.startsWith("/panel/")) {
+        return reply
+          .type("text/html")
+          .header(
+            "X-Robots-Tag",
+            "noindex, nofollow, noarchive, nosnippet, noimageindex"
+          )
+          .send(spaIndex);
+      }
+      return reply.redirect("/panel/");
+    });
+  }
+
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+    reply.header(
+      "X-Robots-Tag",
+      "noindex, nofollow, noarchive, nosnippet, noimageindex"
+    );
+    return payload;
+  });
+
   app.setErrorHandler((error, _request, reply) => {
     if (isDbConnectionError(error)) {
       return reply.status(503).send({
@@ -95,7 +166,7 @@ async function buildServer() {
 
     app.log.error(error);
     return reply.status(500).send({
-      error: error instanceof Error ? error.message : "Internal server error",
+      error: getSafeErrorMessage(error, "Internal server error"),
     });
   });
 

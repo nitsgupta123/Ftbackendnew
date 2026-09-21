@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Mark, mergeAttributes } from "@tiptap/core";

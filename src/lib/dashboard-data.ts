@@ -135,9 +135,16 @@ export const QUICK_ACTIONS: QuickActionItem[] = [
   {
     label: "User Management",
     icon: "Users",
-    href: "/user-management",
+    href: "/settings/user-management",
     iconBg: "bg-amber-50",
     iconColor: "text-amber-500",
+  },
+  {
+    label: "Role Management",
+    icon: "Shield",
+    href: "/settings/role-management",
+    iconBg: "bg-violet-50",
+    iconColor: "text-violet-500",
   },
   {
     label: "Package Categories",

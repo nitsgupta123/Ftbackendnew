@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -89,7 +87,7 @@ export default function SettingsGeneralPanel() {
         support_email: form.support_email.trim(),
         support_phone: form.support_phone.trim(),
         office_address: form.office_address.trim(),
-        timezone: form.timezone.trim(),
+        timezone: "Asia/Singapore",
         homepage_title: form.homepage_title.trim(),
         homepage_description: form.homepage_description.trim(),
         maintenance_mode: form.maintenance_mode,
@@ -217,12 +215,12 @@ export default function SettingsGeneralPanel() {
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Timezone</label>
           <Input
-            value={form.timezone}
-            onChange={(e) => updateField("timezone", e.target.value)}
+            value="SGT (Asia/Singapore)"
             className={fieldClass}
-            disabled={disabled}
-            placeholder="Asia/Singapore"
+            disabled
+            readOnly
           />
+          <p className="text-xs text-gray-500">All dates and times use Singapore Standard Time only.</p>
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Homepage Title</label>

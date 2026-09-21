@@ -1,5 +1,3 @@
-"use client";
-
 import { Icon } from "@/components/ui/icons";
 import type { PromotionRecord } from "@/lib/promotion-types";
 import { formatPackageDate } from "@/lib/format-date";

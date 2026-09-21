@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import { getDashboardOverview } from "../../src/lib/dashboard-repository";
 
 const VALID_CHART_DAYS = new Set([7, 30, 90]);
@@ -19,7 +20,7 @@ export const registerDashboardRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load dashboard",
+        error: getSafeErrorMessage(error, "Failed to load dashboard"),
       });
     }
   });

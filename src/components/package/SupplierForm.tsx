@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -188,7 +186,7 @@ export default function SupplierForm({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-4 animate-fade-in">
+      <div className="space-y-4">
         <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm">
           <form className="p-6">
             <div className="mb-5">

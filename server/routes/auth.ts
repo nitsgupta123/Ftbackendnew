@@ -1,12 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
-import bcrypt from "bcrypt";
 import {
   countAdminUsers,
+  countAllAdminUsers,
   createBootstrapAdminUser,
   createPendingSignupAdminUser,
   deletePendingSignupByEmail,
   findAdminByEmail,
   findAdminById,
+  passwordMatchesAdmin,
   refreshEmailVerificationToken,
   toAuthTokenPayload,
   touchAdminLastLogin,
@@ -30,9 +31,22 @@ const resendSchema = z.object({
   email: z.string().trim().email("Invalid email address"),
 });
 
+function isPublicSignupAllowed(existingUserCount: number): boolean {
+  if (existingUserCount === 0) return true;
+  return process.env.ALLOW_PUBLIC_SIGNUP === "true";
+}
+
 export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
   app.post("/signup", async (request, reply) => {
     try {
+      const existingCount = await countAllAdminUsers();
+      if (!isPublicSignupAllowed(existingCount)) {
+        return reply.status(403).send({
+          error:
+            "Public signup is disabled. Ask an administrator to create your account.",
+        });
+      }
+
       const parsed = signupSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({
@@ -51,7 +65,6 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
 
       const verifiedCount = await countAdminUsers();
 
-      // Bootstrap: first account is auto-verified so the system can be set up.
       if (verifiedCount === 0 && !existing) {
         const user = await createBootstrapAdminUser({ email, password, fullName });
         const token = await reply.jwtSign(toAuthTokenPayload(user));
@@ -186,7 +199,7 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
       const row = await findAdminByEmail(email.trim().toLowerCase());
 
       if (row && !Boolean(row.email_verified)) {
-        const passwordOk = await bcrypt.compare(password, row.password_hash);
+        const passwordOk = await passwordMatchesAdmin(row, password);
         if (passwordOk) {
           return reply.status(403).send({ error: VERIFY_EMAIL_FIRST });
         }

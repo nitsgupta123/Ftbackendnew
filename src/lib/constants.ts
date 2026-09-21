@@ -2,16 +2,6 @@ import { NavItem, Step } from "./types";
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", icon: "LayoutDashboard", href: "/" },
-  {
-    label: "Settings",
-    icon: "Settings",
-    children: [
-      { label: "General", href: "/settings/general" },
-      { label: "User Management", href: "/user-management" },
-      { label: "Role Management", href: "/settings/role-management" },
-      { label: "Access Control", href: "/settings/roles" },
-    ],
-  },
   { label: "Blogs Management", icon: "FileText", href: "/blogs/all", children: [
       { label: "All Posts", href: "/blogs/all" },
       { label: "Write New Blog", href: "/blogs/new" },
@@ -55,6 +45,16 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Suppliers", icon: "Users", href: "/suppliers" },
   { label: "Promotions", icon: "Percent", href: "/promotions" },
   { label: "Enquiry", icon: "MessageSquare", href: "/enquiry" },
+  {
+    label: "Settings",
+    icon: "Settings",
+    children: [
+      { label: "User Management", href: "/settings/user-management" },
+      { label: "Role Management", href: "/settings/role-management" },
+      { label: "Access Control", href: "/settings/roles" },
+    ],
+  },
+  { label: "Help Desk", icon: "HelpCircle", href: "/help" },
 ];
 
 export const STEPS: Step[] = [

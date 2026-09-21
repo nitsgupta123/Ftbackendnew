@@ -1,5 +1,3 @@
-"use client";
-
 import { Icon } from "../ui/icons";
 import { STEPS } from "@/lib/constants";
 
@@ -30,7 +28,7 @@ export default function Stepper({
               <div
                 className={`
                   w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0
-                  border-2 transition-colors duration-300
+                  border-2
                   ${
                     locked
                       ? "bg-gray-100 border-[#D1D5DB]"
@@ -81,7 +79,6 @@ export default function Stepper({
                 }}
                 className={`
                   flex items-start justify-between rounded-[10px] px-3 py-2
-                  transition-all duration-200
                   ${
                     locked
                       ? "cursor-not-allowed"

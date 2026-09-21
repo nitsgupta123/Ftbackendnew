@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "../ui/icons";
@@ -18,6 +16,7 @@ import {
 } from "./step-form-props";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { nowIsoSgt } from "@/lib/format-date";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
@@ -192,7 +191,7 @@ export default function SalesAdsAssetsForm({
     setSalesCardPrice(price);
     setSalesCardCta(cta);
     setSalesCardImage(imagePath);
-    setSalesCardGeneratedAt(new Date().toISOString());
+    setSalesCardGeneratedAt(nowIsoSgt());
     toast.success("Sales card generated from package title, image, price and CTA");
   };
 
@@ -234,7 +233,7 @@ export default function SalesAdsAssetsForm({
   });
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-6 space-y-6">
         <div>
           <h2 className="text-lg font-bold text-[#1F2A44]">Sales & Ads Assets</h2>

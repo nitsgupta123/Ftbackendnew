@@ -1,6 +1,8 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { PackageAuditContext } from "./audit-context";
-import { query } from "./db";
+import { query, sqlLimit, sqlOffset } from "./db";
+import { toIsoSgtOrNow } from "./format-date";
+import { LEGACY_TABLES } from "./legacy-tables";
 import { slugify, uniqueSlug } from "./slug";
 import type {
   CreateBlogCategoryInput,
@@ -10,43 +12,65 @@ import type {
   UpdateBlogCategoryInput,
 } from "./blog-category-types";
 
-const CATEGORIES_TABLE = "blog_categories";
-const POSTS_TABLE = "blog_posts";
+const CATEGORIES_TABLE = LEGACY_TABLES.categories;
+const POSTS_TABLE = LEGACY_TABLES.posts;
+const ARTICLE_CAT_TYPE = "article";
+
+function statusToInt(status: string | undefined): number {
+  return status === "inactive" ? 2 : 1;
+}
+
+function statusFromInt(value: unknown): "active" | "inactive" {
+  return Number(value) === 1 ? "active" : "inactive";
+}
+
+function toIso(value: unknown): string {
+  return toIsoSgtOrNow(
+    value instanceof Date || typeof value === "string" ? value : value != null ? String(value) : null
+  );
+}
 
 function parseCategoryRow(row: RowDataPacket): BlogCategoryRecord {
   return {
     id: Number(row.id),
-    name: row.name,
-    slug: row.slug,
-    description: row.description ?? null,
-    display_order: Number(row.display_order),
-    status: row.status,
-    seo_meta_title: row.seo_meta_title ?? null,
-    seo_meta_description: row.seo_meta_description ?? null,
-    created_by: row.created_by ?? null,
-    updated_by: row.updated_by ?? null,
-    created_at:
-      row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    updated_at:
-      row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    name: String(row.cat_title ?? ""),
+    slug: String(row.cat_slug ?? ""),
+    description: row.cat_content ?? null,
+    display_order: Number(row.id),
+    status: statusFromInt(row.status),
+    seo_meta_title: row.meta_title ?? null,
+    seo_meta_description: row.meta_discription ?? null,
+    created_by: null,
+    updated_by: null,
+    created_at: toIso(row.insert_date),
+    updated_at: toIso(row.edit_date ?? row.insert_date),
     total_posts: row.total_posts !== undefined ? Number(row.total_posts) : undefined,
   };
 }
 
 async function listExistingSlugs(excludeId?: number): Promise<string[]> {
   const sql = excludeId
-    ? `SELECT slug FROM ${CATEGORIES_TABLE} WHERE id != ?`
-    : `SELECT slug FROM ${CATEGORIES_TABLE}`;
+    ? `SELECT cat_slug AS slug FROM ${CATEGORIES_TABLE} WHERE id != ?`
+    : `SELECT cat_slug AS slug FROM ${CATEGORIES_TABLE}`;
   const params = excludeId ? [excludeId] : [];
   const rows = await query<RowDataPacket[]>(sql, params);
-  return rows.map((r) => r.slug as string);
+  return rows.map((r) => String(r.slug));
 }
 
 async function isNameTaken(name: string, excludeId?: number): Promise<boolean> {
   const sql = excludeId
-    ? `SELECT id FROM ${CATEGORIES_TABLE} WHERE LOWER(name) = LOWER(?) AND id != ? LIMIT 1`
-    : `SELECT id FROM ${CATEGORIES_TABLE} WHERE LOWER(name) = LOWER(?) LIMIT 1`;
+    ? `SELECT id FROM ${CATEGORIES_TABLE} WHERE LOWER(cat_title) = LOWER(?) AND id != ? LIMIT 1`
+    : `SELECT id FROM ${CATEGORIES_TABLE} WHERE LOWER(cat_title) = LOWER(?) LIMIT 1`;
   const params = excludeId ? [name, excludeId] : [name];
+  const rows = await query<RowDataPacket[]>(sql, params);
+  return rows.length > 0;
+}
+
+async function isSlugTaken(slug: string, excludeId?: number): Promise<boolean> {
+  const sql = excludeId
+    ? `SELECT id FROM ${CATEGORIES_TABLE} WHERE cat_slug = ? AND id != ? LIMIT 1`
+    : `SELECT id FROM ${CATEGORIES_TABLE} WHERE cat_slug = ? LIMIT 1`;
+  const params = excludeId ? [slug, excludeId] : [slug];
   const rows = await query<RowDataPacket[]>(sql, params);
   return rows.length > 0;
 }
@@ -57,15 +81,9 @@ export async function resolveBlogCategorySlug(
   excludeId?: number
 ): Promise<string> {
   const base = requestedSlug?.trim() ? slugify(requestedSlug) : slugify(name);
-  if (!base) {
-    throw new Error("Unable to generate a valid slug");
-  }
-
-  const existing = await listExistingSlugs(excludeId);
-  if (!existing.includes(base)) {
-    return base;
-  }
-  return uniqueSlug(base, existing);
+  if (!base) throw new Error("Unable to generate a valid slug");
+  if (!(await isSlugTaken(base, excludeId))) return base;
+  return uniqueSlug(base, await listExistingSlugs(excludeId));
 }
 
 export async function listBlogCategories(
@@ -81,22 +99,19 @@ export async function listBlogCategories(
     activeOnly = false,
   } = params;
 
-  const conditions: string[] = [];
-  const values: (string | number)[] = [];
+  const conditions: string[] = ["c.cat_type = ?"];
+  const values: (string | number)[] = [ARTICLE_CAT_TYPE];
 
-  if (activeOnly || status === "active") {
-    conditions.push("c.status = 'active'");
-  } else if (status === "inactive") {
-    conditions.push("c.status = 'inactive'");
-  }
+  if (activeOnly || status === "active") conditions.push("c.status = 1");
+  else if (status === "inactive") conditions.push("c.status = 2");
 
   if (search?.trim()) {
-    conditions.push("c.name LIKE ?");
+    conditions.push("c.cat_title LIKE ?");
     values.push(`%${search.trim()}%`);
   }
 
-  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const sortColumn = sort === "created_at" ? "c.created_at" : "c.display_order";
+  const whereClause = `WHERE ${conditions.join(" AND ")}`;
+  const sortColumn = sort === "created_at" ? "c.insert_date" : "c.id";
   const sortOrder = order === "desc" ? "DESC" : "ASC";
 
   const countRows = await query<RowDataPacket[]>(
@@ -104,19 +119,19 @@ export async function listBlogCategories(
     values
   );
   const total = Number(countRows[0]?.total ?? 0);
-
-  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  const safeLimit = sqlLimit(limit);
   const safePage = Math.max(page, 1);
-  const offset = (safePage - 1) * safeLimit;
+  const offset = sqlOffset((safePage - 1) * safeLimit);
 
   const rows = await query<RowDataPacket[]>(
     `SELECT c.*,
-      (SELECT COUNT(*) FROM ${POSTS_TABLE} p WHERE p.category_id = c.id) AS total_posts
+      (SELECT COUNT(*) FROM ${POSTS_TABLE} p
+        WHERE p.post_cat = c.id AND p.post_type = 'article') AS total_posts
      FROM ${CATEGORIES_TABLE} c
      ${whereClause}
-     ORDER BY ${sortColumn} ${sortOrder}, c.name ASC
-     LIMIT ? OFFSET ?`,
-    [...values, safeLimit, offset]
+     ORDER BY ${sortColumn} ${sortOrder}, c.cat_title ASC
+     LIMIT ${safeLimit} OFFSET ${offset}`,
+    values
   );
 
   return {
@@ -131,10 +146,10 @@ export async function listBlogCategories(
 export async function getBlogCategoryById(id: number): Promise<BlogCategoryRecord | null> {
   const rows = await query<RowDataPacket[]>(
     `SELECT c.*,
-      (SELECT COUNT(*) FROM ${POSTS_TABLE} p WHERE p.category_id = c.id) AS total_posts
+      (SELECT COUNT(*) FROM ${POSTS_TABLE} p
+        WHERE p.post_cat = c.id AND p.post_type = 'article') AS total_posts
      FROM ${CATEGORIES_TABLE} c
-     WHERE c.id = ?
-     LIMIT 1`,
+     WHERE c.id = ? LIMIT 1`,
     [id]
   );
   if (!rows.length) return null;
@@ -143,109 +158,73 @@ export async function getBlogCategoryById(id: number): Promise<BlogCategoryRecor
 
 export async function createBlogCategory(
   input: CreateBlogCategoryInput,
-  audit?: PackageAuditContext
+  _audit?: PackageAuditContext
 ): Promise<BlogCategoryRecord> {
   const name = input.name.trim();
-  if (!name) {
-    throw new Error("Category name is required");
-  }
-
-  if (await isNameTaken(name)) {
-    throw new Error("A category with this name already exists");
-  }
-
+  if (!name) throw new Error("Category name is required");
+  if (await isNameTaken(name)) throw new Error("A category with this name already exists");
   const slug = await resolveBlogCategorySlug(name, input.slug);
-  const auditUser = audit?.user ?? null;
 
   const result = await query<ResultSetHeader>(
     `INSERT INTO ${CATEGORIES_TABLE} (
-      name, slug, description, display_order, status,
-      seo_meta_title, seo_meta_description, created_by, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      cat_title, cat_slug, cat_content, cat_img, cat_parent,
+      meta_title, meta_keyword, meta_discription, cat_type,
+      insert_date, edit_date, status, user_id
+    ) VALUES (?, ?, ?, NULL, 0, ?, '', ?, ?, NOW(), NOW(), ?, 0)`,
     [
       name,
       slug,
       input.description?.trim() || null,
-      input.display_order ?? 0,
-      input.status ?? "active",
       input.seo_meta_title?.trim() || null,
       input.seo_meta_description?.trim() || null,
-      auditUser,
-      auditUser,
+      ARTICLE_CAT_TYPE,
+      statusToInt(input.status),
     ]
   );
 
   const created = await getBlogCategoryById(result.insertId);
-  if (!created) {
-    throw new Error("Failed to load category after create");
-  }
+  if (!created) throw new Error("Failed to load category after create");
   return created;
 }
 
 export async function updateBlogCategory(
   id: number,
   input: UpdateBlogCategoryInput,
-  audit?: PackageAuditContext
+  _audit?: PackageAuditContext
 ): Promise<BlogCategoryRecord | null> {
   const existing = await getBlogCategoryById(id);
   if (!existing) return null;
 
-  const fields: string[] = [];
-  const values: (string | number | null)[] = [];
+  const name = input.name !== undefined ? input.name.trim() : existing.name;
+  if (!name) throw new Error("Category name is required");
+  if (input.name !== undefined && (await isNameTaken(name, id))) {
+    throw new Error("A category with this name already exists");
+  }
+  const slug = await resolveBlogCategorySlug(name, input.slug ?? existing.slug, id);
 
-  if (input.name !== undefined) {
-    const name = input.name.trim();
-    if (!name) {
-      throw new Error("Category name is required");
-    }
-    if (await isNameTaken(name, id)) {
-      throw new Error("A category with this name already exists");
-    }
-    fields.push("name = ?");
-    values.push(name);
-  }
-
-  if (input.slug !== undefined || input.name !== undefined) {
-    const nameForSlug = input.name?.trim() ?? existing.name;
-    const slug = await resolveBlogCategorySlug(nameForSlug, input.slug ?? existing.slug, id);
-    fields.push("slug = ?");
-    values.push(slug);
-  }
-
-  if (input.description !== undefined) {
-    fields.push("description = ?");
-    values.push(input.description?.trim() || null);
-  }
-  if (input.display_order !== undefined) {
-    fields.push("display_order = ?");
-    values.push(input.display_order);
-  }
-  if (input.status !== undefined) {
-    fields.push("status = ?");
-    values.push(input.status);
-  }
-  if (input.seo_meta_title !== undefined) {
-    fields.push("seo_meta_title = ?");
-    values.push(input.seo_meta_title?.trim() || null);
-  }
-  if (input.seo_meta_description !== undefined) {
-    fields.push("seo_meta_description = ?");
-    values.push(input.seo_meta_description?.trim() || null);
-  }
-
-  if (!fields.length) {
-    return existing;
-  }
-
-  if (audit?.user) {
-    fields.push("updated_by = ?");
-    values.push(audit.user);
-  }
-
-  values.push(id);
   await query<ResultSetHeader>(
-    `UPDATE ${CATEGORIES_TABLE} SET ${fields.join(", ")} WHERE id = ?`,
-    values
+    `UPDATE ${CATEGORIES_TABLE} SET
+      cat_title = ?,
+      cat_slug = ?,
+      cat_content = ?,
+      meta_title = ?,
+      meta_discription = ?,
+      status = ?,
+      edit_date = NOW()
+     WHERE id = ?`,
+    [
+      name,
+      slug,
+      input.description !== undefined ? input.description?.trim() || null : existing.description,
+      input.seo_meta_title !== undefined
+        ? input.seo_meta_title?.trim() || null
+        : existing.seo_meta_title,
+      input.seo_meta_description !== undefined
+        ? input.seo_meta_description?.trim() || null
+        : existing.seo_meta_description,
+      input.status !== undefined ? statusToInt(input.status) : statusToInt(existing.status),
+      id,
+    ]
   );
 
   return getBlogCategoryById(id);
@@ -253,7 +232,7 @@ export async function updateBlogCategory(
 
 export async function deleteBlogCategory(id: number): Promise<boolean> {
   const result = await query<ResultSetHeader>(
-    `DELETE FROM ${CATEGORIES_TABLE} WHERE id = ?`,
+    `UPDATE ${CATEGORIES_TABLE} SET status = 2, edit_date = NOW() WHERE id = ?`,
     [id]
   );
   return result.affectedRows > 0;
@@ -263,13 +242,14 @@ export async function listActiveBlogCategoryOptions(): Promise<
   Pick<BlogCategoryRecord, "id" | "name" | "slug">[]
 > {
   const rows = await query<RowDataPacket[]>(
-    `SELECT id, name, slug FROM ${CATEGORIES_TABLE}
-     WHERE status = 'active'
-     ORDER BY display_order ASC, name ASC`
+    `SELECT id, cat_title AS name, cat_slug AS slug FROM ${CATEGORIES_TABLE}
+     WHERE status = 1 AND cat_type = ?
+     ORDER BY cat_title ASC`,
+    [ARTICLE_CAT_TYPE]
   );
   return rows.map((r) => ({
     id: Number(r.id),
-    name: r.name as string,
-    slug: r.slug as string,
+    name: String(r.name),
+    slug: String(r.slug),
   }));
 }

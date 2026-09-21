@@ -9,13 +9,40 @@ export type { QueryParam };
 /** Singapore Standard Time — used for all admin datetime storage/display. */
 export const DB_TIME_ZONE = "+08:00";
 
+const CONNECTION_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "PROTOCOL_CONNECTION_LOST",
+  "PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR",
+]);
+
+function assertSqlIdentifier(value: string, label: string): string {
+  if (!/^[A-Za-z0-9_]+$/.test(value)) {
+    throw new Error(`Invalid ${label}`);
+  }
+  return value;
+}
+
+/** Safe MySQL database name from env (letters, digits, underscore only). */
+export function getSqlDatabaseName(
+  envValue: string | undefined,
+  fallback: string,
+  label = "database name"
+): string {
+  return assertSqlIdentifier(envValue?.trim() || fallback, label);
+}
+
 export function getDbConfig() {
   return {
     host: process.env.DB_HOST ?? "localhost",
     port: Number(process.env.DB_PORT ?? 3306),
     user: process.env.DB_USER ?? "root",
     password: process.env.DB_PASSWORD ?? "",
-    database: process.env.DB_NAME ?? "fz",
+    database: getSqlDatabaseName(process.env.DB_NAME, "fayyaz_new", "DB_NAME"),
   };
 }
 
@@ -35,6 +62,7 @@ export function getPool(): mysql.Pool {
       connectionLimit: 10,
       maxIdle: 5,
       idleTimeout: 60_000,
+      connectTimeout: 10_000,
       enableKeepAlive: true,
     });
     attachSingaporeTimeZone(pool);
@@ -48,7 +76,10 @@ export function isDbConnectionError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
 
   const err = error as { code?: string; errno?: number; fatal?: boolean };
-  if (err.code === "ECONNREFUSED" || err.code === "PROTOCOL_CONNECTION_LOST") {
+  if (err.code && CONNECTION_ERROR_CODES.has(err.code)) {
+    return true;
+  }
+  if (err.fatal === true) {
     return true;
   }
 
@@ -58,6 +89,12 @@ export function isDbConnectionError(error: unknown): boolean {
   }
 
   return false;
+}
+
+export function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { code?: string; errno?: number };
+  return err.code === "ER_NO_SUCH_TABLE" || err.errno === 1146;
 }
 
 export async function verifyDbConnection(
@@ -83,6 +120,20 @@ export async function verifyDbConnection(
   throw lastError;
 }
 
+/** Sanitize LIMIT for safe inlining (MySQL prepared stmts reject LIMIT ?). */
+export function sqlLimit(value: number, max = 100): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(Math.max(Math.trunc(n), 1), max);
+}
+
+/** Sanitize OFFSET for safe inlining. */
+export function sqlOffset(value: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(Math.trunc(n), 0);
+}
+
 export async function query<T = mysql.RowDataPacket[]>(
   sql: string,
   params: QueryParam[] = []
@@ -91,7 +142,9 @@ export async function query<T = mysql.RowDataPacket[]>(
   const connection = await pool.getConnection();
   try {
     await connection.query(`SET time_zone = '${DB_TIME_ZONE}'`);
-    const [rows] = await connection.execute(sql, params);
+    // Use text-protocol query (not prepare/execute). Some MySQL builds reject
+    // LIMIT/OFFSET placeholders under prepared statements (ER_WRONG_ARGUMENTS).
+    const [rows] = await connection.query(sql, params);
     return rows as T;
   } finally {
     connection.release();

@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef } from "react";
 import { Icon } from "@/components/ui/icons";
 import { usePermissions } from "@/components/auth/PermissionsProvider";

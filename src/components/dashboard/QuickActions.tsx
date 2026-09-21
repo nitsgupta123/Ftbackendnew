@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
+
 import { Icon } from "@/components/ui/icons";
 import type { QuickActionItem } from "@/lib/dashboard-data";
 
@@ -15,7 +16,7 @@ export default function QuickActions({ actions }: QuickActionsProps) {
         {actions.map((action) => (
           <li key={action.label}>
             <Link
-              href={action.href}
+              to={action.href}
               className="flex items-center gap-3 p-2.5 -mx-2.5 rounded-lg hover:bg-gray-50 transition-colors group"
             >
               <div

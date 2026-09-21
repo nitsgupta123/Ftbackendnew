@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   createPricingRule,
   deletePricingRule,
@@ -51,7 +52,7 @@ export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load pricing rules stats",
+        error: getSafeErrorMessage(error, "Failed to load pricing rules stats"),
       });
     }
   });
@@ -63,7 +64,7 @@ export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load default pricing rule",
+        error: getSafeErrorMessage(error, "Failed to load default pricing rule"),
       });
     }
   });
@@ -92,7 +93,7 @@ export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list pricing rules",
+        error: getSafeErrorMessage(error, "Failed to list pricing rules"),
       });
     }
   });
@@ -114,7 +115,7 @@ export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch pricing rule",
+        error: getSafeErrorMessage(error, "Failed to fetch pricing rule"),
       });
     }
   });
@@ -134,7 +135,7 @@ export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(201).send({ rule });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to create pricing rule";
+      const message = getSafeErrorMessage(error, "Failed to create pricing rule");
       const status = message.includes("already exists") ? 409 : 500;
       return reply.status(status).send({ error: message });
     }
@@ -165,7 +166,7 @@ export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ rule });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to update pricing rule";
+      const message = getSafeErrorMessage(error, "Failed to update pricing rule");
       const status = message.includes("already exists") ? 409 : 500;
       return reply.status(status).send({ error: message });
     }
@@ -191,7 +192,7 @@ export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete pricing rule",
+        error: getSafeErrorMessage(error, "Failed to delete pricing rule"),
       });
     }
   });

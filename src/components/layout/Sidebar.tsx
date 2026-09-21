@@ -1,8 +1,7 @@
-"use client";
-
+import { Link, useLocation } from "react-router-dom";
 import { useMemo, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+
+
 import { Icon } from "../ui/icons";
 import { NAV_ITEMS } from "@/lib/constants";
 import { NavItem } from "@/lib/types";
@@ -86,11 +85,13 @@ function filterNavByPermission(
 function NavTreeItem({
   item,
   depth = 0,
+  onNavigate,
 }: {
   item: NavItem;
   depth?: number;
+  onNavigate?: () => void;
 }) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
   const hasChildren = Boolean(item.children?.length);
   const [expanded, setExpanded] = useState(() => hasActiveDescendant(pathname, item));
 
@@ -136,9 +137,10 @@ function NavTreeItem({
     return (
       <div className="mx-2">
         <Link
-          href={item.href}
+          to={item.href}
           className={depth === 0 ? itemClasses : childTextClasses}
           style={{ paddingLeft: `${paddingLeft}px` }}
+          onClick={onNavigate}
         >
           {depth === 0 && item.icon && (
             <Icon name={item.icon} size={18} className={iconClasses} />
@@ -176,7 +178,7 @@ function NavTreeItem({
             {depth === 0 && item.icon && (
               <Icon name={item.icon} size={18} className={iconClasses} />
             )}
-            <Link href={item.href} className="min-w-0 flex-1 truncate hover:underline">
+            <Link to={item.href} className="min-w-0 flex-1 truncate hover:underline" onClick={onNavigate}>
               {item.label}
             </Link>
             <button
@@ -193,7 +195,7 @@ function NavTreeItem({
         {expanded && (
           <div className="mt-1">
             {item.children?.map((child) => (
-              <NavTreeItem key={child.label} item={child} depth={depth + 1} />
+              <NavTreeItem key={child.label} item={child} depth={depth + 1} onNavigate={onNavigate} />
             ))}
           </div>
         )}
@@ -223,7 +225,7 @@ function NavTreeItem({
       {expanded && (
         <div className="mt-1">
           {item.children?.map((child) => (
-            <NavTreeItem key={child.label} item={child} depth={depth + 1} />
+            <NavTreeItem key={child.label} item={child} depth={depth + 1} onNavigate={onNavigate} />
           ))}
         </div>
       )}
@@ -235,7 +237,7 @@ export default function Sidebar({
   collapsed,
   onToggle,
 }: {
-  collapsed: boolean;
+  collapsed: boolean | null;
   onToggle: () => void;
 }) {
   const { user } = useAuth();
@@ -246,9 +248,23 @@ export default function Sidebar({
     return filterNavByPermission(NAV_ITEMS, (moduleKey) => can(moduleKey, "view"));
   }, [can, loading, user]);
 
+  const asideTransform =
+    collapsed === null
+      ? "-translate-x-full lg:translate-x-0"
+      : collapsed
+        ? "-translate-x-full"
+        : "translate-x-0";
+
+  const closeMobileNav = () => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(min-width: 1024px)").matches && collapsed === false) {
+      onToggle();
+    }
+  };
+
   return (
     <>
-      {!collapsed && (
+      {collapsed === false && (
         <div
           className="fixed inset-0 bg-[#B48A2C]/50 z-30 lg:hidden"
           onClick={onToggle}
@@ -258,8 +274,8 @@ export default function Sidebar({
       <aside
         className={`
           fixed top-0 left-0 h-full w-[280px] bg-white border-r border-[#E5E7EB] z-40 overflow-x-hidden
-          transition-transform duration-300 flex flex-col
-          ${collapsed ? "-translate-x-full" : "translate-x-0"}
+          flex flex-col
+          ${asideTransform}
         `}
       >
         <div className="h-16 flex items-center gap-3 px-4 border-b border-[#E5E7EB] flex-shrink-0">
@@ -278,7 +294,7 @@ export default function Sidebar({
 
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-0.5">
           {visibleNav.map((item) => (
-            <NavTreeItem key={item.label} item={item} />
+            <NavTreeItem key={item.label} item={item} onNavigate={closeMobileNav} />
           ))}
         </nav>
 

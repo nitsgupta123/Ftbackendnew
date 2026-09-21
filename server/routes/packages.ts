@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import { auditContextFromHeader, AUDIT_USER_HEADER } from "../../src/lib/audit-context";
 import {
   archiveLegacyPackage,
@@ -69,7 +70,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch stats",
+        error: getSafeErrorMessage(error, "Failed to fetch stats"),
       });
     }
   });
@@ -81,7 +82,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch expiring rates",
+        error: getSafeErrorMessage(error, "Failed to fetch expiring rates"),
       });
     }
   });
@@ -93,7 +94,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch supplier quotes",
+        error: getSafeErrorMessage(error, "Failed to fetch supplier quotes"),
       });
     }
   });
@@ -105,7 +106,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch recently published packages",
+        error: getSafeErrorMessage(error, "Failed to fetch recently published packages"),
       });
     }
   });
@@ -117,7 +118,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch all packages",
+        error: getSafeErrorMessage(error, "Failed to fetch all packages"),
       });
     }
   });
@@ -129,7 +130,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch packages from tbl_packages",
+        error: getSafeErrorMessage(error, "Failed to fetch packages from tbl_packages"),
       });
     }
   });
@@ -148,7 +149,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch packages",
+        error: getSafeErrorMessage(error, "Failed to fetch packages"),
       });
     }
   });
@@ -162,7 +163,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to create package",
+        error: getSafeErrorMessage(error, "Failed to create package"),
       });
     }
   });
@@ -185,7 +186,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch package",
+        error: getSafeErrorMessage(error, "Failed to fetch package"),
       });
     }
   });
@@ -224,7 +225,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to update package",
+        error: getSafeErrorMessage(error, "Failed to update package"),
       });
     }
   });
@@ -339,7 +340,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to send supplier quote email",
+        error: getSafeErrorMessage(error, "Failed to send supplier quote email"),
       });
     }
   });
@@ -367,7 +368,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete package",
+        error: getSafeErrorMessage(error, "Failed to delete package"),
       });
     }
   });

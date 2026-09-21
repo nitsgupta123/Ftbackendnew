@@ -1,7 +1,6 @@
-"use client";
-
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+
 import { Icon } from "../ui/icons";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getUserInitials } from "@/lib/auth-storage";
@@ -30,17 +29,21 @@ const headerControlClass =
   "h-10 shrink-0 rounded-xl border border-[#E5E7EB] bg-white text-[#1F2A44] hover:bg-gray-50 transition-colors";
 
 const FRONTEND_URL = (
-  process.env.NEXT_PUBLIC_FRONTEND_URL ?? "https://fayyaztravels.com"
+  import.meta.env.VITE_FRONTEND_URL ?? "https://fayyaztravels.com"
 ).replace(/\/$/, "");
 
 const QUICK_LINKS = [
   { label: "All Packages", href: "/packages/all", keywords: ["package", "packages", "tour"] },
   { label: "Add Package", href: "/add-package", keywords: ["add", "new", "create", "package"] },
+  { label: "Help Desk", href: "/help", keywords: ["help", "guide", "how to", "docs", "manual"] },
   { label: "Enquiries", href: "/enquiry", keywords: ["enquiry", "enquiries", "lead", "leads"] },
   { label: "Suppliers", href: "/suppliers", keywords: ["supplier", "vendors"] },
   { label: "Blogs", href: "/blogs/all", keywords: ["blog", "blogs", "post"] },
   { label: "Pages", href: "/pages/all", keywords: ["page", "pages", "cms"] },
   { label: "Promotions", href: "/promotions", keywords: ["promo", "promotion", "discount"] },
+  { label: "User Management", href: "/settings/user-management", keywords: ["user", "users", "admin", "staff"] },
+  { label: "Role Management", href: "/settings/role-management", keywords: ["role", "roles", "permission"] },
+  { label: "Access Control", href: "/settings/roles", keywords: ["access", "permission", "permissions", "control"] },
 ] as const;
 
 function matchesQuery(text: string, query: string) {
@@ -53,8 +56,8 @@ export default function Header({
   sidebarCollapsed = false,
 }: HeaderProps) {
   const { user, logout } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -73,7 +76,7 @@ export default function Header({
   const handleLogout = () => {
     logout();
     setMenuOpen(false);
-    router.replace("/login");
+    navigate("/login", { replace: true });
   };
 
   useEffect(() => {
@@ -161,10 +164,10 @@ export default function Header({
     const q = query.trim();
     setSearchOpen(false);
     if (!q) {
-      router.push("/packages/all");
+      navigate("/packages/all");
       return;
     }
-    router.push(`/packages/all?search=${encodeURIComponent(q)}`);
+    navigate(`/packages/all?search=${encodeURIComponent(q)}`);
   };
 
   const openFrontView = () => {
@@ -172,23 +175,29 @@ export default function Header({
   };
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b border-[#E5E7EB] bg-white px-3 shadow-sm sm:gap-3 sm:px-4 lg:px-6">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <Button
-          onClick={onMenuToggle}
-          variant="ghost"
-          className={`${headerControlClass} w-10 p-0 text-gray-500 hover:text-gray-700 ${
+    <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-[#E5E7EB] bg-white">
+      <div className="flex h-full items-center gap-3 px-3 sm:gap-4 sm:px-4 lg:px-6">
+        <div
+          className={`flex h-full shrink-0 items-center gap-2 border-r border-[#E5E7EB] pr-3 ${
             sidebarCollapsed ? "" : "lg:hidden"
           }`}
-          aria-label={sidebarCollapsed ? "Open sidebar" : "Close sidebar"}
         >
-          <Icon name="Menu" size={20} />
-        </Button>
+          <Button
+            onClick={onMenuToggle}
+            variant="ghost"
+            className={`${headerControlClass} w-10 p-0 text-gray-500 hover:text-gray-700`}
+            aria-label={sidebarCollapsed ? "Open sidebar" : "Close sidebar"}
+          >
+            <Icon name="Menu" size={20} />
+          </Button>
 
-        {sidebarCollapsed && <BrandLogo className="h-8" />}
+          {sidebarCollapsed && (
+            <BrandLogo className="!h-8 !w-auto max-h-8 max-w-[140px] object-contain object-left sm:max-w-none" />
+          )}
+        </div>
 
         <nav
-          className="flex min-w-0 flex-1 flex-row flex-nowrap items-center gap-2 overflow-x-auto text-sm"
+          className="hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto text-sm leading-none sm:flex"
           aria-label="Breadcrumb"
         >
           {breadcrumbs.map((crumb, index) => (
@@ -199,17 +208,17 @@ export default function Header({
                 </span>
               )}
               {crumb.href && index < breadcrumbs.length - 1 ? (
-                <a
-                  href={crumb.href}
-                  className="shrink-0 whitespace-nowrap text-gray-400 transition-colors hover:text-gray-600"
+                <Link
+                  to={crumb.href}
+                  className="shrink-0 whitespace-nowrap text-gray-400 hover:text-gray-600"
                 >
                   {crumb.label}
-                </a>
+                </Link>
               ) : (
                 <span
                   className={`shrink-0 whitespace-nowrap ${
                     index === breadcrumbs.length - 1
-                      ? "font-medium text-gray-900"
+                      ? "font-medium text-[#1F2A44]"
                       : "text-gray-400"
                   }`}
                 >
@@ -219,9 +228,8 @@ export default function Header({
             </Fragment>
           ))}
         </nav>
-      </div>
 
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+      <div className="flex h-full shrink-0 items-center gap-1.5 sm:gap-2">
         <div ref={searchRef} className="relative hidden md:block">
           <div
             className={`flex h-10 w-[180px] items-center gap-2 px-3 lg:w-[240px] ${headerControlClass}`}
@@ -271,7 +279,7 @@ export default function Header({
                         className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                         onClick={() => {
                           setSearchOpen(false);
-                          router.push(link.href);
+                          navigate(link.href);
                         }}
                       >
                         <Icon name="Search" size={14} className="text-gray-400" />
@@ -296,7 +304,7 @@ export default function Header({
                           className="flex w-full flex-col rounded-lg px-2 py-2 text-left hover:bg-gray-50"
                           onClick={() => {
                             setSearchOpen(false);
-                            router.push(getPackageEditHref(pkg));
+                            navigate(getPackageEditHref(pkg));
                           }}
                         >
                           <span className="truncate text-sm font-medium text-gray-900">
@@ -376,7 +384,7 @@ export default function Header({
                       className="flex w-full flex-col gap-0.5 border-b border-[#F3F4F6] px-4 py-3 text-left hover:bg-gray-50"
                       onClick={() => {
                         setNotificationsOpen(false);
-                        router.push("/enquiry");
+                        navigate("/enquiry");
                       }}
                     >
                       <span className="truncate text-sm font-medium text-gray-900">
@@ -396,7 +404,7 @@ export default function Header({
                   className="h-9 w-full justify-center rounded-lg text-sm font-medium text-[#B48A2C] hover:bg-[#B48A2C]/5"
                   onClick={() => {
                     setNotificationsOpen(false);
-                    router.push("/enquiry");
+                    navigate("/enquiry");
                   }}
                 >
                   View all enquiries
@@ -469,6 +477,7 @@ export default function Header({
             </>
           )}
         </div>
+      </div>
       </div>
     </header>
   );

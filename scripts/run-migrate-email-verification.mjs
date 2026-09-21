@@ -10,7 +10,7 @@ config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
-  const dbName = process.env.DB_NAME ?? "fz";
+  const dbName = process.env.DB_NAME ?? "fayyaz_new";
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST ?? "localhost",
     port: Number(process.env.DB_PORT ?? 3306),
@@ -22,7 +22,7 @@ async function main() {
   try {
     const [cols] = await connection.query(
       `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'admin_users' AND COLUMN_NAME = 'email_verified'`,
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tbl_user' AND COLUMN_NAME = 'email_verified'`,
       [dbName]
     );
 

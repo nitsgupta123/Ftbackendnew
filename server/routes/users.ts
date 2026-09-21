@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   createAdminUserByAdmin,
   deleteAdminUser,
@@ -37,7 +38,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch user stats",
+        error: getSafeErrorMessage(error, "Failed to fetch user stats"),
       });
     }
   });
@@ -61,7 +62,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list users",
+        error: getSafeErrorMessage(error, "Failed to list users"),
       });
     }
   });
@@ -83,7 +84,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch user",
+        error: getSafeErrorMessage(error, "Failed to fetch user"),
       });
     }
   });
@@ -101,17 +102,17 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
+      const { email, password, fullName, role } = parsed.data;
+      const existing = await findAdminByEmail(email);
+      if (existing && Boolean(existing.email_verified)) {
+        return reply.status(409).send({ error: "An account with this email already exists" });
+      }
+
       if (!isEmailConfigured()) {
         return reply.status(503).send({
           error:
             "Email delivery is not configured. Cannot invite users until Graph/SMTP is set up.",
         });
-      }
-
-      const { email, password, fullName, role } = parsed.data;
-      const existing = await findAdminByEmail(email);
-      if (existing && Boolean(existing.email_verified)) {
-        return reply.status(409).send({ error: "An account with this email already exists" });
       }
 
       const pending = await createAdminUserByAdmin({ email, password, fullName, role });
@@ -143,11 +144,8 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
       }
     } catch (error) {
       app.log.error(error);
-      if (error instanceof Error && error.message.includes("already exists")) {
-        return reply.status(409).send({ error: error.message });
-      }
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to create user",
+        error: getSafeErrorMessage(error, "Failed to create user"),
       });
     }
   });
@@ -172,7 +170,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const existing = await findAdminUserById(userId);
-      if (!existing || !existing.emailVerified) {
+      if (!existing) {
         return reply.status(404).send({ error: "User not found" });
       }
 
@@ -229,7 +227,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to update user",
+        error: getSafeErrorMessage(error, "Failed to update user"),
       });
     }
   });
@@ -258,7 +256,7 @@ export const registerUserRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ success: true });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to delete user";
+      const message = getSafeErrorMessage(error, "Failed to delete user");
       if (message.includes("last active Super Admin")) {
         return reply.status(400).send({ error: message });
       }

@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import EnquiryStatsGrid from "@/components/enquiries/EnquiryStatsGrid";

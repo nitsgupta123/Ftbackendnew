@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { Link } from "react-router-dom";
+
 import { Icon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,7 @@ export default function WriteNewBlogLink({
   className,
 }: WriteNewBlogLinkProps) {
   return (
-    <Link href={href} className={cn(writeNewBlogButtonClass, className)}>
+    <Link to={href} className={cn(writeNewBlogButtonClass, className)}>
       <Icon name="Pencil" size={16} />
       Write New Blog
     </Link>

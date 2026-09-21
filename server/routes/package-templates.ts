@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   applyPackageTemplate,
   createPackageTemplate,
@@ -44,7 +45,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch template stats",
+        error: getSafeErrorMessage(error, "Failed to fetch template stats"),
       });
     }
   });
@@ -73,7 +74,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list templates",
+        error: getSafeErrorMessage(error, "Failed to list templates"),
       });
     }
   });
@@ -95,7 +96,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch template",
+        error: getSafeErrorMessage(error, "Failed to fetch template"),
       });
     }
   });
@@ -115,7 +116,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
       return reply.status(201).send({ template });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to create template";
+      const message = getSafeErrorMessage(error, "Failed to create template");
       const status = message.includes("already exists") ? 409 : 500;
       return reply.status(status).send({ error: message });
     }
@@ -146,7 +147,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
       return reply.send({ template });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to update template";
+      const message = getSafeErrorMessage(error, "Failed to update template");
       const status = message.includes("already exists") ? 409 : 500;
       return reply.status(status).send({ error: message });
     }
@@ -169,7 +170,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
       return reply.send(result);
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to apply template";
+      const message = getSafeErrorMessage(error, "Failed to apply template");
       const status = message.includes("active") ? 400 : 500;
       return reply.status(status).send({ error: message });
     }
@@ -195,7 +196,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete template",
+        error: getSafeErrorMessage(error, "Failed to delete template"),
       });
     }
   });

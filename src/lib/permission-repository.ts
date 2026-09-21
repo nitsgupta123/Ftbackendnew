@@ -1,6 +1,12 @@
-import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import { getPool, query } from "./db";
+import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import type { AdminRole } from "./auth-types";
+import {
+  listLegacyRoleKeys,
+  resolveRoleTypeId,
+  ROLES_TABLE,
+  USERS_TABLE,
+} from "./auth-repository";
 import {
   ACCESS_MODULES,
   buildDefaultMatrix,
@@ -9,56 +15,21 @@ import {
   type PermissionsPayload,
   type RolePermissionMatrix,
 } from "./permission-types";
-
-interface PermissionRow extends RowDataPacket {
-  role: AdminRole;
-  module_key: string;
-  can_view: number | boolean;
-  can_edit: number | boolean;
-  can_delete: number | boolean;
-}
+import {
+  deleteSettingBlob,
+  getSettingBlobById,
+  insertSettingBlob,
+  updateSettingBlob,
+} from "./legacy-settings-store";
+import { SETTINGS_BLOB } from "./legacy-tables";
 
 const BUILTIN_ROLES: AdminRole[] = ["admin", "super_admin"];
 
-interface UserPermissionRow extends RowDataPacket {
-  user_id: number;
-  module_key: string;
-  can_view: number | boolean;
-  can_edit: number | boolean;
-  can_delete: number | boolean;
-}
-
-let userPermissionsTableReady = false;
-
-async function ensureUserPermissionsTable(): Promise<void> {
-  if (userPermissionsTableReady) return;
-  await query<ResultSetHeader>(
-    `
-      CREATE TABLE IF NOT EXISTS user_permissions (
-        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id INT UNSIGNED NOT NULL,
-        module_key VARCHAR(80) NOT NULL,
-        can_view TINYINT(1) NOT NULL DEFAULT 0,
-        can_edit TINYINT(1) NOT NULL DEFAULT 0,
-        can_delete TINYINT(1) NOT NULL DEFAULT 0,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (id),
-        UNIQUE KEY uq_user_module (user_id, module_key),
-        KEY idx_user_permissions_user (user_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `
-  );
-  userPermissionsTableReady = true;
-}
-
-function mapUserRow(row: UserPermissionRow): ModulePermission {
-  return {
-    moduleKey: row.module_key,
-    canView: Boolean(row.can_view),
-    canEdit: Boolean(row.can_edit),
-    canDelete: Boolean(row.can_delete),
-  };
-}
+type RoleRow = RowDataPacket & {
+  id: number;
+  role_name: string;
+  roles: string | null;
+};
 
 function normalizeStoredPermission(perm: ModulePermission): ModulePermission {
   const canEdit = Boolean(perm.canEdit);
@@ -81,187 +52,155 @@ function permissionsEqual(a: ModulePermission, b: ModulePermission): boolean {
   );
 }
 
-function mapRow(row: PermissionRow): ModulePermission {
-  return {
-    moduleKey: row.module_key,
-    canView: Boolean(row.can_view),
-    canEdit: Boolean(row.can_edit),
-    canDelete: Boolean(row.can_delete),
-  };
+function roleKeyFromName(roleName: string): AdminRole {
+  const key = roleName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (key === "superadmin" || key === "super_admin") return "super_admin";
+  return (key || "admin") as AdminRole;
 }
 
-async function listStoredPermissions(role?: AdminRole): Promise<PermissionRow[]> {
-  if (role) {
-    return query<PermissionRow[]>(
-      `
-        SELECT role, module_key, can_view, can_edit, can_delete
-        FROM role_permissions
-        WHERE role = ?
-        ORDER BY module_key ASC
-      `,
-      [role]
-    );
+function parseRolesColumn(raw: string | null | undefined, role: AdminRole): ModulePermission[] {
+  const text = String(raw ?? "").trim();
+  if (!text) return buildDefaultMatrix(role).permissions;
+
+  if (text.startsWith("[") || text.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(text) as
+        | ModulePermission[]
+        | { permissions?: ModulePermission[] };
+      const list = Array.isArray(parsed) ? parsed : parsed.permissions;
+      if (Array.isArray(list) && list.length) {
+        const byKey = new Map(
+          list
+            .filter((p) => p && typeof p.moduleKey === "string")
+            .map((p) => [p.moduleKey, normalizeStoredPermission(p)])
+        );
+        return ACCESS_MODULES.map(
+          (mod) => byKey.get(mod.key) ?? defaultPermissionForRole(role, mod.key)
+        );
+      }
+    } catch {
+      // fall through to CSV / defaults
+    }
   }
 
-  return query<PermissionRow[]>(
-    `
-      SELECT role, module_key, can_view, can_edit, can_delete
-      FROM role_permissions
-      ORDER BY role ASC, module_key ASC
-    `
+  // Legacy CSV permission keys → allow full access for known panel modules when
+  // the role already has broad legacy rights (super admin / admin heuristics).
+  if (role === "super_admin") {
+    return buildDefaultMatrix(role).permissions;
+  }
+
+  const tokens = new Set(
+    text
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  return ACCESS_MODULES.map((mod) => {
+    const key = mod.key.toLowerCase();
+    const canView =
+      tokens.has(key) ||
+      tokens.has(`${key}_view`) ||
+      [...tokens].some((t) => t.startsWith(key));
+    const canEdit = tokens.has(`${key}_edit`) || tokens.has(`${key}_add`) || canView;
+    const canDelete = tokens.has(`${key}_delete`);
+    if (!canView && !canEdit && !canDelete) {
+      return defaultPermissionForRole(role, mod.key);
+    }
+    return normalizeStoredPermission({
+      moduleKey: mod.key,
+      canView: canView || canEdit || canDelete,
+      canEdit,
+      canDelete,
+    });
+  });
+}
+
+async function listRoleRows(): Promise<RoleRow[]> {
+  return query<RoleRow[]>(
+    `SELECT id, role_name, roles FROM ${ROLES_TABLE} WHERE status = 1 ORDER BY id ASC`
   );
 }
 
 async function listKnownRoles(): Promise<AdminRole[]> {
-  const adminRoles = await query<RowDataPacket[]>(
-    `
-      SELECT DISTINCT role
-      FROM admin_users
-      WHERE role IS NOT NULL AND TRIM(role) <> ''
-    `
-  );
-  const permissionRoles = await query<RowDataPacket[]>(
-    `
-      SELECT DISTINCT role
-      FROM role_permissions
-      WHERE role IS NOT NULL AND TRIM(role) <> ''
-    `
-  );
-  const merged = new Set<AdminRole>(BUILTIN_ROLES);
-  for (const row of [...adminRoles, ...permissionRoles]) {
-    const role = String(row.role ?? "").trim();
-    if (role) merged.add(role);
-  }
-  return Array.from(merged);
+  const legacyRoles = await listLegacyRoleKeys();
+  return Array.from(new Set<AdminRole>([...BUILTIN_ROLES, ...legacyRoles]));
 }
 
-/** Ensure every catalog module has a row for each known role (seeds new modules/roles automatically). */
-export async function ensureRolePermissionsSeeded(): Promise<void> {
-  const roles = await listKnownRoles();
-  for (const role of roles) {
-    const existing = await listStoredPermissions(role);
-    const existingKeys = new Set(existing.map((row) => row.module_key));
-
-    for (const mod of ACCESS_MODULES) {
-      if (existingKeys.has(mod.key)) continue;
-      const defaults = defaultPermissionForRole(role, mod.key);
-      await query<ResultSetHeader>(
-        `
-          INSERT INTO role_permissions (role, module_key, can_view, can_edit, can_delete)
-          VALUES (?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE module_key = module_key
-        `,
-        [
-          role,
-          defaults.moduleKey,
-          defaults.canView ? 1 : 0,
-          defaults.canEdit ? 1 : 0,
-          defaults.canDelete ? 1 : 0,
-        ]
-      );
-    }
-  }
-}
-
-function mergeMatrix(
-  role: AdminRole,
-  rows: PermissionRow[]
-): RolePermissionMatrix {
-  const byKey = new Map(rows.map((row) => [row.module_key, mapRow(row)]));
+function mergeMatrix(role: AdminRole, permissions: ModulePermission[]): RolePermissionMatrix {
+  const byKey = new Map(permissions.map((p) => [p.moduleKey, p]));
   return {
     role,
-    permissions: ACCESS_MODULES.map((mod) => {
-      const stored = byKey.get(mod.key);
-      return stored ?? defaultPermissionForRole(role, mod.key);
-    }),
+    permissions: ACCESS_MODULES.map(
+      (mod) => byKey.get(mod.key) ?? defaultPermissionForRole(role, mod.key)
+    ),
   };
+}
+
+async function loadRolePermissions(role: AdminRole): Promise<ModulePermission[]> {
+  const rows = await listRoleRows();
+  const match = rows.find((row) => roleKeyFromName(String(row.role_name ?? "")) === role);
+  if (!match) return buildDefaultMatrix(role).permissions;
+  return parseRolesColumn(match.roles, role);
+}
+
+/** No-op seed — permissions live on tbl_roles.roles. */
+export async function ensureRolePermissionsSeeded(): Promise<void> {
+  // intentionally empty — do not CREATE tables
 }
 
 export async function getPermissionsPayload(): Promise<PermissionsPayload> {
-  await ensureRolePermissionsSeeded();
   const roles = await listKnownRoles();
-  const rows = await listStoredPermissions();
-  const byRole = new Map<AdminRole, PermissionRow[]>();
-  for (const role of roles) {
-    byRole.set(role, []);
-  }
-  for (const row of rows) {
-    const role = String(row.role ?? "").trim();
-    if (!role) continue;
-    if (!byRole.has(role)) byRole.set(role, []);
-    byRole.get(role)?.push(row);
-  }
-
-  return {
-    modules: ACCESS_MODULES,
-    matrices: Array.from(byRole.keys()).map((role) =>
-      mergeMatrix(role, byRole.get(role) ?? [])
-    ),
-  };
+  const matrices = await Promise.all(
+    roles.map(async (role) => mergeMatrix(role, await loadRolePermissions(role)))
+  );
+  return { modules: ACCESS_MODULES, matrices };
 }
 
 export async function getRolePermissionMatrix(
   role: AdminRole
 ): Promise<RolePermissionMatrix> {
-  await ensureRolePermissionsSeeded();
-  const rows = await listStoredPermissions(role);
-  return mergeMatrix(role, rows);
+  return mergeMatrix(role, await loadRolePermissions(role));
 }
 
 export async function getUserPermissionOverrides(
   userId: number
 ): Promise<ModulePermission[]> {
-  await ensureUserPermissionsTable();
-  const rows = await query<UserPermissionRow[]>(
-    `
-      SELECT user_id, module_key, can_view, can_edit, can_delete
-      FROM user_permissions
-      WHERE user_id = ?
-      ORDER BY module_key ASC
-    `,
-    [userId]
+  const blob = await getSettingBlobById<{ permissions?: ModulePermission[] }>(
+    SETTINGS_BLOB.userPermissions,
+    userId
   );
-  return rows.map(mapUserRow);
+  if (!blob?.permissions?.length) return [];
+  return blob.permissions.map(normalizeStoredPermission);
 }
 
 export async function setUserPermissionOverrides(
   userId: number,
   permissions: ModulePermission[]
 ): Promise<ModulePermission[]> {
-  await ensureUserPermissionsTable();
-
   const allowedKeys = new Set(ACCESS_MODULES.map((m) => m.key));
   const normalized = permissions
     .filter((perm) => allowedKeys.has(perm.moduleKey))
     .map(normalizeStoredPermission);
 
-  await query<ResultSetHeader>(`DELETE FROM user_permissions WHERE user_id = ?`, [userId]);
-
-  for (const perm of normalized) {
-    await query<ResultSetHeader>(
-      `
-        INSERT INTO user_permissions (user_id, module_key, can_view, can_edit, can_delete)
-        VALUES (?, ?, ?, ?, ?)
-      `,
-      [
-        userId,
-        perm.moduleKey,
-        perm.canView ? 1 : 0,
-        perm.canEdit ? 1 : 0,
-        perm.canDelete ? 1 : 0,
-      ]
-    );
+  const existing = await getSettingBlobById(SETTINGS_BLOB.userPermissions, userId);
+  const payload = { id: userId, permissions: normalized };
+  if (existing) {
+    await updateSettingBlob(SETTINGS_BLOB.userPermissions, userId, payload);
+  } else {
+    await insertSettingBlob(SETTINGS_BLOB.userPermissions, `user_${userId}`, payload);
   }
-
   return getUserPermissionOverrides(userId);
 }
 
 export async function clearUserPermissionOverrides(userId: number): Promise<void> {
-  await ensureUserPermissionsTable();
-  await query<ResultSetHeader>(`DELETE FROM user_permissions WHERE user_id = ?`, [userId]);
+  await deleteSettingBlob(SETTINGS_BLOB.userPermissions, userId);
 }
 
-/** Role matrix with per-user overrides applied (overrides win when present). */
 export async function getEffectivePermissionMatrix(
   userId: number,
   role: AdminRole
@@ -277,7 +216,6 @@ export async function getEffectivePermissionMatrix(
   };
 }
 
-/** Keep only modules that differ from the role defaults. */
 export function diffFromRoleDefaults(
   rolePermissions: ModulePermission[],
   overrides: ModulePermission[]
@@ -296,42 +234,24 @@ export async function updateRolePermissions(
   role: AdminRole,
   permissions: ModulePermission[]
 ): Promise<RolePermissionMatrix> {
-  await ensureRolePermissionsSeeded();
-
   const allowedKeys = new Set(ACCESS_MODULES.map((m) => m.key));
   const incoming = new Map<string, ModulePermission>();
 
   for (const perm of permissions) {
     if (!allowedKeys.has(perm.moduleKey)) continue;
-    incoming.set(perm.moduleKey, {
-      moduleKey: perm.moduleKey,
-      canView: Boolean(perm.canView),
-      canEdit: Boolean(perm.canEdit),
-      canDelete: Boolean(perm.canDelete),
-    });
+    incoming.set(perm.moduleKey, normalizeStoredPermission(perm));
   }
 
-  for (const mod of ACCESS_MODULES) {
-    const next = incoming.get(mod.key) ?? defaultPermissionForRole(role, mod.key);
+  const next = ACCESS_MODULES.map((mod) => {
+    const value = incoming.get(mod.key) ?? defaultPermissionForRole(role, mod.key);
+    return normalizeStoredPermission(value);
+  });
 
-    // Edit/delete imply view for consistency.
-    const canView = next.canView || next.canEdit || next.canDelete;
-    const canEdit = next.canEdit;
-    const canDelete = next.canDelete;
-
-    await query<ResultSetHeader>(
-      `
-        INSERT INTO role_permissions (role, module_key, can_view, can_edit, can_delete)
-        VALUES (?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-          can_view = VALUES(can_view),
-          can_edit = VALUES(can_edit),
-          can_delete = VALUES(can_delete),
-          updated_at = CURRENT_TIMESTAMP
-      `,
-      [role, mod.key, canView ? 1 : 0, canEdit ? 1 : 0, canDelete ? 1 : 0]
-    );
-  }
+  const roleTypeId = await resolveRoleTypeId(role);
+  await query<ResultSetHeader>(
+    `UPDATE ${ROLES_TABLE} SET roles = ?, edit_date = NOW() WHERE id = ?`,
+    [JSON.stringify(next), Number(roleTypeId)]
+  );
 
   return getRolePermissionMatrix(role);
 }
@@ -351,29 +271,29 @@ export async function renameRole(
   try {
     await connection.beginTransaction();
 
-    const [existingRows] = await connection.execute<RowDataPacket[]>(
+    const currentTypeId = await resolveRoleTypeId(currentRole);
+    const nextLabel = nextRole
+      .split("_")
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase() + part.slice(1))
+      .join(" ");
+
+    const [nameClash] = await connection.query<RowDataPacket[]>(
       `
-        SELECT role FROM role_permissions WHERE role = ? LIMIT 1
+        SELECT id FROM ${ROLES_TABLE}
+        WHERE id <> ?
+          AND LOWER(REPLACE(TRIM(role_name), ' ', '_')) = ?
+        LIMIT 1
       `,
-      [nextRole]
+      [Number(currentTypeId), nextRole.toLowerCase()]
     );
-    const [existingUsers] = await connection.execute<RowDataPacket[]>(
-      `
-        SELECT role FROM admin_users WHERE role = ? LIMIT 1
-      `,
-      [nextRole]
-    );
-    if (existingRows.length || existingUsers.length) {
+    if (nameClash.length) {
       throw new Error("A role with that name already exists");
     }
 
-    await connection.execute(
-      `UPDATE role_permissions SET role = ? WHERE role = ?`,
-      [nextRole, currentRole]
-    );
-    await connection.execute(
-      `UPDATE admin_users SET role = ? WHERE role = ?`,
-      [nextRole, currentRole]
+    await connection.query(
+      `UPDATE ${ROLES_TABLE} SET role_name = ?, edit_date = NOW() WHERE id = ?`,
+      [nextLabel || nextRole, Number(currentTypeId)]
     );
 
     await connection.commit();
@@ -392,11 +312,16 @@ export async function deleteRole(
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
-    await connection.execute(
-      `UPDATE admin_users SET role = ? WHERE role = ?`,
-      [fallbackRole, role]
+    const roleTypeId = await resolveRoleTypeId(role);
+    const fallbackTypeId = await resolveRoleTypeId(fallbackRole);
+    await connection.query(
+      `UPDATE ${USERS_TABLE} SET user_type = ?, edit_date = NOW() WHERE user_type = ?`,
+      [fallbackTypeId, roleTypeId]
     );
-    await connection.execute(`DELETE FROM role_permissions WHERE role = ?`, [role]);
+    await connection.query(
+      `UPDATE ${ROLES_TABLE} SET status = 2, edit_date = NOW() WHERE id = ?`,
+      [Number(roleTypeId)]
+    );
     await connection.commit();
   } catch (error) {
     await connection.rollback();

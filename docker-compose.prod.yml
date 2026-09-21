@@ -6,8 +6,10 @@ services:
       - .env.production
     environment:
       SKIP_DB_INIT: "true"      # use existing external MySQL; do not create schema
+      API_PORT: "4000"
+      API_HOST: "0.0.0.0"
     ports:
-      - "127.0.0.1:3000:3000"   # only reachable on VPS, behind Apache
+      # Fastify serves /panel, /api, /uploads — Apache proxies here
       - "127.0.0.1:4000:4000"
     volumes:
       - uploads:/app/uploads

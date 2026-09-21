@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -394,7 +392,7 @@ export default function PackageBasicsForm({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm animate-fade-in">
+      <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm">
         <form onSubmit={handleSubmit(onSubmit)} className="p-6">
           {/* Header */}
           <div className="mb-6">
@@ -621,7 +619,7 @@ export default function PackageBasicsForm({
               <p className="text-xs text-gray-400 mt-2">
                 {selectedCountry
                   ? `Showing cities and regions for ${selectedCountry}.`
-                  : "Pick a country above — this list fills automatically."}
+                  : "Pick a country above — this lists automatically."}
               </p>
             </div>
           </div>

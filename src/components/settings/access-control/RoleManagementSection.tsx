@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { formatPackageDate } from "@/lib/format-date";
@@ -53,7 +51,7 @@ export default function RoleManagementSection({
           </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 shrink-0 lg:w-auto">
-          <Link href="/user-management">
+          <Link to="/settings/user-management">
             <Button variant="outline" className="h-10 w-full rounded-lg px-4 border-[#E5E7EB] sm:w-auto">
               <Icon name="UserCog" size={16} className="mr-2" />
               Manage users

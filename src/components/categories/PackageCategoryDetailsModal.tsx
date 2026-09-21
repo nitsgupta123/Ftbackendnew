@@ -1,9 +1,7 @@
-"use client";
-
 import { Icon } from "@/components/ui/icons";
 import type { PackageCategoryRecord } from "@/lib/category-types";
 import { formatPackageDateTime } from "@/lib/format-date";import { Button } from "@/components/ui/button";
-import Image from "next/image";
+
 
 interface PackageCategoryDetailsModalProps {
   category: PackageCategoryRecord | null;
@@ -43,12 +41,11 @@ export default function PackageCategoryDetailsModal({
 
         <div className="p-6 space-y-5">
           {imageSrc &&
-          <Image
+          <img
             src={imageSrc}
             alt={category.name}
             width={768}
             height={160}
-            unoptimized
             className="w-full h-40 object-cover rounded-xl border border-[#E5E7EB]" />
 
           }

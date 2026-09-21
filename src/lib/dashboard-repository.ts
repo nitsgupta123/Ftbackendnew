@@ -1,7 +1,7 @@
 import type { RowDataPacket } from "mysql2";
-import { query, type QueryParam } from "./db";
+import { isMissingTableError, query, sqlLimit, type QueryParam } from "./db";
 import { getPackageStats } from "./package-repository";
-import { SGT_TIME_ZONE } from "./format-date";
+import { SGT_TIME_ZONE, toIsoSgt } from "./format-date";
 import type {
   ChartDataPoint,
   ContentSummaryItem,
@@ -10,9 +10,6 @@ import type {
   DashboardStats,
   MetricCount,
 } from "./dashboard-types";
-
-const LEGACY_DB = process.env.LEGACY_DB_NAME ?? "fz";
-const DB = process.env.DB_NAME ?? "fz";
 
 function calcPercentChange(current: number, previous: number): number {
   if (previous === 0) {
@@ -26,19 +23,26 @@ async function countMetric(
   monthSql: string,
   params: QueryParam[] = []
 ): Promise<MetricCount> {
-  const [totalRows, monthRows] = await Promise.all([
-    query<RowDataPacket[]>(totalSql, params),
-    query<RowDataPacket[]>(monthSql, params),
-  ]);
+  try {
+    const [totalRows, monthRows] = await Promise.all([
+      query<RowDataPacket[]>(totalSql, params),
+      query<RowDataPacket[]>(monthSql, params),
+    ]);
 
-  const total = Number(totalRows[0]?.cnt ?? 0);
-  const currentMonth = Number(monthRows[0]?.current_month ?? 0);
-  const previousMonth = Number(monthRows[0]?.previous_month ?? 0);
+    const total = Number(totalRows[0]?.cnt ?? 0);
+    const currentMonth = Number(monthRows[0]?.current_month ?? 0);
+    const previousMonth = Number(monthRows[0]?.previous_month ?? 0);
 
-  return {
-    total,
-    change: calcPercentChange(currentMonth, previousMonth),
-  };
+    return {
+      total,
+      change: calcPercentChange(currentMonth, previousMonth),
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      return { total: 0, change: 0 };
+    }
+    throw error;
+  }
 }
 
 const MONTHLY_COUNT = `
@@ -53,63 +57,70 @@ function monthlySql(dateColumn: string): string {
 
 async function getPagesMetric(): Promise<MetricCount> {
   return countMetric(
-    `SELECT COUNT(*) AS cnt FROM ${DB}.cms_pages`,
-    `SELECT ${monthlySql("COALESCE(published_at, created_at)")} FROM ${DB}.cms_pages`
+    `SELECT COUNT(*) AS cnt FROM tbl_post WHERE post_type = 'pages'`,
+    `SELECT ${monthlySql("insert_date")} FROM tbl_post WHERE post_type = 'pages'`
   );
 }
 
 async function getDestinationsMetric(): Promise<MetricCount> {
   const where = "IFNULL(status, 0) != 2";
   return countMetric(
-    `SELECT COUNT(*) AS cnt FROM ${LEGACY_DB}.tbl_destinations WHERE ${where}`,
-    `SELECT ${monthlySql("insert_date")} FROM ${LEGACY_DB}.tbl_destinations WHERE ${where}`
+    `SELECT COUNT(*) AS cnt FROM tbl_destinations WHERE ${where}`,
+    `SELECT ${monthlySql("insert_date")} FROM tbl_destinations WHERE ${where}`
   );
 }
 
 async function getPackagesMetric(): Promise<MetricCount> {
-  const stats = await getPackageStats();
-  const monthRows = await query<RowDataPacket[]>(`
-    SELECT ${monthlySql("created_at")}
-    FROM ${DB}.add_package
-    WHERE status != 'deleted'
-  `);
+  try {
+    const stats = await getPackageStats();
+    const monthRows = await query<RowDataPacket[]>(`
+      SELECT ${monthlySql("insert_date")}
+      FROM tbl_packages
+      WHERE IFNULL(status, 0) != 2
+    `);
 
-  return {
-    total: stats.total,
-    change: calcPercentChange(
-      Number(monthRows[0]?.current_month ?? 0),
-      Number(monthRows[0]?.previous_month ?? 0)
-    ),
-  };
+    return {
+      total: stats.total,
+      change: calcPercentChange(
+        Number(monthRows[0]?.current_month ?? 0),
+        Number(monthRows[0]?.previous_month ?? 0)
+      ),
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      return { total: 0, change: 0 };
+    }
+    throw error;
+  }
 }
 
 async function getTestimonialsMetric(): Promise<MetricCount> {
   const where = "IFNULL(status, 0) != 2";
   return countMetric(
-    `SELECT COUNT(*) AS cnt FROM ${LEGACY_DB}.tbl_testimonials WHERE ${where}`,
-    `SELECT ${monthlySql("insert_date")} FROM ${LEGACY_DB}.tbl_testimonials WHERE ${where}`
+    `SELECT COUNT(*) AS cnt FROM tbl_testimonials WHERE ${where}`,
+    `SELECT ${monthlySql("insert_date")} FROM tbl_testimonials WHERE ${where}`
   );
 }
 
 async function getBlogsMetric(): Promise<MetricCount> {
   return countMetric(
-    `SELECT COUNT(*) AS cnt FROM ${DB}.blog_posts`,
-    `SELECT ${monthlySql("created_at")} FROM ${DB}.blog_posts`
+    `SELECT COUNT(*) AS cnt FROM tbl_post WHERE post_type = 'article'`,
+    `SELECT ${monthlySql("insert_date")} FROM tbl_post WHERE post_type = 'article'`
   );
 }
 
 async function getProductsMetric(): Promise<MetricCount> {
   const where = "IFNULL(status, 0) != 2";
   return countMetric(
-    `SELECT COUNT(*) AS cnt FROM ${LEGACY_DB}.tbl_products WHERE ${where}`,
-    `SELECT ${monthlySql("entry_date")} FROM ${LEGACY_DB}.tbl_products WHERE ${where}`
+    `SELECT COUNT(*) AS cnt FROM tbl_products WHERE ${where}`,
+    `SELECT ${monthlySql("entry_date")} FROM tbl_products WHERE ${where}`
   );
 }
 
 async function getNewsletterMetric(): Promise<MetricCount> {
   return countMetric(
-    `SELECT COUNT(*) AS cnt FROM ${LEGACY_DB}.tbl_message WHERE message_type = 'popupenquery'`,
-    `SELECT ${monthlySql("insert_date")} FROM ${LEGACY_DB}.tbl_message WHERE message_type = 'popupenquery'`
+    `SELECT COUNT(*) AS cnt FROM tbl_message WHERE message_type = 'popupenquery'`,
+    `SELECT ${monthlySql("insert_date")} FROM tbl_message WHERE message_type = 'popupenquery'`
   );
 }
 
@@ -218,7 +229,7 @@ async function getEnquiryChart(days: number): Promise<ChartDataPoint[]> {
         DATE(insert_date) AS day,
         COUNT(DISTINCT NULLIF(email, '')) AS visitors,
         COUNT(*) AS pageViews
-      FROM ${LEGACY_DB}.tbl_message
+      FROM tbl_message
       WHERE insert_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
       GROUP BY DATE(insert_date)
       ORDER BY day ASC
@@ -250,58 +261,74 @@ function asAuditName(value: unknown): string | null {
 }
 
 async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
+  const safe = sqlLimit(limit, 50);
+  const safeQuery = async (sql: string, params: QueryParam[] = []) => {
+    try {
+      return await query<RowDataPacket[]>(sql, params);
+    } catch (error) {
+      if (isMissingTableError(error)) return [] as RowDataPacket[];
+      throw error;
+    }
+  };
+
   const [packages, blogs, destinations, testimonials] = await Promise.all([
-    query<RowDataPacket[]>(
-      `
-        SELECT
-          ap.id,
-          ap.status,
-          ap.updated_at AS occurred_at,
-          ap.created_by,
-          ap.updated_by,
-          tp.p_name AS title
-        FROM ${DB}.add_package ap
-        INNER JOIN ${LEGACY_DB}.tbl_packages tp ON tp.id = ap.package_id
-        WHERE ap.status != 'deleted'
-        ORDER BY ap.updated_at DESC
-        LIMIT ?
-      `,
-      [limit]
-    ),
-    query<RowDataPacket[]>(
+    safeQuery(
       `
         SELECT
           id,
-          title,
-          status,
-          COALESCE(published_at, updated_at, created_at) AS occurred_at,
-          COALESCE(created_by, author_name) AS created_by,
-          COALESCE(updated_by, created_by, author_name) AS updated_by
-        FROM ${DB}.blog_posts
-        ORDER BY COALESCE(published_at, updated_at, created_at) DESC
-        LIMIT ?
-      `,
-      [limit]
+          CASE
+            WHEN is_publish = 1 THEN 'published'
+            WHEN is_archive = 1 THEN 'archived'
+            ELSE 'draft'
+          END AS status,
+          COALESCE(edit_date, insert_date) AS occurred_at,
+          NULL AS created_by,
+          NULL AS updated_by,
+          p_name AS title
+        FROM tbl_packages
+        WHERE IFNULL(status, 0) != 2
+        ORDER BY COALESCE(edit_date, insert_date) DESC
+        LIMIT ${safe}
+      `
     ),
-    query<RowDataPacket[]>(
+    safeQuery(
+      `
+        SELECT
+          id,
+          post_title AS title,
+          CASE
+            WHEN is_auto_scheduled = 1 AND IFNULL(is_auto_scheduled_posted,0) = 0 THEN 'scheduled'
+            WHEN is_draft = 1 THEN 'draft'
+            WHEN post_status = 2 THEN 'archived'
+            WHEN post_status = 1 THEN 'published'
+            ELSE 'draft'
+          END AS status,
+          COALESCE(post_date, edit_date, insert_date) AS occurred_at,
+          NULL AS created_by,
+          NULL AS updated_by
+        FROM tbl_post
+        WHERE post_type = 'article'
+        ORDER BY COALESCE(edit_date, insert_date) DESC
+        LIMIT ${safe}
+      `
+    ),
+    safeQuery(
       `
         SELECT id, d_name AS title, status, COALESCE(edit_date, insert_date) AS occurred_at
-        FROM ${LEGACY_DB}.tbl_destinations
+        FROM tbl_destinations
         WHERE IFNULL(status, 0) != 2
         ORDER BY COALESCE(edit_date, insert_date) DESC
-        LIMIT ?
-      `,
-      [limit]
+        LIMIT ${safe}
+      `
     ),
-    query<RowDataPacket[]>(
+    safeQuery(
       `
         SELECT id, testi_name AS title, status, COALESCE(edit_date, insert_date) AS occurred_at
-        FROM ${LEGACY_DB}.tbl_testimonials
+        FROM tbl_testimonials
         WHERE IFNULL(status, 0) != 2
         ORDER BY COALESCE(edit_date, insert_date) DESC
-        LIMIT ?
-      `,
-      [limit]
+        LIMIT ${safe}
+      `
     ),
   ]);
 
@@ -309,7 +336,11 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
     ...packages.map((row) => ({
       id: `package-${row.id}`,
       title: `Package "${String(row.title ?? "Untitled")}" updated`,
-      occurredAt: new Date(row.occurred_at).toISOString(),
+      occurredAt: toIsoSgt(
+        row.occurred_at instanceof Date || typeof row.occurred_at === "string"
+          ? row.occurred_at
+          : String(row.occurred_at ?? "")
+      ) ?? String(row.occurred_at ?? ""),
       createdBy: asAuditName(row.created_by),
       updatedBy: asAuditName(row.updated_by) ?? asAuditName(row.created_by),
       icon: "Package",
@@ -320,7 +351,11 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
     ...blogs.map((row) => ({
       id: `blog-${row.id}`,
       title: `Blog post "${String(row.title)}" ${row.status === "published" ? "published" : "updated"}`,
-      occurredAt: new Date(row.occurred_at).toISOString(),
+      occurredAt: toIsoSgt(
+        row.occurred_at instanceof Date || typeof row.occurred_at === "string"
+          ? row.occurred_at
+          : String(row.occurred_at ?? "")
+      ) ?? String(row.occurred_at ?? ""),
       createdBy: asAuditName(row.created_by),
       updatedBy: asAuditName(row.updated_by),
       icon: "FileText",
@@ -331,7 +366,11 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
     ...destinations.map((row) => ({
       id: `destination-${row.id}`,
       title: `Destination "${String(row.title)}" added`,
-      occurredAt: new Date(row.occurred_at).toISOString(),
+      occurredAt: toIsoSgt(
+        row.occurred_at instanceof Date || typeof row.occurred_at === "string"
+          ? row.occurred_at
+          : String(row.occurred_at ?? "")
+      ) ?? String(row.occurred_at ?? ""),
       createdBy: null,
       updatedBy: null,
       icon: "MapPin",
@@ -342,7 +381,11 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
     ...testimonials.map((row) => ({
       id: `testimonial-${row.id}`,
       title: `Testimonial from ${String(row.title)} approved`,
-      occurredAt: new Date(row.occurred_at).toISOString(),
+      occurredAt: toIsoSgt(
+        row.occurred_at instanceof Date || typeof row.occurred_at === "string"
+          ? row.occurred_at
+          : String(row.occurred_at ?? "")
+      ) ?? String(row.occurred_at ?? ""),
       createdBy: null,
       updatedBy: null,
       icon: "Star",

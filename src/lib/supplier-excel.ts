@@ -4,6 +4,7 @@ import {
   buildSupplierSummary,
   type SupplierRecord,
 } from "@/lib/supplier-types";
+import { toDateOnlySgt } from "@/lib/format-date";
 
 const EXCEL_HEADERS = [
   "Date Added/Updated",
@@ -81,7 +82,7 @@ export function downloadSuppliersExcel(suppliers: SupplierRecord[]) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `FT-Suppliers-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `FT-Suppliers-${toDateOnlySgt(new Date()) ?? "export"}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();

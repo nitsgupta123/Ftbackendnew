@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import {
@@ -33,6 +31,7 @@ import type {
 } from "@/components/settings/access-control/types";
 import { normalizeExtended, useRolePermissions } from "@/components/settings/access-control/useRolePermissions";
 import { useEmployeeOverrides } from "@/components/settings/access-control/useEmployeeOverrides";
+import { nowIsoSgt } from "@/lib/format-date";
 
 const GOLD = "#A68231";
 const PROTECTED_ROLES = new Set(["owner", "super_admin"]);
@@ -80,7 +79,7 @@ function readLocalStorageJson<T>(key: string, fallback: T): T {
 }
 
 function nowIso(): string {
-  return new Date().toISOString();
+  return nowIsoSgt();
 }
 
 export default function RolesPanel() {

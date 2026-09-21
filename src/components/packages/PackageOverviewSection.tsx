@@ -1,7 +1,6 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
-import Link from "next/link";
+
 import { NativeSelect } from "@/components/ui/native-select";
 import { getPackageRecordKey } from "@/lib/package-api";
 import { packageAllPackagesHref, type PackageRecord } from "@/lib/package-types";
@@ -111,8 +110,8 @@ function getPublishedAt(pkg: PackageRecord): string | null {
 function buildRecentPublished(packages: PackageRecord[]): RecentPublishedItem[] {
   return packages.map((pkg, index) => {
     const subtitle =
-      pkg.package_basics?.countriesCovered ||
       pkg.package_basics?.citiesOrRegions ||
+      pkg.package_basics?.countriesCovered ||
       pkg.slug ||
       pkg.supplier_name ||
       "International";
@@ -243,7 +242,7 @@ export default function PackageOverviewSection({ packages, recentPublished }: Pa
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-[#111827]">Recently Published Packages</h2>
           <Link
-            href={packageAllPackagesHref("published")}
+            to={packageAllPackagesHref("published")}
             className="text-xs font-medium text-[#374151] hover:text-[#111827]">
             
             View All

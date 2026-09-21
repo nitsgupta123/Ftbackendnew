@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   createBlogPost,
   deleteBlogPost,
@@ -35,7 +36,7 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load blog stats",
+        error: getSafeErrorMessage(error, "Failed to load blog stats"),
       });
     }
   });
@@ -47,7 +48,7 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load blog authors",
+        error: getSafeErrorMessage(error, "Failed to load blog authors"),
       });
     }
   });
@@ -79,7 +80,7 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list blog posts",
+        error: getSafeErrorMessage(error, "Failed to list blog posts"),
       });
     }
   });
@@ -101,7 +102,7 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch blog post",
+        error: getSafeErrorMessage(error, "Failed to fetch blog post"),
       });
     }
   });
@@ -121,7 +122,7 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(201).send({ post });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to create blog post";
+      const message = getSafeErrorMessage(error, "Failed to create blog post");
       return reply.status(500).send({ error: message });
     }
   });
@@ -151,7 +152,7 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ post });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to update blog post";
+      const message = getSafeErrorMessage(error, "Failed to update blog post");
       return reply.status(500).send({ error: message });
     }
   });
@@ -176,7 +177,7 @@ export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete blog post",
+        error: getSafeErrorMessage(error, "Failed to delete blog post"),
       });
     }
   });

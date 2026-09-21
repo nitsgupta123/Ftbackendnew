@@ -1,5 +1,3 @@
-"use client";
-
 import { GUIDE_ITEMS } from "@/lib/constants";import { Button } from "@/components/ui/button";
 
 const FIRST_ROW_ITEMS = GUIDE_ITEMS.slice(0, 3);

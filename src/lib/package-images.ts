@@ -7,10 +7,17 @@ export function normalizeLegacyImagePath(path: string): string {
 }
 
 export function getLegacyAssetBaseUrl(): string {
-  const base =
-    process.env.NEXT_PUBLIC_LEGACY_ASSET_BASE_URL ??
-    process.env.LEGACY_ASSET_BASE_URL ??
-    DEFAULT_ASSET_BASE;
+  let fromVite: string | undefined;
+  try {
+    fromVite = import.meta.env?.VITE_LEGACY_ASSET_BASE_URL;
+  } catch {
+    fromVite = undefined;
+  }
+  const fromProcess =
+    typeof process !== "undefined"
+      ? process.env.LEGACY_ASSET_BASE_URL || process.env.VITE_LEGACY_ASSET_BASE_URL
+      : undefined;
+  const base = fromVite || fromProcess || DEFAULT_ASSET_BASE;
 
   return base.replace(/\/$/, "");
 }

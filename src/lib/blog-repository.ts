@@ -1,10 +1,12 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { PackageAuditContext } from "./audit-context";
-import { query } from "./db";
-import { nowMysqlDateTimeSgt, toValidDate } from "./format-date";
+import { query, sqlLimit, sqlOffset } from "./db";
+import { nowIsoSgt, nowMysqlDateTimeSgt, toIsoSgt, toValidDate } from "./format-date";
+import { LEGACY_TABLES } from "./legacy-tables";
 import { slugify, uniqueSlug } from "./slug";
 import type {
   BlogPostRecord,
+  BlogPostStatus,
   BlogStats,
   CreateBlogPostInput,
   ListBlogPostsParams,
@@ -12,31 +14,53 @@ import type {
   UpdateBlogPostInput,
 } from "./blog-types";
 
-const POSTS_TABLE = "blog_posts";
-const CATEGORIES_TABLE = "blog_categories";
+const POSTS_TABLE = LEGACY_TABLES.posts;
+const DETAILS_TABLE = LEGACY_TABLES.postDetails;
+const CATEGORIES_TABLE = LEGACY_TABLES.categories;
 
-function parseTags(value: unknown): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value.map(String).filter(Boolean);
+function toIso(value: unknown): string | null {
+  if (!value) return null;
+  return toIsoSgt(value instanceof Date || typeof value === "string" ? value : String(value));
+}
+
+function mapStatus(row: RowDataPacket): BlogPostStatus {
+  if (Number(row.is_auto_scheduled) === 1 && Number(row.is_auto_scheduled_posted) !== 1) {
+    return "scheduled";
   }
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
-    } catch {
-      return [];
-    }
+  if (Number(row.is_draft) === 1) return "draft";
+  if (Number(row.post_status) === 2) return "archived";
+  if (Number(row.post_status) === 1) return "published";
+  return "draft";
+}
+
+function statusToColumns(status: BlogPostStatus, publishedAt: string | null): {
+  is_draft: number;
+  post_status: number;
+  is_auto_scheduled: number;
+  auto_schedule_date: string | null;
+} {
+  if (status === "scheduled") {
+    return {
+      is_draft: 1,
+      post_status: 10,
+      is_auto_scheduled: 1,
+      auto_schedule_date: publishedAt ? publishedAt.slice(0, 10) : null,
+    };
   }
-  return [];
+  if (status === "published") {
+    return { is_draft: 0, post_status: 1, is_auto_scheduled: 0, auto_schedule_date: null };
+  }
+  if (status === "archived") {
+    return { is_draft: 0, post_status: 2, is_auto_scheduled: 0, auto_schedule_date: null };
+  }
+  return { is_draft: 1, post_status: 10, is_auto_scheduled: 0, auto_schedule_date: null };
 }
 
 function parseRelatedPackageIds(value: unknown): number[] {
   if (!value) return [];
   let raw: unknown[] = [];
-  if (Array.isArray(value)) {
-    raw = value;
-  } else if (typeof value === "string") {
+  if (Array.isArray(value)) raw = value;
+  else if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       raw = Array.isArray(parsed) ? parsed : [];
@@ -44,51 +68,59 @@ function parseRelatedPackageIds(value: unknown): number[] {
       return [];
     }
   }
-  const ids = raw
-    .map((item) => (typeof item === "number" ? item : Number(item)))
-    .filter((id) => Number.isInteger(id) && id > 0);
-  return [...new Set(ids)];
+  return [
+    ...new Set(
+      raw
+        .map((item) => (typeof item === "number" ? item : Number(item)))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
 }
 
 function parsePostRow(row: RowDataPacket): BlogPostRecord {
+  const created = toIso(row.insert_date) ?? nowIsoSgt();
+  const updated = toIso(row.edit_date) ?? created;
+  const published = toIso(row.post_date) ?? toIso(row.auto_schedule_date);
   return {
     id: Number(row.id),
-    title: row.title,
-    slug: row.slug,
-    excerpt: row.excerpt ?? null,
-    content: row.content ?? null,
-    featured_image_path: row.featured_image_path ?? null,
-    category_id: row.category_id !== null && row.category_id !== undefined ? Number(row.category_id) : null,
+    title: String(row.post_title ?? ""),
+    slug: String(row.post_url ?? ""),
+    excerpt: null,
+    content: row.post_content ?? null,
+    featured_image_path: row.feature_img ?? null,
+    category_id: row.post_cat ? Number(row.post_cat) : null,
     category_name: row.category_name ?? null,
-    author_name: row.author_name ?? null,
-    status: row.status,
-    is_featured: Boolean(row.is_featured),
-    published_at:
-      row.published_at instanceof Date
-        ? row.published_at.toISOString()
-        : row.published_at
-          ? String(row.published_at)
-          : null,
-    tags: parseTags(row.tags),
-    related_package_ids: parseRelatedPackageIds(row.related_package_ids),
-    seo_meta_title: row.seo_meta_title ?? null,
-    seo_meta_description: row.seo_meta_description ?? null,
-    created_by: row.created_by ?? null,
-    updated_by: row.updated_by ?? null,
-    created_at:
-      row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    updated_at:
-      row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    author_name: null,
+    status: mapStatus(row),
+    is_featured: Number(row.sale_page) === 1,
+    published_at: published,
+    tags: [],
+    related_package_ids: [],
+    seo_meta_title: row.meta_title ?? null,
+    seo_meta_description: row.meta_discription ?? null,
+    created_by: null,
+    updated_by: null,
+    created_at: created,
+    updated_at: updated,
   };
 }
 
+const POST_SELECT = `
+  SELECT p.*,
+         c.cat_title AS category_name,
+         d.meta_title, d.meta_discription, d.meta_keyword
+  FROM ${POSTS_TABLE} p
+  LEFT JOIN ${CATEGORIES_TABLE} c ON c.id = p.post_cat
+  LEFT JOIN ${DETAILS_TABLE} d ON d.post_id = p.id
+`;
+
 async function listExistingSlugs(excludeId?: number): Promise<string[]> {
   const sql = excludeId
-    ? `SELECT slug FROM ${POSTS_TABLE} WHERE id != ?`
-    : `SELECT slug FROM ${POSTS_TABLE}`;
+    ? `SELECT post_url AS slug FROM ${POSTS_TABLE} WHERE id != ? AND post_type = 'article'`
+    : `SELECT post_url AS slug FROM ${POSTS_TABLE} WHERE post_type = 'article'`;
   const params = excludeId ? [excludeId] : [];
   const rows = await query<RowDataPacket[]>(sql, params);
-  return rows.map((r) => r.slug as string);
+  return rows.map((r) => String(r.slug));
 }
 
 export async function resolveBlogPostSlug(
@@ -97,22 +129,23 @@ export async function resolveBlogPostSlug(
   excludeId?: number
 ): Promise<string> {
   const base = requestedSlug?.trim() ? slugify(requestedSlug) : slugify(title);
-  if (!base) {
-    throw new Error("Unable to generate a valid slug");
-  }
-
+  if (!base) throw new Error("Unable to generate a valid slug");
   const existing = await listExistingSlugs(excludeId);
-  if (!existing.includes(base)) {
-    return base;
-  }
+  if (!existing.includes(base)) return base;
   return uniqueSlug(base, existing);
 }
 
-const POST_SELECT = `
-  SELECT p.*, c.name AS category_name
-  FROM ${POSTS_TABLE} p
-  LEFT JOIN ${CATEGORIES_TABLE} c ON c.id = p.category_id
-`;
+function statusWhere(status: string): { sql: string; values: number[] } | null {
+  if (status === "all") return null;
+  if (status === "draft") return { sql: "p.is_draft = 1 AND IFNULL(p.is_auto_scheduled,0) = 0", values: [] };
+  if (status === "published") return { sql: "p.is_draft = 0 AND p.post_status = 1", values: [] };
+  if (status === "archived") return { sql: "p.post_status = 2", values: [] };
+  if (status === "scheduled") {
+    return { sql: "p.is_auto_scheduled = 1 AND IFNULL(p.is_auto_scheduled_posted,0) = 0", values: [] };
+  }
+  if (status === "pending_review") return { sql: "p.is_draft = 1 AND p.post_status = 10", values: [] };
+  return null;
+}
 
 export async function listBlogPosts(
   params: ListBlogPostsParams = {}
@@ -121,7 +154,6 @@ export async function listBlogPosts(
     search,
     status = "all",
     category_id,
-    author_name,
     sort = "published_at",
     order = "desc",
     page = 1,
@@ -129,44 +161,30 @@ export async function listBlogPosts(
     featuredOnly = false,
   } = params;
 
-  const conditions: string[] = [];
+  const conditions: string[] = ["p.post_type = 'article'"];
   const values: (string | number)[] = [];
 
-  if (status !== "all") {
-    conditions.push("p.status = ?");
-    values.push(status);
-  }
+  const statusFilter = statusWhere(status);
+  if (statusFilter) conditions.push(statusFilter.sql);
 
   if (category_id) {
-    conditions.push("p.category_id = ?");
+    conditions.push("p.post_cat = ?");
     values.push(category_id);
   }
-
-  if (author_name?.trim()) {
-    conditions.push("p.author_name = ?");
-    values.push(author_name.trim());
-  }
-
-  if (featuredOnly) {
-    conditions.push("p.is_featured = 1");
-  }
-
+  if (featuredOnly) conditions.push("p.sale_page = 1");
   if (search?.trim()) {
-    conditions.push("(p.title LIKE ? OR p.excerpt LIKE ? OR p.author_name LIKE ?)");
+    conditions.push("(p.post_title LIKE ? OR p.post_content LIKE ? OR p.post_url LIKE ?)");
     const term = `%${search.trim()}%`;
     values.push(term, term, term);
   }
 
-  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
+  const whereClause = `WHERE ${conditions.join(" AND ")}`;
   const sortColumn =
     sort === "title"
-      ? "p.title"
+      ? "p.post_title"
       : sort === "created_at"
-        ? "p.created_at"
-        : sort === "author_name"
-          ? "p.author_name"
-          : "COALESCE(p.published_at, p.created_at)";
+        ? "p.insert_date"
+        : "COALESCE(p.post_date, p.insert_date)";
   const sortOrder = order === "asc" ? "ASC" : "DESC";
 
   const countRows = await query<RowDataPacket[]>(
@@ -174,17 +192,16 @@ export async function listBlogPosts(
     values
   );
   const total = Number(countRows[0]?.total ?? 0);
-
-  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  const safeLimit = sqlLimit(limit);
   const safePage = Math.max(page, 1);
-  const offset = (safePage - 1) * safeLimit;
+  const offset = sqlOffset((safePage - 1) * safeLimit);
 
   const rows = await query<RowDataPacket[]>(
     `${POST_SELECT}
      ${whereClause}
-     ORDER BY ${sortColumn} ${sortOrder}, p.updated_at DESC
-     LIMIT ? OFFSET ?`,
-    [...values, safeLimit, offset]
+     ORDER BY ${sortColumn} ${sortOrder}, p.edit_date DESC
+     LIMIT ${safeLimit} OFFSET ${offset}`,
+    values
   );
 
   return {
@@ -197,34 +214,31 @@ export async function listBlogPosts(
 }
 
 export async function getBlogPostById(id: number): Promise<BlogPostRecord | null> {
-  const rows = await query<RowDataPacket[]>(`${POST_SELECT} WHERE p.id = ? LIMIT 1`, [id]);
+  const rows = await query<RowDataPacket[]>(
+    `${POST_SELECT} WHERE p.id = ? AND p.post_type = 'article' LIMIT 1`,
+    [id]
+  );
   if (!rows.length) return null;
   return parsePostRow(rows[0]);
 }
 
 export async function listBlogAuthors(): Promise<string[]> {
-  const rows = await query<RowDataPacket[]>(
-    `SELECT DISTINCT TRIM(author_name) AS author_name
-     FROM ${POSTS_TABLE}
-     WHERE author_name IS NOT NULL AND TRIM(author_name) <> ''
-     ORDER BY TRIM(author_name) ASC`
-  );
-  return rows.map((row) => String(row.author_name).trim()).filter(Boolean);
+  return [];
 }
 
 export async function getBlogStats(): Promise<BlogStats> {
   const rows = await query<RowDataPacket[]>(
     `SELECT
       COUNT(*) AS total,
-      SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft,
-      SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) AS pending_review,
-      SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) AS scheduled,
-      SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) AS published,
-      SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END) AS archived,
-      SUM(CASE WHEN is_featured = 1 THEN 1 ELSE 0 END) AS featured
-     FROM ${POSTS_TABLE}`
+      SUM(CASE WHEN is_draft = 1 AND IFNULL(is_auto_scheduled,0) = 0 THEN 1 ELSE 0 END) AS draft,
+      SUM(CASE WHEN is_draft = 1 AND post_status = 10 THEN 1 ELSE 0 END) AS pending_review,
+      SUM(CASE WHEN is_auto_scheduled = 1 AND IFNULL(is_auto_scheduled_posted,0) = 0 THEN 1 ELSE 0 END) AS scheduled,
+      SUM(CASE WHEN is_draft = 0 AND post_status = 1 THEN 1 ELSE 0 END) AS published,
+      SUM(CASE WHEN post_status = 2 THEN 1 ELSE 0 END) AS archived,
+      SUM(CASE WHEN sale_page = 1 THEN 1 ELSE 0 END) AS featured
+     FROM ${POSTS_TABLE}
+     WHERE post_type = 'article'`
   );
-
   const row = rows[0] ?? {};
   return {
     total: Number(row.total ?? 0),
@@ -246,25 +260,18 @@ function assertScheduledHasPublishAt(
   }
 }
 
-/** True when the SGT wall-clock datetime is strictly after now (SGT). */
 function isFuturePublishAt(publishedAt: string | null | undefined): boolean {
   const date = toValidDate(publishedAt);
   if (!date) return false;
   return date.getTime() > Date.now();
 }
 
-/**
- * Posts with a future publish time must be `scheduled` so they appear on the
- * Scheduled Posts page and the cron can publish them later.
- */
 function resolveBlogPostStatus(
   status: string | undefined,
   publishedAt: string | null | undefined
-): string {
-  const resolved = status ?? "draft";
-  if (resolved === "published" && isFuturePublishAt(publishedAt)) {
-    return "scheduled";
-  }
+): BlogPostStatus {
+  const resolved = (status ?? "draft") as BlogPostStatus;
+  if (resolved === "published" && isFuturePublishAt(publishedAt)) return "scheduled";
   return resolved;
 }
 
@@ -274,174 +281,161 @@ function resolvePublishedAt(
   existingPublishedAt: string | null
 ): string | null {
   if (status === "scheduled") {
-    if (publishedAt) return publishedAt;
-    if (existingPublishedAt) return existingPublishedAt;
-    return null;
+    return publishedAt || existingPublishedAt || null;
   }
   if (status === "published") {
-    if (publishedAt) return publishedAt;
-    if (existingPublishedAt) return existingPublishedAt;
-    return nowMysqlDateTimeSgt();
+    return publishedAt || existingPublishedAt || nowMysqlDateTimeSgt();
   }
-  if (publishedAt !== undefined) {
-    return publishedAt;
-  }
+  if (publishedAt !== undefined) return publishedAt ?? null;
   return existingPublishedAt;
+}
+
+async function upsertPostDetails(
+  postId: number,
+  metaTitle: string | null,
+  metaDescription: string | null
+): Promise<void> {
+  const existing = await query<RowDataPacket[]>(
+    `SELECT id FROM ${DETAILS_TABLE} WHERE post_id = ? LIMIT 1`,
+    [postId]
+  );
+  if (existing[0]?.id) {
+    await query(
+      `UPDATE ${DETAILS_TABLE}
+       SET meta_title = ?, meta_discription = ?, edit_date = NOW()
+       WHERE post_id = ?`,
+      [metaTitle, metaDescription, postId]
+    );
+    return;
+  }
+  await query(
+    `INSERT INTO ${DETAILS_TABLE}
+      (blog_id, post_id, meta_title, meta_discription, meta_keyword, banner_content, inset_date, edit_date)
+     VALUES ('', ?, ?, ?, '', '', NOW(), NOW())`,
+    [postId, metaTitle, metaDescription]
+  );
 }
 
 export async function createBlogPost(
   input: CreateBlogPostInput,
-  audit?: PackageAuditContext
+  _audit?: PackageAuditContext
 ): Promise<BlogPostRecord> {
   const title = input.title.trim();
-  if (!title) {
-    throw new Error("Blog title is required");
-  }
+  if (!title) throw new Error("Blog title is required");
 
   const slug = await resolveBlogPostSlug(title, input.slug);
-  const auditUser = audit?.user ?? null;
   const preliminaryStatus = input.status ?? "draft";
   const publishedAt = resolvePublishedAt(preliminaryStatus, input.published_at, null);
   const status = resolveBlogPostStatus(preliminaryStatus, publishedAt);
   assertScheduledHasPublishAt(status, publishedAt);
-  const tagsJson = JSON.stringify(input.tags ?? []);
-  const relatedPackageIdsJson = JSON.stringify(
-    parseRelatedPackageIds(input.related_package_ids ?? [])
-  );
+  const cols = statusToColumns(status, publishedAt);
 
   const result = await query<ResultSetHeader>(
     `INSERT INTO ${POSTS_TABLE} (
-      title, slug, excerpt, content, featured_image_path, category_id, author_name,
-      status, is_featured, published_at, tags, related_package_ids,
-      seo_meta_title, seo_meta_description, created_by, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      blog_id, post_type, post_title, post_url, post_content, post_parent, post_template,
+      slider_option, dark_shade, feature_img, post_slider, sale_page, post_cat, post_date,
+      insert_date, edit_date, content_display, breadcrumb, post_status, user_id,
+      is_draft, is_auto_scheduled, auto_schedule_date, is_auto_scheduled_posted
+    ) VALUES (
+      '', 'article', ?, ?, ?, 0, '',
+      0, 0, ?, 0, ?, ?, ?,
+      NOW(), NOW(), 1, 1, ?, 0,
+      ?, ?, ?, 0
+    )`,
     [
       title,
       slug,
-      input.excerpt?.trim() || null,
       input.content ?? null,
       input.featured_image_path?.trim() || null,
-      input.category_id ?? null,
-      input.author_name?.trim() || null,
-      status,
       input.is_featured ? 1 : 0,
-      publishedAt,
-      tagsJson,
-      relatedPackageIdsJson,
-      input.seo_meta_title?.trim() || null,
-      input.seo_meta_description?.trim() || null,
-      auditUser,
-      auditUser,
+      input.category_id ?? 0,
+      publishedAt ? publishedAt.slice(0, 10) : null,
+      cols.post_status,
+      cols.is_draft,
+      cols.is_auto_scheduled,
+      cols.auto_schedule_date,
     ]
   );
 
+  await upsertPostDetails(
+    result.insertId,
+    input.seo_meta_title?.trim() || null,
+    input.seo_meta_description?.trim() || null
+  );
+
   const created = await getBlogPostById(result.insertId);
-  if (!created) {
-    throw new Error("Failed to load blog post after create");
-  }
+  if (!created) throw new Error("Failed to load blog post after create");
   return created;
 }
 
 export async function updateBlogPost(
   id: number,
   input: UpdateBlogPostInput,
-  audit?: PackageAuditContext
+  _audit?: PackageAuditContext
 ): Promise<BlogPostRecord | null> {
   const existing = await getBlogPostById(id);
   if (!existing) return null;
 
-  const fields: string[] = [];
-  const values: (string | number | null)[] = [];
-
-  if (input.title !== undefined) {
-    const title = input.title.trim();
-    if (!title) {
-      throw new Error("Blog title is required");
-    }
-    fields.push("title = ?");
-    values.push(title);
-  }
-
-  if (input.slug !== undefined || input.title !== undefined) {
-    const titleForSlug = input.title?.trim() ?? existing.title;
-    const slug = await resolveBlogPostSlug(titleForSlug, input.slug ?? existing.slug, id);
-    fields.push("slug = ?");
-    values.push(slug);
-  }
-
-  if (input.excerpt !== undefined) {
-    fields.push("excerpt = ?");
-    values.push(input.excerpt?.trim() || null);
-  }
-  if (input.content !== undefined) {
-    fields.push("content = ?");
-    values.push(input.content ?? null);
-  }
-  if (input.featured_image_path !== undefined) {
-    fields.push("featured_image_path = ?");
-    values.push(input.featured_image_path?.trim() || null);
-  }
-  if (input.category_id !== undefined) {
-    fields.push("category_id = ?");
-    values.push(input.category_id);
-  }
-  if (input.author_name !== undefined) {
-    fields.push("author_name = ?");
-    values.push(input.author_name?.trim() || null);
-  }
-  if (input.is_featured !== undefined) {
-    fields.push("is_featured = ?");
-    values.push(input.is_featured ? 1 : 0);
-  }
-  if (input.tags !== undefined) {
-    fields.push("tags = ?");
-    values.push(JSON.stringify(input.tags ?? []));
-  }
-  if (input.related_package_ids !== undefined) {
-    fields.push("related_package_ids = ?");
-    values.push(JSON.stringify(parseRelatedPackageIds(input.related_package_ids)));
-  }
-  if (input.seo_meta_title !== undefined) {
-    fields.push("seo_meta_title = ?");
-    values.push(input.seo_meta_title?.trim() || null);
-  }
-  if (input.seo_meta_description !== undefined) {
-    fields.push("seo_meta_description = ?");
-    values.push(input.seo_meta_description?.trim() || null);
-  }
+  const title = input.title !== undefined ? input.title.trim() : existing.title;
+  if (!title) throw new Error("Blog title is required");
+  const slug = await resolveBlogPostSlug(title, input.slug ?? existing.slug, id);
 
   const preliminaryStatus = input.status ?? existing.status;
-  if (input.status !== undefined || input.published_at !== undefined) {
-    const publishedAt = resolvePublishedAt(
-      preliminaryStatus,
-      input.published_at,
-      existing.published_at
-    );
-    const nextStatus = resolveBlogPostStatus(preliminaryStatus, publishedAt);
-    assertScheduledHasPublishAt(nextStatus, publishedAt);
-    fields.push("status = ?");
-    values.push(nextStatus);
-    fields.push("published_at = ?");
-    values.push(publishedAt);
-  } else {
-    assertScheduledHasPublishAt(existing.status, existing.published_at);
-  }
+  const publishedAt = resolvePublishedAt(
+    preliminaryStatus,
+    input.published_at !== undefined ? input.published_at : existing.published_at,
+    existing.published_at
+  );
+  const status = resolveBlogPostStatus(preliminaryStatus, publishedAt);
+  assertScheduledHasPublishAt(status, publishedAt);
+  const cols = statusToColumns(status, publishedAt);
 
-  if (!fields.length) {
-    return existing;
-  }
-
-  if (audit?.user) {
-    fields.push("updated_by = ?");
-    values.push(audit.user);
-  }
-
-  values.push(id);
   await query<ResultSetHeader>(
-    `UPDATE ${POSTS_TABLE} SET ${fields.join(", ")} WHERE id = ?`,
-    values
+    `UPDATE ${POSTS_TABLE} SET
+      post_title = ?,
+      post_url = ?,
+      post_content = ?,
+      feature_img = ?,
+      sale_page = ?,
+      post_cat = ?,
+      post_date = ?,
+      post_status = ?,
+      is_draft = ?,
+      is_auto_scheduled = ?,
+      auto_schedule_date = ?,
+      edit_date = NOW()
+     WHERE id = ? AND post_type = 'article'`,
+    [
+      title,
+      slug,
+      input.content !== undefined ? input.content : existing.content,
+      input.featured_image_path !== undefined
+        ? input.featured_image_path?.trim() || null
+        : existing.featured_image_path,
+      input.is_featured !== undefined ? (input.is_featured ? 1 : 0) : existing.is_featured ? 1 : 0,
+      input.category_id !== undefined ? input.category_id ?? 0 : existing.category_id ?? 0,
+      publishedAt ? publishedAt.slice(0, 10) : null,
+      cols.post_status,
+      cols.is_draft,
+      cols.is_auto_scheduled,
+      cols.auto_schedule_date,
+      id,
+    ]
   );
 
+  if (input.seo_meta_title !== undefined || input.seo_meta_description !== undefined) {
+    await upsertPostDetails(
+      id,
+      input.seo_meta_title !== undefined
+        ? input.seo_meta_title?.trim() || null
+        : existing.seo_meta_title,
+      input.seo_meta_description !== undefined
+        ? input.seo_meta_description?.trim() || null
+        : existing.seo_meta_description
+    );
+  }
+
+  void parseRelatedPackageIds;
   return getBlogPostById(id);
 }
 
@@ -451,24 +445,25 @@ export async function publishDueScheduledBlogPosts(): Promise<{
 }> {
   const dueRows = await query<RowDataPacket[]>(
     `SELECT id FROM ${POSTS_TABLE}
-     WHERE status = 'scheduled'
-       AND published_at IS NOT NULL
-       AND published_at <= NOW()
-     ORDER BY published_at ASC`
+     WHERE post_type = 'article'
+       AND is_auto_scheduled = 1
+       AND IFNULL(is_auto_scheduled_posted, 0) = 0
+       AND auto_schedule_date IS NOT NULL
+       AND auto_schedule_date <= CURDATE()
+     ORDER BY auto_schedule_date ASC`
   );
 
   const publishedIds = dueRows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id));
-  if (!publishedIds.length) {
-    return { publishedCount: 0, publishedIds: [] };
-  }
+  if (!publishedIds.length) return { publishedCount: 0, publishedIds: [] };
 
   const placeholders = publishedIds.map(() => "?").join(", ");
   await query<ResultSetHeader>(
     `UPDATE ${POSTS_TABLE}
-     SET status = 'published',
-         updated_by = 'system-scheduler'
-     WHERE id IN (${placeholders})
-       AND status = 'scheduled'`,
+     SET is_draft = 0,
+         post_status = 1,
+         is_auto_scheduled_posted = 1,
+         edit_date = NOW()
+     WHERE id IN (${placeholders})`,
     publishedIds
   );
 
@@ -476,6 +471,10 @@ export async function publishDueScheduledBlogPosts(): Promise<{
 }
 
 export async function deleteBlogPost(id: number): Promise<boolean> {
-  const result = await query<ResultSetHeader>(`DELETE FROM ${POSTS_TABLE} WHERE id = ?`, [id]);
+  const result = await query<ResultSetHeader>(
+    `UPDATE ${POSTS_TABLE} SET post_status = 2, is_draft = 0, edit_date = NOW()
+     WHERE id = ? AND post_type = 'article'`,
+    [id]
+  );
   return result.affectedRows > 0;
 }

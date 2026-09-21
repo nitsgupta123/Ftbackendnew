@@ -1,5 +1,3 @@
-"use client";
-
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import PromotionListTable from "@/components/promotions/PromotionListTable";
@@ -12,6 +10,7 @@ import {
   type PromotionRecord,
 } from "@/lib/promotion-types";
 import { Button } from "@/components/ui/button";
+import { nowIsoSgt } from "@/lib/format-date";
 
 type FormMode = "create" | "edit" | null;
 
@@ -21,7 +20,7 @@ function formValuesToRecord(
   data: PromotionFormValues,
   existing?: PromotionRecord | null
 ): PromotionRecord {
-  const now = new Date().toISOString();
+  const now = nowIsoSgt();
   return {
     id: existing?.id ?? nextId++,
     title: data.title.trim(),
@@ -123,7 +122,7 @@ const PromotionsPanel = forwardRef<PromotionsPanelHandle>(function PromotionsPan
           ? {
               ...item,
               status: item.status === "active" ? "inactive" : "active",
-              updated_at: new Date().toISOString(),
+              updated_at: nowIsoSgt(),
             }
           : item
       )

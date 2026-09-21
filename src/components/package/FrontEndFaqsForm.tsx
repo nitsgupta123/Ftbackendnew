@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Icon } from "../ui/icons";
@@ -34,7 +32,7 @@ export default function FrontEndFaqsForm({
     answer: ""
   }]);
   const inputClass = "w-full h-[48px] px-4 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-colors";
-  const selectClass = `${inputClass} cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239CA3AF%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E')] bg-[length:12px] bg-[right_16px_center] bg-no-repeat pr-10`;
+  const selectClass = `${inputClass} cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27=%27none%27 stroke=%27%239CA3AF%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E')] bg-[length:12px] bg-[right_16px_center] bg-no-repeat pr-10`;
   const labelClass = "block text-sm font-semibold text-[#1F2A44] mb-2";
   const textareaClass = "w-full min-h-[120px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-colors resize-y";
   const updateFaq = (id: string, field: keyof FaqItem, value: string) => {
@@ -66,13 +64,13 @@ export default function FrontEndFaqsForm({
       return prev.filter((faq) => faq.id !== id);
     });
   };
-  return <div className="space-y-6 animate-fade-in">
+  return <div className="space-y-6">
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-6 space-y-6">
         <div>
           <h2 className="text-lg font-bold text-[#1F2A44]">Front-End FAQs</h2>
           <p className="text-sm text-gray-400 mt-1.5 max-w-3xl leading-relaxed">
             FAQs shown on the package page. These should answer actual client
-            buying concerns and support SEO without adding generic filler.
+            buying concerns and support SEO without adding genericer.
           </p>
         </div>
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { STEPS } from "@/lib/constants";
 
 interface ProgressCardProps {
@@ -22,7 +20,7 @@ export default function ProgressCard({ currentStep = 1 }: ProgressCardProps) {
       {/* Progress bar */}
       <div className="w-full bg-[#D9B24C]/20 rounded-full h-2.5">
         <div
-          className="bg-[#A9832E] h-2.5 rounded-full transition-all duration-500"
+          className="bg-[#A9832E] h-2.5 rounded-full"
           style={{ width: `${percent}%` }}
         />
       </div>

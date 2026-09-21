@@ -1,5 +1,3 @@
-"use client";
-
 import { Icon } from "@/components/ui/icons";
 import type { PricingRuleRecord } from "@/lib/pricing-rules-types";
 import { formatPackageDateTime } from "@/lib/format-date";

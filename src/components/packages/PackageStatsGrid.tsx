@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Icon } from "@/components/ui/icons";
 import {
   packageAllPackagesHref,
@@ -158,7 +156,7 @@ export default function PackageStatsGrid({ stats, packages, loading }: PackageSt
         return (
           <Link
             key={item.key}
-            href={getStatHref(item)}
+            to={getStatHref(item)}
             className="rounded-2xl border border-[#E8ECF4] bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className={`h-10 w-10 rounded-full ${item.iconBg} flex items-center justify-center mb-3`}>

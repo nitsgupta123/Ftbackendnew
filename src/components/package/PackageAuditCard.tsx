@@ -1,5 +1,3 @@
-"use client";
-
 import { DEFAULT_AUDIT_USER } from "@/lib/audit-context";
 import { formatPackageDateTime } from "@/lib/format-date";
 import type { PackageRecord } from "@/lib/package-types";
@@ -9,9 +7,7 @@ interface PackageAuditCardProps {
 }
 
 function formatAuditDateTime(value: string | null | undefined): string {
-  const formatted = formatPackageDateTime(value);
-  if (!value || formatted === "—") return "—";
-  return formatted.endsWith(" SGT") ? formatted : `${formatted} SGT`;
+  return formatPackageDateTime(value);
 }
 
 export default function PackageAuditCard({ packageData }: PackageAuditCardProps) {

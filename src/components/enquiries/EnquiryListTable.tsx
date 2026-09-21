@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import type { EnquiryRecord } from "@/lib/enquiry-types";

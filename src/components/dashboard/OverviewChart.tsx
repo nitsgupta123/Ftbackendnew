@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { ChartDataPoint } from "@/lib/dashboard-data";
@@ -164,8 +162,7 @@ export default function OverviewChart({
                 x={toX(i) - segmentWidth / 2}
                 y={padding.top}
                 width={segmentWidth}
-                height={chartH}
-                fill="transparent"
+                height={chartH} fill="transparent"
                 onMouseEnter={() => setHoveredIndex(i)}
               />
               {shouldShowLabel(i) ? (
@@ -194,14 +191,12 @@ export default function OverviewChart({
               <circle
                 cx={toX(hoveredIndex)}
                 cy={toY(data[hoveredIndex].visitors)}
-                r={4}
-                fill="#3B82F6"
+                r={4} fill="#3B82F6"
               />
               <circle
                 cx={toX(hoveredIndex)}
                 cy={toY(data[hoveredIndex].pageViews)}
-                r={4}
-                fill="#10B981"
+                r={4} fill="#10B981"
               />
             </>
           )}

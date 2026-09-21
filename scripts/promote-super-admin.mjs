@@ -21,7 +21,10 @@ async function main() {
 
   try {
     const [existing] = await connection.query(
-      "SELECT id, email, full_name, role, is_active FROM admin_users WHERE email = ? LIMIT 1",
+      `SELECT id, user_email, first_name, last_name, user_type, status
+       FROM tbl_user
+       WHERE LOWER(user_email) = ? AND LOWER(TRIM(user_type)) <> 'front'
+       LIMIT 1`,
       [email]
     );
 
@@ -31,18 +34,25 @@ async function main() {
 
     const before = existing[0];
     await connection.query(
-      "UPDATE admin_users SET role = 'super_admin', is_active = 1 WHERE email = ?",
-      [email]
+      `UPDATE tbl_user
+       SET user_type = '1', status = 1, edit_date = NOW()
+       WHERE id = ?`,
+      [before.id]
     );
 
     const [updated] = await connection.query(
-      "SELECT id, email, full_name, role, is_active FROM admin_users WHERE email = ? LIMIT 1",
-      [email]
+      `SELECT id, user_email, first_name, last_name, user_type, status
+       FROM tbl_user WHERE id = ? LIMIT 1`,
+      [before.id]
     );
 
-    console.log("Promoted to super_admin:");
-    console.log(`  Before: ${before.full_name} <${before.email}> — ${before.role}`);
-    console.log(`  After:  ${updated[0].full_name} <${updated[0].email}> — ${updated[0].role}`);
+    console.log("Promoted to Super Admin (user_type=1):");
+    console.log(
+      `  Before: ${before.first_name} <${before.user_email}> — type ${before.user_type}`
+    );
+    console.log(
+      `  After:  ${updated[0].first_name} <${updated[0].user_email}> — type ${updated[0].user_type}`
+    );
     console.log("\nAsk the user to sign out and sign in again to refresh their session.");
   } finally {
     await connection.end();

@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import { z } from "zod";
 import {
   clearUserPermissionOverrides,
@@ -71,7 +72,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load permissions",
+        error: getSafeErrorMessage(error, "Failed to load permissions"),
       });
     }
   });
@@ -85,7 +86,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error:
-          error instanceof Error ? error.message : "Failed to load your permissions",
+          getSafeErrorMessage(error, "Failed to load your permissions"),
       });
     }
   });
@@ -121,7 +122,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error:
-          error instanceof Error ? error.message : "Failed to load user permissions",
+          getSafeErrorMessage(error, "Failed to load user permissions"),
       });
     }
   });
@@ -179,7 +180,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error:
-          error instanceof Error ? error.message : "Failed to update user permissions",
+          getSafeErrorMessage(error, "Failed to update user permissions"),
       });
     }
   });
@@ -215,7 +216,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error:
-          error instanceof Error ? error.message : "Failed to reset user permissions",
+          getSafeErrorMessage(error, "Failed to reset user permissions"),
       });
     }
   });
@@ -260,7 +261,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error:
-          error instanceof Error ? error.message : "Failed to update permissions",
+          getSafeErrorMessage(error, "Failed to update permissions"),
       });
     }
   });
@@ -291,7 +292,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ matrix });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to rename role";
+      const message = getSafeErrorMessage(error, "Failed to rename role");
       return reply.status(message.includes("already exists") ? 409 : 500).send({
         error: message,
       });
@@ -318,7 +319,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete role",
+        error: getSafeErrorMessage(error, "Failed to delete role"),
       });
     }
   });
@@ -341,7 +342,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error:
-          error instanceof Error ? error.message : "Failed to reset permissions",
+          getSafeErrorMessage(error, "Failed to reset permissions"),
       });
     }
   });

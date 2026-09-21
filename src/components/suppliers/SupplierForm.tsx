@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
 import ServiceOfferedSelect from "@/components/suppliers/ServiceOfferedSelect";
+import { toDateOnlySgt } from "@/lib/format-date";
 
 const inputClass =
   "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
@@ -54,15 +53,13 @@ function FieldLabel({
 }
 
 function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+  return toDateOnlySgt(new Date()) ?? "";
 }
 
 function toInputDate(value: string | null | undefined): string {
   if (!value?.trim()) return "";
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().slice(0, 10);
+  return toDateOnlySgt(value) ?? "";
 }
 
 function resolveDateAddedUpdated(supplier?: SupplierRecord | null): string {

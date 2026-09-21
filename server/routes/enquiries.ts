@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   deleteEnquiry,
   findEnquiryById,
@@ -54,7 +55,7 @@ export const registerEnquiryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch enquiry stats",
+        error: getSafeErrorMessage(error, "Failed to fetch enquiry stats"),
       });
     }
   });
@@ -75,7 +76,7 @@ export const registerEnquiryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list enquiries",
+        error: getSafeErrorMessage(error, "Failed to list enquiries"),
       });
     }
   });
@@ -97,7 +98,7 @@ export const registerEnquiryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch enquiry",
+        error: getSafeErrorMessage(error, "Failed to fetch enquiry"),
       });
     }
   });
@@ -124,7 +125,7 @@ export const registerEnquiryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to update enquiry",
+        error: getSafeErrorMessage(error, "Failed to update enquiry"),
       });
     }
   });
@@ -146,7 +147,7 @@ export const registerEnquiryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete enquiry",
+        error: getSafeErrorMessage(error, "Failed to delete enquiry"),
       });
     }
   });

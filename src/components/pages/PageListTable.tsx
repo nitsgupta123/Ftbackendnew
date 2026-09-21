@@ -1,8 +1,7 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
+
+
 import { Icon } from "@/components/ui/icons";
 import { deletePage } from "@/lib/page-api";
 import type { CmsPageRecord } from "@/lib/page-types";
@@ -49,12 +48,11 @@ function PageThumbnail({ page }: { page: CmsPageRecord }) {
   }
 
   return (
-    <Image
+    <img
       src={page.featured_image_path}
       alt={page.title}
       width={56}
       height={40}
-      unoptimized
       className="h-10 w-14 rounded-lg object-cover border border-[#E5E7EB]"
       onError={() => setHasError(true)}
     />
@@ -99,7 +97,7 @@ function PageRowActions({
       >
         <Icon name="Eye" size={16} />
       </Button>
-      <Link href={`/pages/edit/${page.id}`} className={actionIconClass} title="Edit">
+      <Link to={`/pages/edit/${page.id}`} className={actionIconClass} title="Edit">
         <Icon name="Pencil" size={16} />
       </Link>
       {canDelete && (

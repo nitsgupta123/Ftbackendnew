@@ -1,5 +1,3 @@
-"use client";
-
 import type { AccessModuleDefinition, AccessModuleGroup } from "@/lib/permission-types";
 
 export type PermissionKey =

@@ -1,5 +1,8 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Fayyaz Travels Admin (Vite + React)
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+This is a Vite + React Router SPA under `/panel`, with a Fastify API.
+
+- Frontend: `npm run dev:web` (Vite on port 5173, proxies `/api` and `/uploads`)
+- API: `npm run dev:api` (Fastify on port 4000)
+- Combined: `npm run dev`
+- Production: `npm run build` then `npm start` (API serves `dist/` at `/panel`)

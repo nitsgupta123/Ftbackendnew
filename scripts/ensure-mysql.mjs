@@ -1,6 +1,10 @@
 import { createConnection } from "net";
 import { spawn } from "child_process";
 import { existsSync } from "fs";
+import { config } from "dotenv";
+
+config({ path: ".env.local" });
+config();
 
 const DB_HOST = process.env.DB_HOST ?? "127.0.0.1";
 const DB_PORT = Number(process.env.DB_PORT ?? 3306);

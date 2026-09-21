@@ -1,7 +1,6 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useState } from "react";
-import Link from "next/link";
+
 import { Icon } from "@/components/ui/icons";
 import { deletePackageTemplate } from "@/lib/package-template-api";
 import { TEMPLATE_STEP_OPTIONS, type PackageTemplateRecord } from "@/lib/package-template-types";
@@ -91,7 +90,7 @@ function TemplateRowActions({
         <Icon name="Pencil" size={16} />
       </Button>
       <Link
-        href={`/add-package?templateId=${template.id}`}
+        to={`/add-package?templateId=${template.id}`}
         className={actionIconClass}
         title="Use template"
       >

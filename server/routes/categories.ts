@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   createCategory,
   deleteCategory,
@@ -43,7 +44,7 @@ export const registerCategoryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list categories",
+        error: getSafeErrorMessage(error, "Failed to list categories"),
       });
     }
   });
@@ -65,7 +66,7 @@ export const registerCategoryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch category",
+        error: getSafeErrorMessage(error, "Failed to fetch category"),
       });
     }
   });
@@ -85,7 +86,7 @@ export const registerCategoryRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(201).send({ category });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to create category";
+      const message = getSafeErrorMessage(error, "Failed to create category");
       const status = message.includes("already exists") ? 409 : 500;
       return reply.status(status).send({ error: message });
     }
@@ -116,7 +117,7 @@ export const registerCategoryRoutes: FastifyPluginAsync = async (app) => {
       return reply.send({ category });
     } catch (error) {
       app.log.error(error);
-      const message = error instanceof Error ? error.message : "Failed to update category";
+      const message = getSafeErrorMessage(error, "Failed to update category");
       const status = message.includes("already exists") ? 409 : 500;
       return reply.status(status).send({ error: message });
     }
@@ -142,7 +143,7 @@ export const registerCategoryRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete category",
+        error: getSafeErrorMessage(error, "Failed to delete category"),
       });
     }
   });

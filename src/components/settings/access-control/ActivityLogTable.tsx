@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import type { ActivityItem } from "./types";
 import { formatPackageDateTime } from "@/lib/format-date";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { resetRolePermissions, updateRolePermissions } from "@/lib/permission-api";
 import { updateUser } from "@/lib/user-api";
@@ -12,6 +10,7 @@ import type {
   PermissionKey,
   RoleMeta,
 } from "./types";
+import { nowIsoSgt } from "@/lib/format-date";
 
 const LOCAL_STORAGE_ROLE_META = "ftadmin-role-meta-v1";
 
@@ -27,7 +26,7 @@ function readLocalStorageJson<T>(key: string, fallback: T): T {
 }
 
 function nowIso(): string {
-  return new Date().toISOString();
+  return nowIsoSgt();
 }
 
 function slugify(input: string): string {

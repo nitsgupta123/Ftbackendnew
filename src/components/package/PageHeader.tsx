@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Icon } from "../ui/icons";
 import { STEPS } from "@/lib/constants";
 import type { PackageStatus } from "@/lib/package-types";
@@ -47,7 +45,7 @@ export default function PageHeader({
   return (
     <div className="mb-6">
       <Link
-        href="/packages"
+        to="/packages"
         className="mb-3 flex w-fit items-center gap-1.5 text-sm text-gray-400 transition-colors hover:text-gray-600"
       >
         <Icon name="ArrowLeft" size={16} />

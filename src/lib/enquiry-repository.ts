@@ -1,5 +1,6 @@
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
-import { query, type QueryParam } from "./db";
+import { query, sqlLimit, sqlOffset, type QueryParam } from "./db";
+import { toIsoSgt } from "./format-date";
 import type {
   EnquiryRecord,
   EnquirySortField,
@@ -9,8 +10,6 @@ import type {
   ListEnquiriesParams,
   ListEnquiriesResult,
 } from "./enquiry-types";
-
-const LEGACY_DB = process.env.LEGACY_DB_NAME ?? "fz";
 
 const SORT_COLUMNS: Record<EnquirySortField, string> = {
   insert_date: "m.insert_date",
@@ -25,8 +24,9 @@ function asString(value: unknown): string {
 
 function asNullableDate(value: unknown): string | null {
   if (value == null) return null;
-  if (value instanceof Date) return value.toISOString();
-  return String(value);
+  return toIsoSgt(
+    value instanceof Date || typeof value === "string" ? value : String(value)
+  );
 }
 
 function mapEnquiry(row: RowDataPacket): EnquiryRecord {
@@ -115,7 +115,7 @@ export async function getEnquiryStats(): Promise<EnquiryStats> {
         SUM(CASE WHEN message_type = 'popupenquery' THEN 1 ELSE 0 END) AS popup,
         SUM(CASE WHEN message_type = 'contactus_visa' THEN 1 ELSE 0 END) AS visa,
         SUM(CASE WHEN message_type = 'contactus_corporate' THEN 1 ELSE 0 END) AS corporate
-      FROM ${LEGACY_DB}.tbl_message
+      FROM tbl_message
     `
   );
 
@@ -136,8 +136,8 @@ export async function listEnquiries(
   params: ListEnquiriesParams = {}
 ): Promise<ListEnquiriesResult> {
   const page = Math.max(1, params.page ?? 1);
-  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
-  const offset = (page - 1) * limit;
+  const limit = sqlLimit(params.limit ?? 20);
+  const offset = sqlOffset((page - 1) * limit);
   const sort = params.sort && SORT_COLUMNS[params.sort] ? params.sort : "insert_date";
   const order = params.order === "asc" ? "ASC" : "DESC";
   const { where, values } = buildFilters(params);
@@ -146,7 +146,7 @@ export async function listEnquiries(
     query<RowDataPacket[]>(
       `
         SELECT COUNT(*) AS total
-        FROM ${LEGACY_DB}.tbl_message m
+        FROM tbl_message m
         ${where}
       `,
       values
@@ -157,18 +157,18 @@ export async function listEnquiries(
           m.*,
           od.d_name AS origin_name,
           dd.d_name AS destination_name
-        FROM ${LEGACY_DB}.tbl_message m
-        LEFT JOIN ${LEGACY_DB}.tbl_destinations od
+        FROM tbl_message m
+        LEFT JOIN tbl_destinations od
           ON od.id = CAST(NULLIF(TRIM(m.origin), '') AS UNSIGNED)
           AND TRIM(m.origin) REGEXP '^[0-9]+$'
-        LEFT JOIN ${LEGACY_DB}.tbl_destinations dd
+        LEFT JOIN tbl_destinations dd
           ON dd.id = CAST(NULLIF(TRIM(m.destination), '') AS UNSIGNED)
           AND TRIM(m.destination) REGEXP '^[0-9]+$'
         ${where}
         ORDER BY ${SORT_COLUMNS[sort]} ${order}, m.id DESC
-        LIMIT ? OFFSET ?
+        LIMIT ${limit} OFFSET ${offset}
       `,
-      [...values, limit, offset]
+      values
     ),
   ]);
 
@@ -189,11 +189,11 @@ export async function findEnquiryById(id: number): Promise<EnquiryRecord | null>
         m.*,
         od.d_name AS origin_name,
         dd.d_name AS destination_name
-      FROM ${LEGACY_DB}.tbl_message m
-      LEFT JOIN ${LEGACY_DB}.tbl_destinations od
+      FROM tbl_message m
+      LEFT JOIN tbl_destinations od
         ON od.id = CAST(NULLIF(TRIM(m.origin), '') AS UNSIGNED)
         AND TRIM(m.origin) REGEXP '^[0-9]+$'
-      LEFT JOIN ${LEGACY_DB}.tbl_destinations dd
+      LEFT JOIN tbl_destinations dd
         ON dd.id = CAST(NULLIF(TRIM(m.destination), '') AS UNSIGNED)
         AND TRIM(m.destination) REGEXP '^[0-9]+$'
       WHERE m.id = ?
@@ -212,7 +212,7 @@ export async function updateEnquiryStatus(
   const nextStatus = status === "closed" ? 2 : 1;
   const result = await query<ResultSetHeader>(
     `
-      UPDATE ${LEGACY_DB}.tbl_message
+      UPDATE tbl_message
       SET status = ?, edit_date = NOW()
       WHERE id = ?
     `,
@@ -225,7 +225,7 @@ export async function updateEnquiryStatus(
 
 export async function deleteEnquiry(id: number): Promise<boolean> {
   const result = await query<ResultSetHeader>(
-    `DELETE FROM ${LEGACY_DB}.tbl_message WHERE id = ?`,
+    `DELETE FROM tbl_message WHERE id = ?`,
     [id]
   );
   return result.affectedRows > 0;

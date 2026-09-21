@@ -1,4 +1,4 @@
-import { getAppBaseUrl } from "./auth-repository";
+import { getAdminPanelBaseUrl } from "./admin-welcome-email";
 import { sendMail, type SendMailResult } from "./email";
 
 export async function sendAdminVerificationEmail(input: {
@@ -7,7 +7,7 @@ export async function sendAdminVerificationEmail(input: {
   token: string;
   invitedByAdmin?: boolean;
 }): Promise<SendMailResult> {
-  const verifyUrl = `${getAppBaseUrl()}/verify-email?token=${encodeURIComponent(input.token)}`;
+  const verifyUrl = `${getAdminPanelBaseUrl()}/verify-email?token=${encodeURIComponent(input.token)}`;
   const intro = input.invitedByAdmin
     ? "An administrator created an account for you on the Fayyaz Travels admin panel."
     : "Thanks for signing up for the Fayyaz Travels admin panel.";

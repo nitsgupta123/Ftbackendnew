@@ -1,11 +1,9 @@
-"use client";
-
-import Image from "next/image";
+import { Link } from "react-router-dom";
 import { Icon } from "@/components/ui/icons";
 import type { CmsPageRecord } from "@/lib/page-types";
 import { formatPackageDateTime } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+
 
 interface PageDetailsModalProps {
   page: CmsPageRecord | null;
@@ -35,7 +33,7 @@ export default function PageDetailsModal({ page, onClose }: PageDetailsModalProp
           <h2 className="text-lg font-bold text-gray-900 pr-4">{page.title}</h2>
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href={`/pages/edit/${page.id}`}
+              to={`/pages/edit/${page.id}`}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[#E5E7EB] text-sm text-[#B48A2C] hover:bg-gray-50"
             >
               <Icon name="Pencil" size={14} />
@@ -53,12 +51,11 @@ export default function PageDetailsModal({ page, onClose }: PageDetailsModalProp
 
         <div className="p-6 space-y-5">
           {page.featured_image_path && (
-            <Image
+            <img
               src={page.featured_image_path}
               alt={page.title}
               width={768}
               height={240}
-              unoptimized
               className="w-full h-48 object-cover rounded-xl border border-[#E5E7EB]"
             />
           )}

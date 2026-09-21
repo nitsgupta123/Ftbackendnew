@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useImperativeHandle, useMemo, useState, forwardRef } from "react";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import BlogCategoryListTable from "@/components/blogs/BlogCategoryListTable";

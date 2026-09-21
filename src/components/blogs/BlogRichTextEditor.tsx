@@ -1,5 +1,3 @@
-"use client";
-
 import {
   useEffect,
   useReducer,
@@ -11,7 +9,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import { Node, Extension, mergeAttributes } from "@tiptap/core";
+import { BubbleMenu } from "@tiptap/react/menus";
+import { Node, Extension, mergeAttributes, ResizableNodeView } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -24,7 +23,10 @@ import { Color } from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
-import { Placeholder } from "@tiptap/extensions";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import Typography from "@tiptap/extension-typography";
+import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import {
   Undo2,
   Redo2,
@@ -33,6 +35,7 @@ import {
   Bold,
   Italic,
   Underline as UnderlineIcon,
+  Strikethrough,
   Link2,
   ImageIcon,
   Video as VideoIcon,
@@ -43,6 +46,8 @@ import {
   ListChecks,
   List,
   ListOrdered,
+  IndentIncrease,
+  IndentDecrease,
   MoreVertical,
   ChevronDown,
   Check,
@@ -53,8 +58,42 @@ import {
   Table2,
   Maximize2,
   Minimize2,
+  Trash2,
+  ArrowDownToLine,
+  ArrowUpToLine,
+  ArrowLeftToLine,
+  ArrowRightToLine,
+  TextCursorInput,
+  RemoveFormatting,
+  Minus as MinusIcon,
+  Subscript as SubscriptIcon,
+  Superscript as SuperscriptIcon,
+  SeparatorHorizontal,
 } from "lucide-react";
 import { uploadMediaFile } from "@/lib/media-api";
+
+type MediaAlign = "left" | "center" | "right";
+
+const MEDIA_WIDTH_PRESETS = [
+  { label: "S", width: 240 },
+  { label: "M", width: 400 },
+  { label: "L", width: 640 },
+  { label: "Full", width: null },
+] as const;
+
+const MEDIA_RESIZE = {
+  enabled: true as const,
+  directions: ["top-left", "top-right", "bottom-left", "bottom-right"] as const,
+  minWidth: 80,
+  minHeight: 80,
+  alwaysPreserveAspectRatio: true,
+};
+
+function parseMediaAlign(element: HTMLElement): MediaAlign {
+  const raw = element.getAttribute("data-align");
+  if (raw === "left" || raw === "center" || raw === "right") return raw;
+  return "center";
+}
 
 interface BlogRichTextEditorProps {
   value: string;
@@ -74,6 +113,8 @@ const TEXT_STYLES = [
   { label: "Heading 2", value: "h2", previewClassName: "text-xl font-semibold text-[#202124]" },
   { label: "Heading 3", value: "h3", previewClassName: "text-lg font-medium text-[#5F6368]" },
   { label: "Heading 4", value: "h4", previewClassName: "text-base font-medium text-[#5F6368]" },
+  { label: "Heading 5", value: "h5", previewClassName: "text-sm font-medium text-[#5F6368]" },
+  { label: "Heading 6", value: "h6", previewClassName: "text-xs font-medium uppercase tracking-wide text-[#5F6368]" },
 ];
 
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48];
@@ -203,32 +244,229 @@ const ParagraphLineHeight = Extension.create({
   },
 });
 
+function syncMediaAlign(container: HTMLElement, align?: string | null) {
+  const value: MediaAlign =
+    align === "left" || align === "right" || align === "center" ? align : "center";
+  container.dataset.align = value;
+  container.style.display = "flex";
+  container.style.width = "100%";
+  container.style.justifyContent =
+    value === "left" ? "flex-start" : value === "right" ? "flex-end" : "center";
+}
+
+function applyImageElementAttrs(
+  el: HTMLImageElement,
+  attrs: Record<string, unknown>
+) {
+  if (attrs.src != null) el.src = String(attrs.src);
+  if (attrs.alt != null && attrs.alt !== "") el.alt = String(attrs.alt);
+  else el.removeAttribute("alt");
+  if (attrs.title != null && attrs.title !== "") el.title = String(attrs.title);
+  else el.removeAttribute("title");
+  el.dataset.align = String(attrs.align || "center");
+  if (attrs.width != null && attrs.width !== "") {
+    el.style.width = `${attrs.width}px`;
+  }
+  if (attrs.height != null && attrs.height !== "") {
+    el.style.height = `${attrs.height}px`;
+  } else if (attrs.width != null && attrs.width !== "") {
+    el.style.height = "auto";
+  }
+}
+
+const MEDIA_NODE_VIEW_OPTIONS = {
+  directions: [...MEDIA_RESIZE.directions],
+  min: { width: MEDIA_RESIZE.minWidth, height: MEDIA_RESIZE.minHeight },
+  preserveAspectRatio: MEDIA_RESIZE.alwaysPreserveAspectRatio,
+  className: {
+    container: "blog-media-resize-container",
+    wrapper: "blog-media-resize-wrapper",
+    handle: "blog-media-resize-handle",
+    resizing: "is-resizing",
+  },
+};
+
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      align: {
+        default: "center" satisfies MediaAlign,
+        parseHTML: (element) => parseMediaAlign(element),
+        renderHTML: (attributes) => ({
+          "data-align": (attributes.align as MediaAlign) || "center",
+        }),
+      },
+    };
+  },
+  addNodeView() {
+    return ({ node, getPos, HTMLAttributes, editor }) => {
+      const el = document.createElement("img");
+      el.draggable = false;
+      el.className = "blog-editor-image";
+
+      const initialAttrs = {
+        ...node.attrs,
+        ...HTMLAttributes,
+      } as Record<string, unknown>;
+      applyImageElementAttrs(el, initialAttrs);
+
+      let nodeView: InstanceType<typeof ResizableNodeView>;
+      nodeView = new ResizableNodeView({
+        element: el,
+        editor,
+        node,
+        getPos,
+        onResize: (width, height) => {
+          el.style.width = `${width}px`;
+          el.style.height = `${height}px`;
+        },
+        onCommit: (width, height) => {
+          const pos = getPos();
+          if (pos === undefined) return;
+          this.editor
+            .chain()
+            .setNodeSelection(pos)
+            .updateAttributes(this.name, { width, height })
+            .run();
+        },
+        onUpdate: (updatedNode) => {
+          if (updatedNode.type.name !== this.name) return false;
+          applyImageElementAttrs(el, updatedNode.attrs as Record<string, unknown>);
+          syncMediaAlign(nodeView.dom as HTMLElement, updatedNode.attrs.align as string);
+          return true;
+        },
+        options: MEDIA_NODE_VIEW_OPTIONS,
+      });
+
+      const container = nodeView.dom as HTMLElement;
+      syncMediaAlign(container, node.attrs.align as string);
+
+      const reveal = () => {
+        container.style.visibility = "";
+        container.style.pointerEvents = "";
+      };
+
+      if (el.complete && el.naturalWidth > 0) {
+        reveal();
+      } else {
+        container.style.visibility = "hidden";
+        container.style.pointerEvents = "none";
+        el.addEventListener("load", reveal, { once: true });
+        el.addEventListener("error", reveal, { once: true });
+      }
+
+      return nodeView;
+    };
+  },
+});
+
 const Video = Node.create({
   name: "video",
   group: "block",
   atom: true,
   draggable: true,
   addAttributes() {
-    return { src: { default: null } };
+    return {
+      src: { default: null },
+      alt: { default: null },
+      title: { default: null },
+      width: { default: null },
+      height: { default: null },
+      align: {
+        default: "center" satisfies MediaAlign,
+        parseHTML: (element) => parseMediaAlign(element),
+        renderHTML: (attributes) => ({
+          "data-align": (attributes.align as MediaAlign) || "center",
+        }),
+      },
+    };
   },
   parseHTML() {
     return [{ tag: "video[src]" }];
   },
   renderHTML({ HTMLAttributes }) {
+    const { alt, ...rest } = HTMLAttributes as Record<string, unknown>;
     return [
       "video",
-      mergeAttributes(HTMLAttributes, {
+      mergeAttributes(rest, {
         controls: "true",
-        style: "max-width:100%;height:auto;border-radius:0.5rem;",
+        class: "blog-editor-video",
+        ...(typeof alt === "string" && alt ? { "aria-label": alt, title: alt } : {}),
       }),
     ];
+  },
+  addNodeView() {
+    return ({ node, getPos, HTMLAttributes, editor }) => {
+      const el = document.createElement("video");
+      el.controls = true;
+      el.draggable = false;
+      el.playsInline = true;
+      el.className = "blog-editor-video";
+
+      const applyVideoAttrs = (attrs: Record<string, unknown>) => {
+        if (attrs.src != null) el.src = String(attrs.src);
+        if (attrs.alt != null && attrs.alt !== "") {
+          el.setAttribute("aria-label", String(attrs.alt));
+          el.setAttribute("title", String(attrs.alt));
+        } else {
+          el.removeAttribute("aria-label");
+          el.removeAttribute("title");
+        }
+        el.dataset.align = String(attrs.align || "center");
+        if (attrs.width != null && attrs.width !== "") {
+          el.style.width = `${attrs.width}px`;
+        }
+        if (attrs.height != null && attrs.height !== "") {
+          el.style.height = `${attrs.height}px`;
+        } else if (attrs.width != null && attrs.width !== "") {
+          el.style.height = "auto";
+        }
+      };
+
+      applyVideoAttrs({ ...node.attrs, ...HTMLAttributes } as Record<string, unknown>);
+
+      let nodeView: InstanceType<typeof ResizableNodeView>;
+      nodeView = new ResizableNodeView({
+        element: el,
+        editor,
+        node,
+        getPos,
+        onResize: (width, height) => {
+          el.style.width = `${width}px`;
+          el.style.height = `${height}px`;
+        },
+        onCommit: (width, height) => {
+          const pos = getPos();
+          if (pos === undefined) return;
+          this.editor
+            .chain()
+            .setNodeSelection(pos)
+            .updateAttributes(this.name, { width, height })
+            .run();
+        },
+        onUpdate: (updatedNode) => {
+          if (updatedNode.type.name !== this.name) return false;
+          applyVideoAttrs(updatedNode.attrs as Record<string, unknown>);
+          syncMediaAlign(nodeView.dom as HTMLElement, updatedNode.attrs.align as string);
+          return true;
+        },
+        options: MEDIA_NODE_VIEW_OPTIONS,
+      });
+
+      syncMediaAlign(nodeView.dom as HTMLElement, node.attrs.align as string);
+      return nodeView;
+    };
   },
   addCommands() {
     return {
       setVideo:
-        (options: { src: string }) =>
+        (options: { src: string; alt?: string; width?: number; height?: number; align?: MediaAlign }) =>
         ({ commands }) =>
-          commands.insertContent({ type: this.name, attrs: options }),
+          commands.insertContent({
+            type: this.name,
+            attrs: { align: "center", ...options },
+          }),
     };
   },
 });
@@ -240,7 +478,13 @@ declare module "@tiptap/core" {
       unsetFontSize: () => ReturnType;
     };
     video: {
-      setVideo: (options: { src: string }) => ReturnType;
+      setVideo: (options: {
+        src: string;
+        alt?: string;
+        width?: number;
+        height?: number;
+        align?: MediaAlign;
+      }) => ReturnType;
     };
   }
 }
@@ -341,7 +585,58 @@ function getCurrentTextStyle(editor: Editor) {
   if (editor.isActive("heading", { level: 2 })) return "h2";
   if (editor.isActive("heading", { level: 3 })) return "h3";
   if (editor.isActive("heading", { level: 4 })) return "h4";
+  if (editor.isActive("heading", { level: 5 })) return "h5";
+  if (editor.isActive("heading", { level: 6 })) return "h6";
   return "p";
+}
+
+function promptAndInsertLink(editor: Editor) {
+  const previousUrl = editor.getAttributes("link").href as string | undefined;
+  const url = window.prompt("Enter URL", previousUrl ?? "https://");
+  if (url === null) return;
+  if (url.trim() === "") {
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    return;
+  }
+  const inserted = insertLinkOrEmbed(editor, url);
+  if (!inserted) {
+    window.alert("Could not insert this link. Please try again.");
+  }
+}
+
+function clearFormatting(editor: Editor) {
+  editor.chain().focus().unsetAllMarks().clearNodes().run();
+}
+
+function indentList(editor: Editor) {
+  if (editor.isActive("taskItem")) {
+    editor.chain().focus().sinkListItem("taskItem").run();
+    return;
+  }
+  editor.chain().focus().sinkListItem("listItem").run();
+}
+
+function outdentList(editor: Editor) {
+  if (editor.isActive("taskItem")) {
+    editor.chain().focus().liftListItem("taskItem").run();
+    return;
+  }
+  editor.chain().focus().liftListItem("listItem").run();
+}
+
+function getWordStats(editor: Editor) {
+  const storage = editor.storage.characterCount as
+    | { characters: () => number; words: () => number }
+    | undefined;
+  if (!storage) {
+    const text = editor.state.doc.textContent.trim();
+    const words = text ? text.split(/\s+/).length : 0;
+    return { characters: text.length, words };
+  }
+  return {
+    characters: storage.characters(),
+    words: storage.words(),
+  };
 }
 
 function getCurrentFontSize(editor: Editor) {
@@ -380,16 +675,31 @@ function useCloseOnOutsideClick(
   }, [open, onClose, ref]);
 }
 
-function useEditorRefresh(editor: Editor) {
+function useEditorRefresh(editor: Editor | null) {
   const [, refresh] = useReducer((count: number) => count + 1, 0);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const handleUpdate = () => refresh();
-    editor.on("transaction", handleUpdate);
-    editor.on("selectionUpdate", handleUpdate);
+    if (!editor) return;
+
+    const scheduleRefresh = () => {
+      if (rafRef.current != null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        refresh();
+      });
+    };
+
+    editor.on("selectionUpdate", scheduleRefresh);
+    editor.on("update", scheduleRefresh);
+
     return () => {
-      editor.off("transaction", handleUpdate);
-      editor.off("selectionUpdate", handleUpdate);
+      editor.off("selectionUpdate", scheduleRefresh);
+      editor.off("update", scheduleRefresh);
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [editor]);
 }
@@ -606,6 +916,332 @@ function ToolbarSelect({
   );
 }
 
+function TableControlsBar({ editor }: { editor: Editor }) {
+  if (!editor.isActive("table")) return null;
+
+  const canAddRowBefore = editor.can().addRowBefore();
+  const canAddRowAfter = editor.can().addRowAfter();
+  const canDeleteRow = editor.can().deleteRow();
+  const canAddColBefore = editor.can().addColumnBefore();
+  const canAddColAfter = editor.can().addColumnAfter();
+  const canDeleteCol = editor.can().deleteColumn();
+  const canDeleteTable = editor.can().deleteTable();
+
+  function runTableCommand(command: () => boolean) {
+    // Keep selection in the table when clicking toolbar buttons.
+    command();
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-[#DADCE0] bg-[#FFF8E8] px-2 py-1.5">
+      <span className="mr-1 inline-flex items-center gap-1 px-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#8C6D26]">
+        <Table2 className="h-3.5 w-3.5" />
+        Table
+      </span>
+
+      <div className="mx-0.5 h-6 w-px bg-[#E3D3AC]" />
+
+      <span className="px-1 text-[11px] font-medium text-[#8C6D26]">Rows</span>
+      <button
+        type="button"
+        title="Add row above"
+        disabled={!canAddRowBefore}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => runTableCommand(() => editor.chain().focus().addRowBefore().run())}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#E3D3AC] bg-white px-2 text-xs font-medium text-[#3C4043] hover:bg-[#F7EFDF] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <ArrowUpToLine className="h-3.5 w-3.5" />
+        Add above
+      </button>
+      <button
+        type="button"
+        title="Add row below"
+        disabled={!canAddRowAfter}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => runTableCommand(() => editor.chain().focus().addRowAfter().run())}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#E3D3AC] bg-white px-2 text-xs font-medium text-[#3C4043] hover:bg-[#F7EFDF] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <ArrowDownToLine className="h-3.5 w-3.5" />
+        Add below
+      </button>
+      <button
+        type="button"
+        title="Delete current row"
+        disabled={!canDeleteRow}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => runTableCommand(() => editor.chain().focus().deleteRow().run())}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#FECACA] bg-white px-2 text-xs font-medium text-[#B91C1C] hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete row
+      </button>
+
+      <div className="mx-0.5 h-6 w-px bg-[#E3D3AC]" />
+
+      <span className="px-1 text-[11px] font-medium text-[#8C6D26]">Columns</span>
+      <button
+        type="button"
+        title="Add column left"
+        disabled={!canAddColBefore}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => runTableCommand(() => editor.chain().focus().addColumnBefore().run())}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#E3D3AC] bg-white px-2 text-xs font-medium text-[#3C4043] hover:bg-[#F7EFDF] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <ArrowLeftToLine className="h-3.5 w-3.5" />
+        Add left
+      </button>
+      <button
+        type="button"
+        title="Add column right"
+        disabled={!canAddColAfter}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => runTableCommand(() => editor.chain().focus().addColumnAfter().run())}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#E3D3AC] bg-white px-2 text-xs font-medium text-[#3C4043] hover:bg-[#F7EFDF] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <ArrowRightToLine className="h-3.5 w-3.5" />
+        Add right
+      </button>
+      <button
+        type="button"
+        title="Delete current column"
+        disabled={!canDeleteCol}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => runTableCommand(() => editor.chain().focus().deleteColumn().run())}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#FECACA] bg-white px-2 text-xs font-medium text-[#B91C1C] hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete column
+      </button>
+
+      <div className="mx-0.5 h-6 w-px bg-[#E3D3AC]" />
+
+      <button
+        type="button"
+        title="Delete entire table"
+        disabled={!canDeleteTable}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          if (window.confirm("Delete this table?")) {
+            runTableCommand(() => editor.chain().focus().deleteTable().run());
+          }
+        }}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#FECACA] bg-white px-2 text-xs font-medium text-[#B91C1C] hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete table
+      </button>
+    </div>
+  );
+}
+
+function MediaControlsBar({ editor }: { editor: Editor }) {
+  const isImage = editor.isActive("image");
+  const isVideo = editor.isActive("video");
+  if (!isImage && !isVideo) return null;
+
+  const mediaType = isImage ? "image" : "video";
+  const attrs = editor.getAttributes(mediaType);
+  const currentAlign = (attrs.align as MediaAlign) || "center";
+  const currentWidth = typeof attrs.width === "number" ? attrs.width : Number(attrs.width) || null;
+  const currentAlt = typeof attrs.alt === "string" ? attrs.alt : "";
+
+  function updateMedia(next: Record<string, unknown>) {
+    editor
+      .chain()
+      .focus()
+      .updateAttributes(mediaType, next)
+      .run();
+  }
+
+  function setWidth(width: number | null) {
+    if (width == null) {
+      updateMedia({ width: null, height: null });
+      return;
+    }
+    updateMedia({ width, height: null });
+  }
+
+  function editAltText() {
+    const next = window.prompt(
+      isImage ? "Image alt text (for accessibility)" : "Video description / alt text",
+      currentAlt
+    );
+    if (next === null) return;
+    updateMedia({ alt: next.trim() || null, ...(isVideo ? { title: next.trim() || null } : {}) });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-[#DADCE0] bg-[#EEF6FF] px-2 py-1.5">
+      <span className="mr-1 inline-flex items-center gap-1 px-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#1D4ED8]">
+        {isImage ? <ImageIcon className="h-3.5 w-3.5" /> : <VideoIcon className="h-3.5 w-3.5" />}
+        {isImage ? "Image" : "Video"}
+      </span>
+
+      <div className="mx-0.5 h-6 w-px bg-[#BFDBFE]" />
+
+      <span className="px-1 text-[11px] font-medium text-[#1D4ED8]">Size</span>
+      {MEDIA_WIDTH_PRESETS.map((preset) => {
+        const selected =
+          preset.width == null
+            ? currentWidth == null
+            : currentWidth != null && Math.abs(currentWidth - preset.width) < 24;
+        return (
+          <button
+            key={preset.label}
+            type="button"
+            title={preset.width ? `Width ${preset.width}px` : "Full width"}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setWidth(preset.width)}
+            className={`inline-flex h-8 min-w-8 items-center justify-center rounded border px-2 text-xs font-medium ${
+              selected
+                ? "border-[#1D4ED8] bg-[#DBEAFE] text-[#1D4ED8]"
+                : "border-[#BFDBFE] bg-white text-[#3C4043] hover:bg-[#EFF6FF]"
+            }`}
+          >
+            {preset.label}
+          </button>
+        );
+      })}
+      <span className="px-1 text-[11px] text-[#64748B]">
+        {currentWidth ? `${Math.round(currentWidth)}px` : "drag corners to resize"}
+      </span>
+
+      <div className="mx-0.5 h-6 w-px bg-[#BFDBFE]" />
+
+      <span className="px-1 text-[11px] font-medium text-[#1D4ED8]">Align</span>
+      {(
+        [
+          { value: "left", icon: AlignLeft, label: "Align left" },
+          { value: "center", icon: AlignCenter, label: "Align center" },
+          { value: "right", icon: AlignRight, label: "Align right" },
+        ] as const
+      ).map(({ value, icon: Icon, label }) => (
+        <button
+          key={value}
+          type="button"
+          title={label}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => updateMedia({ align: value })}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded hover:bg-[#DBEAFE] ${
+            currentAlign === value ? "bg-[#BFDBFE] text-[#1D4ED8]" : "text-[#3C4043]"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+        </button>
+      ))}
+
+      <div className="mx-0.5 h-6 w-px bg-[#BFDBFE]" />
+
+      <button
+        type="button"
+        title="Edit alt text"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={editAltText}
+        className="inline-flex h-8 max-w-[220px] items-center gap-1 rounded border border-[#BFDBFE] bg-white px-2 text-xs font-medium text-[#3C4043] hover:bg-[#EFF6FF]"
+      >
+        <TextCursorInput className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{currentAlt ? `Alt: ${currentAlt}` : "Add alt text"}</span>
+      </button>
+
+      <button
+        type="button"
+        title={`Delete ${mediaType}`}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => editor.chain().focus().deleteSelection().run()}
+        className="inline-flex h-8 items-center gap-1 rounded border border-[#FECACA] bg-white px-2 text-xs font-medium text-[#B91C1C] hover:bg-[#FEE2E2]"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete
+      </button>
+    </div>
+  );
+}
+
+function SelectionBubbleMenu({ editor }: { editor: Editor }) {
+  return (
+    <BubbleMenu
+      editor={editor}
+      options={{ placement: "top", offset: 8 }}
+      shouldShow={({ editor: current, state }) => {
+        const { empty } = state.selection;
+        if (empty) return false;
+        if (
+          current.isActive("image") ||
+          current.isActive("video") ||
+          current.isActive("table") ||
+          current.isActive("codeBlock") ||
+          current.isActive("youtube")
+        ) {
+          return false;
+        }
+        return true;
+      }}
+      className="z-[90] flex items-center gap-0.5 rounded-lg border border-[#DADCE0] bg-white p-1 shadow-xl"
+    >
+      <ToolbarIconButton
+        title="Bold"
+        active={editor.isActive("bold")}
+        onClick={() => editor.chain().focus().toggleBold().run()}
+      >
+        <Bold className="h-4 w-4" />
+      </ToolbarIconButton>
+      <ToolbarIconButton
+        title="Italic"
+        active={editor.isActive("italic")}
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+      >
+        <Italic className="h-4 w-4" />
+      </ToolbarIconButton>
+      <ToolbarIconButton
+        title="Underline"
+        active={editor.isActive("underline")}
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+      >
+        <UnderlineIcon className="h-4 w-4" />
+      </ToolbarIconButton>
+      <ToolbarIconButton
+        title="Strikethrough"
+        active={editor.isActive("strike")}
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+      >
+        <Strikethrough className="h-4 w-4" />
+      </ToolbarIconButton>
+      <ToolbarIconButton
+        title="Highlight"
+        active={editor.isActive("highlight")}
+        onClick={() => editor.chain().focus().toggleHighlight({ color: "#FFFF00" }).run()}
+      >
+        <Highlighter className="h-4 w-4" />
+      </ToolbarIconButton>
+      <ToolbarIconButton
+        title="Link"
+        active={editor.isActive("link")}
+        onClick={() => promptAndInsertLink(editor)}
+      >
+        <Link2 className="h-4 w-4" />
+      </ToolbarIconButton>
+      <ToolbarIconButton title="Clear formatting" onClick={() => clearFormatting(editor)}>
+        <RemoveFormatting className="h-4 w-4" />
+      </ToolbarIconButton>
+    </BubbleMenu>
+  );
+}
+
+function EditorStatsBar({ editor }: { editor: Editor }) {
+  const { characters, words } = getWordStats(editor);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#E8EAED] bg-[#F8F9FA] px-3 py-1.5 text-[11px] text-[#5F6368]">
+      <span>
+        {words.toLocaleString()} {words === 1 ? "word" : "words"} · {characters.toLocaleString()}{" "}
+        characters
+      </span>
+      <span className="hidden sm:inline">
+        Tip: paste images, select text for quick format, click media/tables for controls
+      </span>
+    </div>
+  );
+}
+
 function GoogleDocsToolbar({
   editor,
   zoom,
@@ -625,8 +1261,6 @@ function GoogleDocsToolbar({
   isMaximized: boolean;
   onToggleMaximize: () => void;
 }) {
-  useEditorRefresh(editor);
-
   const [showAlignMenu, setShowAlignMenu] = useState(false);
   const [showLineMenu, setShowLineMenu] = useState(false);
   const [showColorMenu, setShowColorMenu] = useState(false);
@@ -679,6 +1313,14 @@ function GoogleDocsToolbar({
     }
     if (style === "h4") {
       editor.chain().focus().setHeading({ level: 4 }).run();
+      return;
+    }
+    if (style === "h5") {
+      editor.chain().focus().setHeading({ level: 5 }).run();
+      return;
+    }
+    if (style === "h6") {
+      editor.chain().focus().setHeading({ level: 6 }).run();
     }
   }
 
@@ -752,6 +1394,18 @@ function GoogleDocsToolbar({
         <ToolbarIconButton title="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
           <UnderlineIcon className="h-4 w-4" />
         </ToolbarIconButton>
+        <ToolbarIconButton title="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
+          <Strikethrough className="h-4 w-4" />
+        </ToolbarIconButton>
+        <ToolbarIconButton title="Subscript" active={editor.isActive("subscript")} onClick={() => editor.chain().focus().toggleSubscript().run()}>
+          <SubscriptIcon className="h-4 w-4" />
+        </ToolbarIconButton>
+        <ToolbarIconButton title="Superscript" active={editor.isActive("superscript")} onClick={() => editor.chain().focus().toggleSuperscript().run()}>
+          <SuperscriptIcon className="h-4 w-4" />
+        </ToolbarIconButton>
+        <ToolbarIconButton title="Clear formatting" onClick={() => clearFormatting(editor)}>
+          <RemoveFormatting className="h-4 w-4" />
+        </ToolbarIconButton>
 
         <div className="relative" ref={colorMenuRef}>
           <ToolbarIconButton title="Text color" active={showColorMenu} onClick={openTextColorMenu}>
@@ -820,19 +1474,7 @@ function GoogleDocsToolbar({
         <ToolbarIconButton
           title="Insert link"
           active={editor.isActive("link")}
-          onClick={() => {
-            const previousUrl = editor.getAttributes("link").href as string | undefined;
-            const url = window.prompt("Enter URL", previousUrl ?? "https://");
-            if (url === null) return;
-            if (url.trim() === "") {
-              editor.chain().focus().extendMarkRange("link").unsetLink().run();
-              return;
-            }
-            const inserted = insertLinkOrEmbed(editor, url);
-            if (!inserted) {
-              window.alert("Could not insert this link. Please try again.");
-            }
-          }}
+          onClick={() => promptAndInsertLink(editor)}
         >
           <Link2 className="h-4 w-4" />
         </ToolbarIconButton>
@@ -948,6 +1590,41 @@ function GoogleDocsToolbar({
           <ListOrdered className="h-4 w-4" />
         </ToolbarIconButton>
 
+        <ToolbarIconButton
+          title="Insert table"
+          active={editor.isActive("table")}
+          onClick={() => {
+            if (editor.isActive("table")) return;
+            editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+          }}
+        >
+          <Table2 className="h-4 w-4" />
+        </ToolbarIconButton>
+        <ToolbarIconButton
+          title="Horizontal line"
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        >
+          <SeparatorHorizontal className="h-4 w-4" />
+        </ToolbarIconButton>
+        <ToolbarIconButton
+          title="Decrease indent"
+          onClick={() => outdentList(editor)}
+          disabled={
+            !editor.can().liftListItem("listItem") && !editor.can().liftListItem("taskItem")
+          }
+        >
+          <IndentDecrease className="h-4 w-4" />
+        </ToolbarIconButton>
+        <ToolbarIconButton
+          title="Increase indent"
+          onClick={() => indentList(editor)}
+          disabled={
+            !editor.can().sinkListItem("listItem") && !editor.can().sinkListItem("taskItem")
+          }
+        >
+          <IndentIncrease className="h-4 w-4" />
+        </ToolbarIconButton>
+
         <ToolbarSeparator />
 
         <div className="relative" ref={moreMenuRef}>
@@ -997,6 +1674,28 @@ function GoogleDocsToolbar({
                 }}
               >
                 <Code2 className="h-4 w-4" /> Code block
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[#F1F3F4]"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  editor.chain().focus().setHorizontalRule().run();
+                  setShowMoreMenu(false);
+                }}
+              >
+                <MinusIcon className="h-4 w-4" /> Horizontal line
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[#F1F3F4]"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  clearFormatting(editor);
+                  setShowMoreMenu(false);
+                }}
+              >
+                <RemoveFormatting className="h-4 w-4" /> Clear formatting
               </button>
               <button
                 type="button"
@@ -1074,6 +1773,9 @@ export default function BlogRichTextEditor({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const mediaUploadRef = useRef<(file: File, kind: "image" | "video") => Promise<void>>(
+    async () => undefined
+  );
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(100);
@@ -1084,11 +1786,15 @@ export default function BlogRichTextEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4] },
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
         link: false,
         underline: false,
       }),
       Underline,
+      Subscript,
+      Superscript,
+      Typography,
+      CharacterCount,
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -1110,7 +1816,7 @@ export default function BlogRichTextEditor({
       ParagraphLineHeight,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Image.configure({
+      ResizableImage.configure({
         allowBase64: true,
         HTMLAttributes: { class: "blog-editor-image" },
       }),
@@ -1140,11 +1846,59 @@ export default function BlogRichTextEditor({
         class:
           "blog-editor-content h-full min-h-full px-6 py-3 text-sm text-gray-900 focus:outline-none max-w-none",
       },
+      handlePaste(_view, event) {
+        const files = Array.from(event.clipboardData?.files ?? []);
+        const image = files.find((file) => file.type.startsWith("image/"));
+        if (!image) return false;
+        event.preventDefault();
+        void mediaUploadRef.current(image, "image");
+        return true;
+      },
+      handleDrop(_view, event) {
+        const files = Array.from(event.dataTransfer?.files ?? []);
+        const media = files.find(
+          (file) => file.type.startsWith("image/") || file.type.startsWith("video/")
+        );
+        if (!media) return false;
+        event.preventDefault();
+        void mediaUploadRef.current(
+          media,
+          media.type.startsWith("video/") ? "video" : "image"
+        );
+        return true;
+      },
     },
     onUpdate({ editor: currentEditor }) {
       onChange(currentEditor.getHTML());
     },
   });
+
+  useEditorRefresh(editor);
+
+  useEffect(() => {
+    mediaUploadRef.current = async (file: File, expectedKind: "image" | "video") => {
+      if (!editor) return;
+      setUploadError(null);
+      setUploading(true);
+      try {
+        const result = await uploadMediaFile(file);
+        if (expectedKind === "video" || result.kind === "video") {
+          editor.chain().focus().setVideo({ src: result.url, align: "center" }).run();
+        } else {
+          editor
+            .chain()
+            .focus()
+            .setImage({ src: result.url })
+            .updateAttributes("image", { align: "center" })
+            .run();
+        }
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "Upload failed");
+      } finally {
+        setUploading(false);
+      }
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;
@@ -1205,21 +1959,7 @@ export default function BlogRichTextEditor({
   }
 
   async function handleMediaUpload(file: File, expectedKind: "image" | "video") {
-    if (!editor) return;
-    setUploadError(null);
-    setUploading(true);
-    try {
-      const result = await uploadMediaFile(file);
-      if (expectedKind === "video" || result.kind === "video") {
-        editor.chain().focus().setVideo({ src: result.url }).run();
-      } else {
-        editor.chain().focus().setImage({ src: result.url }).run();
-      }
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    await mediaUploadRef.current(file, expectedKind);
   }
 
   if (!editor) {
@@ -1271,6 +2011,9 @@ export default function BlogRichTextEditor({
         onImageClick={() => imageInputRef.current?.click()}
         onVideoClick={() => videoInputRef.current?.click()}
       />
+      <TableControlsBar editor={editor} />
+      <MediaControlsBar editor={editor} />
+      <SelectionBubbleMenu editor={editor} />
 
       {uploadError && (
         <p className="border-b border-[#FECACA] bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C]">
@@ -1286,6 +2029,7 @@ export default function BlogRichTextEditor({
           <EditorContent editor={editor} className="h-full" />
         </div>
       </div>
+      <EditorStatsBar editor={editor} />
       {!isMaximized && (
         <button
           type="button"

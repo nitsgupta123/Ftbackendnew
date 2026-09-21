@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 import {
   createSupplier,
   deleteSupplier,
@@ -60,7 +61,7 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load supplier stats",
+        error: getSafeErrorMessage(error, "Failed to load supplier stats"),
       });
     }
   });
@@ -72,7 +73,7 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to load countries",
+        error: getSafeErrorMessage(error, "Failed to load countries"),
       });
     }
   });
@@ -100,7 +101,7 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to list suppliers",
+        error: getSafeErrorMessage(error, "Failed to list suppliers"),
       });
     }
   });
@@ -122,7 +123,7 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to fetch supplier",
+        error: getSafeErrorMessage(error, "Failed to fetch supplier"),
       });
     }
   });
@@ -143,7 +144,7 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to create supplier",
+        error: getSafeErrorMessage(error, "Failed to create supplier"),
       });
     }
   });
@@ -174,7 +175,7 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to update supplier",
+        error: getSafeErrorMessage(error, "Failed to update supplier"),
       });
     }
   });
@@ -199,7 +200,7 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to delete supplier",
+        error: getSafeErrorMessage(error, "Failed to delete supplier"),
       });
     }
   });

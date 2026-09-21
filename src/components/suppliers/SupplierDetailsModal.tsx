@@ -1,5 +1,3 @@
-"use client";
-
 import { Icon } from "@/components/ui/icons";
 import {
   RELATIONSHIP_STATUS_LABELS,

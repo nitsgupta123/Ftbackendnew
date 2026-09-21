@@ -4,6 +4,7 @@ import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { FastifyPluginAsync } from "fastify";
+import { getSafeErrorMessage } from "../lib/errors";
 
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 
@@ -12,7 +13,6 @@ const IMAGE_MIME = new Set([
   "image/png",
   "image/gif",
   "image/webp",
-  "image/svg+xml",
 ]);
 
 const VIDEO_MIME = new Set([
@@ -39,7 +39,7 @@ function kindFor(filename: string, mimetype: string): UploadKind | null {
 
   const ext = path.extname(filename).toLowerCase();
   if ([".pdf", ".doc", ".docx", ".xls", ".xlsx"].includes(ext)) return "document";
-  if ([".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"].includes(ext)) return "image";
+  if ([".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext)) return "image";
   if ([".mp4", ".webm", ".ogg", ".ogv", ".mov"].includes(ext)) return "video";
   return null;
 }
@@ -53,7 +53,6 @@ function extensionFor(filename: string, mimetype: string): string {
     "image/png": ".png",
     "image/gif": ".gif",
     "image/webp": ".webp",
-    "image/svg+xml": ".svg",
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "video/ogg": ".ogv",
@@ -117,7 +116,7 @@ export const registerMediaRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return reply.status(500).send({
-        error: error instanceof Error ? error.message : "Failed to upload file",
+        error: getSafeErrorMessage(error, "Failed to upload file"),
       });
     }
   });

@@ -9,7 +9,7 @@ import type {
   UpdateRolePermissionsInput,
 } from "./permission-types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 function apiUrl(path: string) {
   return `${API_BASE}${path}`;

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Icon } from "../ui/icons";
@@ -409,7 +407,7 @@ export default function MediaFrontendForm({
   const mediaTags = ["Image source", "Alt text", "Hero image", "Mobile image"];
 
   return (
-    <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm animate-fade-in">
+    <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm">
       <div className="px-6 py-5 border-b border-[#E5E7EB]">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-[#1F2A44]">

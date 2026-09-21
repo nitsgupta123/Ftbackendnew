@@ -1,7 +1,5 @@
-"use client";
-
 import { useState } from "react";
-import Image from "next/image";
+
 import { Icon } from "@/components/ui/icons";
 import { deleteCategory } from "@/lib/category-api";
 import type { PackageCategoryRecord } from "@/lib/category-types";
@@ -55,12 +53,11 @@ function CategoryImage({ category }: { category: PackageCategoryRecord }) {
   }
 
   return (
-    <Image
+    <img
       src={src}
       alt={category.name}
       width={40}
       height={40}
-      unoptimized
       className="h-10 w-10 rounded-lg object-cover border border-[#E8ECF0] shrink-0"
       onError={() => setHasError(true)}
     />

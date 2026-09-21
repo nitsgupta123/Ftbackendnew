@@ -1,7 +1,6 @@
-"use client";
-
+import { Link } from "react-router-dom";
 import { useState } from "react";
-import Link from "next/link";
+
 import WriteNewBlogLink from "@/components/blogs/WriteNewBlogLink";
 import { Icon } from "@/components/ui/icons";
 import { deleteBlogPost } from "@/lib/blog-api";
@@ -85,7 +84,7 @@ function BlogRowActions({
         <Icon name="Eye" size={15} />
       </Button>
       <Link
-        href={`/blogs/edit/${post.id}`}
+        to={`/blogs/edit/${post.id}`}
         className="inline-flex size-8 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-[#A68231] hover:bg-[#FFFCF7] hover:border-[#A68231]/30 transition-colors"
         title="Edit post"
       >

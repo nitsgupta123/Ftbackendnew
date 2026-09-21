@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";

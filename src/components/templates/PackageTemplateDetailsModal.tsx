@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "react-router-dom";
 import { Icon } from "@/components/ui/icons";
 import {
   TEMPLATE_STEP_OPTIONS,
@@ -125,7 +123,7 @@ export default function PackageTemplateDetailsModal({
             Close
           </Button>
           <Link
-            href={`/add-package?templateId=${template.id}`}
+            to={`/add-package?templateId=${template.id}`}
             className="h-10 px-4 inline-flex items-center rounded-lg text-sm font-semibold text-white bg-[#1F2A44] hover:bg-[#1F2A44]/90"
           >
             Use Template

@@ -7,7 +7,7 @@ import type {
 import { getStoredToken } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 function apiUrl(path: string) {
   return `${API_BASE}${path}`;
@@ -52,9 +52,10 @@ export async function loginRequest(input: LoginInput): Promise<AuthResponse> {
   return parseApiResponse<AuthResponse>(response);
 }
 
-export async function fetchCurrentUser() {
+export async function fetchCurrentUser(signal?: AbortSignal) {
   const response = await fetch(apiUrl("/api/auth/me"), {
     headers: authHeaders(),
+    signal,
   });
   return parseApiResponse<{ user: AuthResponse["user"] }>(response);
 }

@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState, type FormEvent } from "react";
 import type { AdminUser } from "@/lib/auth-types";
 import type { CreateUserFormValues } from "@/lib/auth-validation";

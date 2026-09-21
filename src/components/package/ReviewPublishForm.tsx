@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/icons";
 
@@ -16,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { nowIsoSgt } from "@/lib/format-date";
 
 interface ReviewPublishFormProps extends StepFormBaseProps {
   onNext: (data: ReviewPublishData) => void;
@@ -66,7 +65,7 @@ function StatusIcon({ status }: {status: ReadinessStatus;}) {
 
   return (
     <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
-      <Icon name="AlertTriangle" size={22} className="text-[#F59E0B] fill-[#F59E0B]/20" />
+      <Icon name="AlertTriangle" size={22} className="text-[#F59E0B]-[#F59E0B]/20" />
     </div>);
 
 }
@@ -131,7 +130,7 @@ export default function ReviewPublishForm({
     finalApprover,
     reviewNotes,
     submitAction,
-    publishedAt: submitAction === "publish" ? new Date().toISOString() : null
+    publishedAt: submitAction === "publish" ? nowIsoSgt() : null
   });
 
   const handleSave = () => {
@@ -145,7 +144,7 @@ export default function ReviewPublishForm({
   "w-full min-h-[120px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-colors resize-y";
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       {/* Header + readiness + health check */}
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-6 space-y-6">
         <div>
