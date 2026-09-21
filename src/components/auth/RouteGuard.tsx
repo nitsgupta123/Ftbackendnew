@@ -2,8 +2,16 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useAuth } from "@/components/auth/AuthProvider";
+import { HIDDEN_PASSWORD_RECOVERY_PATH } from "@/lib/auth-paths";
 
-const PUBLIC_PATHS = new Set(["/login", "/signup", "/verify-email"]);
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/signup",
+  "/verify-email",
+  HIDDEN_PASSWORD_RECOVERY_PATH,
+  "/reset-password",
+  "/forgot-password",
+]);
 
 export default function RouteGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();

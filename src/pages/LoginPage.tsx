@@ -1,7 +1,5 @@
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
-
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
@@ -22,13 +20,13 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
-      password: ""
-    }
+      password: "",
+    },
   });
 
   const onSubmit = handleSubmit(async (values) => {
@@ -46,21 +44,13 @@ export default function LoginPage() {
     <AuthLayout
       title="Welcome back"
       subtitle="Sign in to the Fayyaz Travels admin panel"
-      footer={
-      <>
-          Don&apos;t have an account?{" "}
-          <Link to="/signup" className="text-[#1F2A44] font-medium hover:underline">
-            Create one
-          </Link>
-        </>
-      }>
-      
+    >
       <form onSubmit={onSubmit} className="space-y-5">
-        {submitError &&
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {submitError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {submitError}
           </div>
-        }
+        )}
 
         <div>
           <Label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -71,11 +61,11 @@ export default function LoginPage() {
             type="email"
             autoComplete="email"
             className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 text-sm outline-none focus:border-[#1F2A44] focus:ring-2 focus:ring-[#1F2A44]/10"
-            {...register("email")} />
-          
-          {errors.email &&
-          <p className="mt-1.5 text-sm text-red-600">{errors.email.message}</p>
-          }
+            {...register("email")}
+          />
+          {errors.email && (
+            <p className="mt-1.5 text-sm text-red-600">{errors.email.message}</p>
+          )}
         </div>
 
         <div>
@@ -88,8 +78,8 @@ export default function LoginPage() {
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               className="w-full rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 pr-10 text-sm outline-none focus:border-[#1F2A44] focus:ring-2 focus:ring-[#1F2A44]/10"
-              {...register("password")} />
-
+              {...register("password")}
+            />
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
@@ -99,20 +89,19 @@ export default function LoginPage() {
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
-
-          {errors.password &&
-          <p className="mt-1.5 text-sm text-red-600">{errors.password.message}</p>
-          }
+          {errors.password && (
+            <p className="mt-1.5 text-sm text-red-600">{errors.password.message}</p>
+          )}
         </div>
 
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="w-full rounded-xl bg-[#1F2A44] text-white py-2.5 text-sm font-medium hover:bg-[#172033] disabled:opacity-60 transition-colors">
-          
+          className="w-full rounded-xl bg-[#1F2A44] text-white py-2.5 text-sm font-medium hover:bg-[#172033] disabled:opacity-60 transition-colors"
+        >
           {isSubmitting ? "Signing in..." : "Sign in"}
         </Button>
       </form>
-    </AuthLayout>);
-
+    </AuthLayout>
+  );
 }

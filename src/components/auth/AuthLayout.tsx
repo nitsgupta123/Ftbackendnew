@@ -5,7 +5,7 @@ interface AuthLayoutProps {
   title: string;
   subtitle: string;
   children: ReactNode;
-  footer: ReactNode;
+  footer?: ReactNode;
 }
 
 export default function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
@@ -24,7 +24,9 @@ export default function AuthLayout({ title, subtitle, children, footer }: AuthLa
           {children}
         </div>
 
-        <div className="text-center mt-6 text-sm text-gray-500">{footer}</div>
+        {footer ? (
+          <div className="text-center mt-6 text-sm text-gray-500">{footer}</div>
+        ) : null}
       </div>
     </div>
   );

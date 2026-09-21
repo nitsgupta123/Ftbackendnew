@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   countAdminUsers,
   countAllAdminUsers,
+  createAdminPasswordReset,
   createBootstrapAdminUser,
   createPendingSignupAdminUser,
   deletePendingSignupByEmail,
@@ -9,19 +10,28 @@ import {
   findAdminById,
   passwordMatchesAdmin,
   refreshEmailVerificationToken,
+  resetAdminPasswordByToken,
   toAuthTokenPayload,
   touchAdminLastLogin,
   verifyAdminEmailByToken,
   verifyAdminPassword,
 } from "../../src/lib/auth-repository";
-import { loginSchema, signupSchema } from "../../src/lib/auth-validation";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  resetPasswordSchema,
+  signupSchema,
+} from "../../src/lib/auth-validation";
 import { isEmailConfigured } from "../../src/lib/email";
+import { sendAdminPasswordResetEmail } from "../../src/lib/password-reset-email";
 import { sendAdminVerificationEmail } from "../../src/lib/verification-email";
 import { sendRouteError } from "../lib/errors";
 import { z } from "zod";
 
 const INVALID_CREDENTIALS = "Invalid email or password";
 const VERIFY_EMAIL_FIRST = "Please verify your email before signing in";
+const RESET_GENERIC =
+  "If that email belongs to an admin account, a reset link has been sent.";
 
 const verifyEmailSchema = z.object({
   token: z.string().min(1, "Verification token is required"),
@@ -34,6 +44,10 @@ const resendSchema = z.object({
 function isPublicSignupAllowed(existingUserCount: number): boolean {
   if (existingUserCount === 0) return true;
   return process.env.ALLOW_PUBLIC_SIGNUP === "true";
+}
+
+function allowPasswordResetBypass(): boolean {
+  return process.env.ADMIN_PASSWORD_RESET_BYPASS === "true";
 }
 
 export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
@@ -221,6 +235,100 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       app.log.error(error);
       return sendRouteError(reply, error, "Login failed");
+    }
+  });
+
+  app.post("/forgot-password", async (request, reply) => {
+    try {
+      const parsed = forgotPasswordSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Validation failed",
+          details: parsed.error.flatten().fieldErrors,
+        });
+      }
+
+      const email = parsed.data.email.trim().toLowerCase();
+      const pending = await createAdminPasswordReset(email);
+
+      if (!pending) {
+        return reply.send({ status: "ok", message: RESET_GENERIC });
+      }
+
+      // Bypass: when email is not configured, return a one-time reset link for admins.
+      if (!isEmailConfigured()) {
+        if (!allowPasswordResetBypass()) {
+          return reply.status(503).send({
+            error:
+              "Email delivery is not configured. Ask a Super Admin to reset your password from User Management, or set ADMIN_PASSWORD_RESET_BYPASS=true.",
+          });
+        }
+        const resetPath = `/reset-password?token=${encodeURIComponent(pending.token)}`;
+        app.log.warn({ email: pending.email }, "Password reset bypass link issued (no email)");
+        return reply.send({
+          status: "ok",
+          message: RESET_GENERIC,
+          bypass: true,
+          resetPath,
+          previewUrl: resetPath,
+        });
+      }
+
+      try {
+        const mailResult = await sendAdminPasswordResetEmail(pending);
+        app.log.info(
+          { email: pending.email, mailMode: mailResult.mode },
+          "Password reset email sent"
+        );
+        return reply.send({
+          status: "ok",
+          message: RESET_GENERIC,
+          previewUrl: mailResult.previewUrl,
+          mailMode: mailResult.mode,
+        });
+      } catch (mailError) {
+        app.log.error(mailError);
+        return reply.status(503).send({
+          error: "Could not send password reset email. Please try again later.",
+        });
+      }
+    } catch (error) {
+      app.log.error(error);
+      return sendRouteError(reply, error, "Failed to start password reset");
+    }
+  });
+
+  app.post("/reset-password", async (request, reply) => {
+    try {
+      const parsed = resetPasswordSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "Validation failed",
+          details: parsed.error.flatten().fieldErrors,
+        });
+      }
+
+      const user = await resetAdminPasswordByToken(
+        parsed.data.token,
+        parsed.data.password
+      );
+      if (!user) {
+        return reply.status(400).send({
+          error: "Invalid or expired reset link. Please request a new one.",
+        });
+      }
+
+      await touchAdminLastLogin(user.id);
+      const token = await reply.jwtSign(toAuthTokenPayload(user));
+      return reply.send({
+        status: "authenticated",
+        token,
+        user,
+        message: "Password updated. You are now signed in.",
+      });
+    } catch (error) {
+      app.log.error(error);
+      return sendRouteError(reply, error, "Password reset failed");
     }
   });
 

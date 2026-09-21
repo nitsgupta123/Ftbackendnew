@@ -18,6 +18,7 @@ interface UserFormModalProps {
     fullName: string;
     role: AdminUser["role"];
     isActive: boolean;
+    password?: string;
   }) => void;
   onCancel: () => void;
 }
@@ -94,7 +95,8 @@ export default function UserFormModal({
       onSubmit({
         fullName,
         role,
-        isActive
+        isActive,
+        ...(password.trim() ? { password: password.trim() } : {}),
       });
     }
   }
@@ -123,6 +125,25 @@ export default function UserFormModal({
           <Label className="block text-sm font-medium text-gray-700 mb-1.5">Email</Label>
           <Input type="email" value={email} disabled className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] bg-gray-50 text-sm text-gray-500" />
         </div>}
+
+      {mode === "edit" && (
+        <div>
+          <Label className="block text-sm font-medium text-gray-700 mb-1.5">
+            New password (optional)
+          </Label>
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
+            placeholder="Leave blank to keep current password"
+            className="w-full h-10 px-3 rounded-lg border border-[#E5E7EB] text-sm focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]"
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Super Admin bypass — set a new password without the old one.
+          </p>
+        </div>
+      )}
 
       <div>
         <div className="mb-1.5 flex items-center justify-between gap-2">

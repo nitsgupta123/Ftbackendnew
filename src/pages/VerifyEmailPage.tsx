@@ -73,7 +73,7 @@ export default function VerifyEmailPage() {
             {error}
           </div>
           <Button asChild className="w-full rounded-xl bg-[#1F2A44] text-white">
-            <Link to="/signup">Sign up again</Link>
+            <Link to="/login">Back to sign in</Link>
           </Button>
         </div>
       )}

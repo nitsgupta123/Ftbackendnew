@@ -62,10 +62,23 @@ export const updateUserSchema = z
       )
       .optional(),
     isActive: z.boolean().optional(),
+    /** Super Admin can set a new password without the current one. */
+    password: passwordSchema.optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field is required",
   });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().min(1, "Email is required").email("Invalid email address"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: passwordSchema,
+});
+
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 export type UpdateUserFormValues = z.infer<typeof updateUserSchema>;
+export type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;

@@ -52,6 +52,35 @@ export async function loginRequest(input: LoginInput): Promise<AuthResponse> {
   return parseApiResponse<AuthResponse>(response);
 }
 
+export async function forgotPasswordRequest(
+  email: string
+): Promise<{
+  status: "ok";
+  message: string;
+  bypass?: boolean;
+  resetPath?: string;
+  previewUrl?: string;
+}> {
+  const response = await fetch(apiUrl("/api/auth/forgot-password"), {
+    method: "POST",
+    headers: authHeaders(true),
+    body: JSON.stringify({ email }),
+  });
+  return parseApiResponse(response);
+}
+
+export async function resetPasswordRequest(
+  token: string,
+  password: string
+): Promise<AuthResponse & { message?: string }> {
+  const response = await fetch(apiUrl("/api/auth/reset-password"), {
+    method: "POST",
+    headers: authHeaders(true),
+    body: JSON.stringify({ token, password }),
+  });
+  return parseApiResponse(response);
+}
+
 export async function fetchCurrentUser(signal?: AbortSignal) {
   const response = await fetch(apiUrl("/api/auth/me"), {
     headers: authHeaders(),

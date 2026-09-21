@@ -105,8 +105,6 @@ function mapAdminUser(row: AdminUserRow): AdminUser {
   };
 }
 
-const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
-
 const USER_SELECT = `
   SELECT u.id, u.user_email, u.password, u.first_name, u.last_name, u.user_type, u.status,
          u.email_verified, u.email_verification_token, u.email_verification_expires_at,
@@ -154,6 +152,10 @@ export async function resolveRoleTypeId(role: string): Promise<string> {
   return String(result.insertId);
 }
 
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_PREFIX = "pwreset_";
+
 export function createEmailVerificationToken(): {
   token: string;
   expiresAt: Date;
@@ -161,6 +163,19 @@ export function createEmailVerificationToken(): {
   return {
     token: randomBytes(32).toString("hex"),
     expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+  };
+}
+
+export function createPasswordResetToken(): {
+  token: string;
+  storedToken: string;
+  expiresAt: Date;
+} {
+  const token = randomBytes(32).toString("hex");
+  return {
+    token,
+    storedToken: `${PASSWORD_RESET_PREFIX}${token}`,
+    expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
   };
 }
 
@@ -210,6 +225,7 @@ export interface UpdateAdminUserInput {
   fullName?: string;
   role?: AdminUser["role"];
   isActive?: boolean;
+  password?: string;
 }
 
 export async function getAdminUserStats(): Promise<AdminUserStats> {
@@ -354,6 +370,10 @@ export async function updateAdminUser(
   if (input.isActive !== undefined) {
     sets.push("status = ?");
     values.push(input.isActive ? 1 : 2);
+  }
+  if (input.password !== undefined && input.password.length > 0) {
+    sets.push("password = ?");
+    values.push(await hashPassword(input.password));
   }
 
   if (!sets.length) {
@@ -529,7 +549,7 @@ export async function deletePendingSignupByEmail(email: string): Promise<void> {
 
 export async function verifyAdminEmailByToken(token: string): Promise<AdminUser | null> {
   const normalized = token.trim();
-  if (!normalized) return null;
+  if (!normalized || normalized.startsWith(PASSWORD_RESET_PREFIX)) return null;
 
   const rows = await query<TblUserRow[]>(
     `${USER_SELECT}
@@ -558,6 +578,83 @@ export async function verifyAdminEmailByToken(token: string): Promise<AdminUser 
          edit_date = NOW()
      WHERE id = ?`,
     [mapped.id]
+  );
+
+  return findAdminById(mapped.id);
+}
+
+export interface PasswordResetRequestResult {
+  email: string;
+  fullName: string;
+  token: string;
+}
+
+/** Issue a password-reset token for a verified admin (reuses verification columns with prefix). */
+export async function createAdminPasswordReset(
+  email: string
+): Promise<PasswordResetRequestResult | null> {
+  const row = await findAdminByEmail(email.trim().toLowerCase());
+  if (!row || !Boolean(row.email_verified) || !Boolean(row.is_active)) {
+    return null;
+  }
+
+  const { token, storedToken, expiresAt } = createPasswordResetToken();
+  await query(
+    `UPDATE ${USERS_TABLE}
+     SET email_verification_token = ?,
+         email_verification_expires_at = ?,
+         edit_date = NOW()
+     WHERE id = ?`,
+    [storedToken, expiresAt, row.id]
+  );
+
+  return {
+    email: row.email,
+    fullName: row.full_name,
+    token,
+  };
+}
+
+export async function resetAdminPasswordByToken(
+  token: string,
+  newPassword: string
+): Promise<AdminUser | null> {
+  const normalized = token.trim();
+  if (!normalized) return null;
+
+  const storedToken = normalized.startsWith(PASSWORD_RESET_PREFIX)
+    ? normalized
+    : `${PASSWORD_RESET_PREFIX}${normalized}`;
+
+  const rows = await query<TblUserRow[]>(
+    `${USER_SELECT}
+     WHERE u.email_verification_token = ?
+       AND u.email_verified = 1
+       AND ${adminUserTypeFilter("u")}
+     LIMIT 1`,
+    [storedToken]
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  const mapped = mapTblUser(row);
+  if (
+    mapped.email_verification_expires_at &&
+    mapped.email_verification_expires_at.getTime() < Date.now()
+  ) {
+    return null;
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await query(
+    `UPDATE ${USERS_TABLE}
+     SET password = ?,
+         email_verification_token = NULL,
+         email_verification_expires_at = NULL,
+         status = 1,
+         edit_date = NOW()
+     WHERE id = ?`,
+    [passwordHash, mapped.id]
   );
 
   return findAdminById(mapped.id);

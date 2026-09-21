@@ -3,6 +3,9 @@ import DashboardPage from "@/pages/DashboardPage";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import { HIDDEN_PASSWORD_RECOVERY_PATH } from "@/lib/auth-paths";
 import PackageDashboardPage from "@/pages/packages/PackageDashboardPage";
 import PackageModulePage from "@/pages/packages/PackageModulePage";
 import AddPackagePage from "@/pages/AddPackagePage";
@@ -28,7 +31,10 @@ export default function App() {
       <Route path="/" element={<DashboardPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path={HIDDEN_PASSWORD_RECOVERY_PATH} element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<Navigate to={HIDDEN_PASSWORD_RECOVERY_PATH} replace />} />
 
       <Route path="/packages" element={<PackageDashboardPage />} />
       <Route path="/packages/:module" element={<PackageModulePage />} />

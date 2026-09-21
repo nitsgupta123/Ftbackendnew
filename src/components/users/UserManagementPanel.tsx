@@ -206,10 +206,12 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
     fullName: string;
     role: AdminUser["role"];
     isActive: boolean;
+    password?: string;
   }) {
     if (!editingUser) return;
     setIsSaving(true);
     setError(null);
+    setSuccessMessage(null);
     try {
       const {
         user: updated
@@ -219,6 +221,9 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
       setCatalogRoles((prev) =>
         prev.includes(updated.role) ? prev : [...prev, updated.role]
       );
+      if (data.password) {
+        setSuccessMessage(`Password updated for ${updated.email}.`);
+      }
       setFormMode(null);
       setEditingUser(null);
       await Promise.all([loadStats(), loadCatalogRoles()]);
@@ -441,6 +446,7 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
                       fullName: string;
                       role: AdminUser["role"];
                       isActive: boolean;
+                      password?: string;
                     }
                   );
                 }
