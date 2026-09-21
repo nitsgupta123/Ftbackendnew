@@ -255,23 +255,25 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
         return reply.send({ status: "ok", message: RESET_GENERIC });
       }
 
-      // Bypass: when email is not configured, return a one-time reset link for admins.
-      if (!isEmailConfigured()) {
-        if (!allowPasswordResetBypass()) {
+      // Prefer email when configured; otherwise return an on-screen bypass link for admins.
+      if (!isEmailConfigured() || allowPasswordResetBypass()) {
+        if (!isEmailConfigured() && !allowPasswordResetBypass()) {
           return reply.status(503).send({
             error:
               "Email delivery is not configured. Ask a Super Admin to reset your password from User Management, or set ADMIN_PASSWORD_RESET_BYPASS=true.",
           });
         }
-        const resetPath = `/reset-password?token=${encodeURIComponent(pending.token)}`;
-        app.log.warn({ email: pending.email }, "Password reset bypass link issued (no email)");
-        return reply.send({
-          status: "ok",
-          message: RESET_GENERIC,
-          bypass: true,
-          resetPath,
-          previewUrl: resetPath,
-        });
+        if (allowPasswordResetBypass()) {
+          const resetPath = `/reset-password?token=${encodeURIComponent(pending.token)}`;
+          app.log.warn({ email: pending.email }, "Password reset bypass link issued");
+          return reply.send({
+            status: "ok",
+            message: RESET_GENERIC,
+            bypass: true,
+            resetPath,
+            previewUrl: resetPath,
+          });
+        }
       }
 
       try {
@@ -288,6 +290,16 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
         });
       } catch (mailError) {
         app.log.error(mailError);
+        if (allowPasswordResetBypass()) {
+          const resetPath = `/reset-password?token=${encodeURIComponent(pending.token)}`;
+          return reply.send({
+            status: "ok",
+            message: RESET_GENERIC,
+            bypass: true,
+            resetPath,
+            previewUrl: resetPath,
+          });
+        }
         return reply.status(503).send({
           error: "Could not send password reset email. Please try again later.",
         });

@@ -154,7 +154,8 @@ export async function resolveRoleTypeId(role: string): Promise<string> {
 
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
-const PASSWORD_RESET_PREFIX = "pwreset_";
+/** Kept short so `pwreset_` + hex fits in email_verification_token VARCHAR(64). */
+const PASSWORD_RESET_PREFIX = "pr_";
 
 export function createEmailVerificationToken(): {
   token: string;
@@ -171,7 +172,8 @@ export function createPasswordResetToken(): {
   storedToken: string;
   expiresAt: Date;
 } {
-  const token = randomBytes(32).toString("hex");
+  // 16 bytes → 32 hex; with "pr_" prefix = 35 chars (fits VARCHAR(64))
+  const token = randomBytes(16).toString("hex");
   return {
     token,
     storedToken: `${PASSWORD_RESET_PREFIX}${token}`,
@@ -589,12 +591,13 @@ export interface PasswordResetRequestResult {
   token: string;
 }
 
-/** Issue a password-reset token for a verified admin (reuses verification columns with prefix). */
+/** Issue a password-reset token for an active admin (reuses verification columns with prefix). */
 export async function createAdminPasswordReset(
   email: string
 ): Promise<PasswordResetRequestResult | null> {
   const row = await findAdminByEmail(email.trim().toLowerCase());
-  if (!row || !Boolean(row.email_verified) || !Boolean(row.is_active)) {
+  // Allow legacy admins even if email_verified was never set.
+  if (!row || !Boolean(row.is_active)) {
     return null;
   }
 
@@ -629,7 +632,6 @@ export async function resetAdminPasswordByToken(
   const rows = await query<TblUserRow[]>(
     `${USER_SELECT}
      WHERE u.email_verification_token = ?
-       AND u.email_verified = 1
        AND ${adminUserTypeFilter("u")}
      LIMIT 1`,
     [storedToken]
@@ -649,9 +651,10 @@ export async function resetAdminPasswordByToken(
   await query(
     `UPDATE ${USERS_TABLE}
      SET password = ?,
+         email_verified = 1,
+         status = 1,
          email_verification_token = NULL,
          email_verification_expires_at = NULL,
-         status = 1,
          edit_date = NOW()
      WHERE id = ?`,
     [passwordHash, mapped.id]
