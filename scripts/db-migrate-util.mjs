@@ -1,10 +1,37 @@
-import { config } from "dotenv";
 import mysql from "mysql2/promise";
 import fs from "fs";
 import path from "path";
 
-config({ path: ".env.local" });
-config();
+/** Load KEY=VALUE env files without requiring the dotenv package. */
+function loadEnvFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const text = fs.readFileSync(filePath, "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq <= 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let value = trimmed.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  } catch {
+    // ignore missing/unreadable env files
+  }
+}
+
+loadEnvFile(path.resolve(process.cwd(), ".env.production"));
+loadEnvFile(path.resolve(process.cwd(), ".env.local"));
+loadEnvFile(path.resolve(process.cwd(), ".env"));
 
 export function getMigrateDbConfig() {
   const database = process.env.DB_NAME ?? "fayyaz_new";

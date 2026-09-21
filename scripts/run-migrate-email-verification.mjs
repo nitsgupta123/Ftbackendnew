@@ -1,9 +1,4 @@
-import { config } from "dotenv";
 import { withMigrateConnection } from "./db-migrate-util.mjs";
-
-config({ path: ".env.production" });
-config({ path: ".env.local" });
-config();
 
 const COLUMNS = [
   {
