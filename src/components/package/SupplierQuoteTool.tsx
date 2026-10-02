@@ -19,6 +19,7 @@ import { sendSupplierQuoteEmail } from "@/lib/package-api";
 import { isValidEmail, parseEmailList } from "@/lib/email-list";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
+  applyReferenceCodeToSubject,
   buildQuoteEmailBody,
   buildQuoteEmailSignature,
   buildQuoteEmailSubject,
@@ -50,6 +51,7 @@ type QuoteFormState = Required<
   Pick<
     SupplierQuoteToolData,
     | "quoteRequestType"
+    | "referenceCode"
     | "supplierToSendTo"
     | "basedOnPackage"
     | "replyDeadline"
@@ -125,6 +127,7 @@ function buildInitialForm(
 
   const base: QuoteFormState = {
     quoteRequestType: initialData?.quoteRequestType || "updated-rate",
+    referenceCode: initialData?.referenceCode || "",
     supplierToSendTo:
       initialData?.supplierToSendTo ||
       supplierSource?.supplierName ||
@@ -343,6 +346,7 @@ export default function SupplierQuoteTool({
 
   const toPayload = (): SupplierQuoteToolData => ({
     quoteRequestType: formData.quoteRequestType,
+    referenceCode: formData.referenceCode.trim(),
     supplierToSendTo: formData.supplierToSendTo,
     basedOnPackage: formData.basedOnPackage,
     replyDeadline: formData.replyDeadline,
@@ -384,9 +388,19 @@ export default function SupplierQuoteTool({
       toast.error("Select or add at least one recipient email");
       return;
     }
+    const referenceCode = formData.referenceCode.trim();
+    if (!referenceCode) {
+      toast.error("Add your reference code so it appears in the subject line");
+      return;
+    }
     if (!formData.emailSubject.trim() || !formData.emailBody.trim()) {
       toast.error("Subject and email body are required");
       return;
+    }
+
+    const subject = applyReferenceCodeToSubject(formData.emailSubject, referenceCode);
+    if (subject !== formData.emailSubject) {
+      setFormData((prev) => ({ ...prev, emailSubject: subject, referenceCode }));
     }
 
     setSending(true);
@@ -394,10 +408,14 @@ export default function SupplierQuoteTool({
       const result = await sendSupplierQuoteEmail(packageId, {
         to,
         additionalTo,
-        subject: formData.emailSubject.trim(),
+        subject,
         body: formData.emailBody.trim(),
         emailSignature: formData.emailSignature,
-        quoteData: toPayload() as unknown as Record<string, unknown>,
+        quoteData: {
+          ...(toPayload() as unknown as Record<string, unknown>),
+          referenceCode,
+          emailSubject: subject,
+        },
       });
 
       if (result.package?.supplier_quote_tool) {
@@ -470,6 +488,23 @@ export default function SupplierQuoteTool({
       <div className="p-6 pb-0">
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6">
           <div className="space-y-5">
+            <div>
+              <Label htmlFor="referenceCode" className={labelClass}>
+                Your reference code
+              </Label>
+              <Input
+                id="referenceCode"
+                type="text"
+                placeholder="e.g. TC-1042"
+                className={inputClass}
+                value={formData.referenceCode}
+                onChange={(e) => updateField("referenceCode", e.target.value)}
+              />
+              <p className="mt-1.5 text-xs text-gray-500">
+                Required. This is added to the supplier email subject so replies come back to you.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5">
               <div>
                 <Label htmlFor="quoteRequestType" className={labelClass}>
@@ -806,7 +841,7 @@ export default function SupplierQuoteTool({
                     Editable email preview
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Edit subject, body, and signature before sending.
+                    Your reference code is included in the subject. Edit the subject, body, and signature before sending.
                   </p>
                 </div>
                 <Button

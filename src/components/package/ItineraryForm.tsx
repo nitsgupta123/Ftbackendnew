@@ -1,6 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../ui/icons";
 import type { ItineraryData, ItineraryDay } from "@/lib/package-types";
+import {
+  clearItineraryDraft,
+  coerceItineraryDays,
+  dayHasUserContent,
+  isEmptyRichText,
+  parseDurationDays,
+  readItineraryDraft,
+  resolveItineraryDays,
+  writeItineraryDraft,
+} from "@/lib/itinerary-days";
 import { uploadMediaFile } from "@/lib/media-api";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { Button } from "@/components/ui/button";
@@ -12,59 +22,12 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { resolveMediaSrc } from "@/lib/package-images";
 
 interface ItineraryFormProps extends StepFormBaseProps {
-  onNext: (data: ItineraryData) => void;
+  onNext: (data: ItineraryData) => void | boolean | Promise<void | boolean>;
   onPrevious: () => void;
   initialData?: ItineraryData | null;
   /** Package duration in days from Package Basics (`days` field). */
   packageDurationDays?: string | number | null;
-}
-
-function createEmptyDay(dayNumber: number): ItineraryDay {
-  return {
-    dayNumber,
-    title: "",
-    description: "",
-    activitiesIncluded: "",
-    highlights: "",
-    internalNotes: "",
-    mobilityWarning: "",
-    supplierNotes: "",
-    dietaryNotes: "",
-    breakfast: false,
-    lunch: false,
-    dinner: false,
-    imageUrl: null,
-  };
-}
-
-function parseDurationDays(raw: string | number | null | undefined): number {
-  const n = typeof raw === "number" ? raw : Number.parseInt(String(raw ?? "").trim(), 10);
-  if (!Number.isFinite(n) || n < 1) return 0;
-  return Math.min(Math.floor(n), 60);
-}
-
-function normalizeDay(day: ItineraryDay, dayNumber: number): ItineraryDay {
-  return {
-    ...createEmptyDay(dayNumber),
-    ...day,
-    dayNumber,
-    description: toEditorHtml(day.description),
-    dietaryNotes: day.dietaryNotes ?? day.halalFoodNote ?? "",
-  };
-}
-
-function buildDaysForDuration(
-  duration: number,
-  existing?: ItineraryDay[] | null
-): ItineraryDay[] {
-  if (duration < 1) return [];
-
-  return Array.from({ length: duration }, (_, index) => {
-    const dayNumber = index + 1;
-    const prior =
-      existing?.find((d) => d.dayNumber === dayNumber) ?? existing?.[index];
-    return prior ? normalizeDay(prior, dayNumber) : createEmptyDay(dayNumber);
-  });
+  packageId?: number | null;
 }
 
 function ToggleBlock({
@@ -97,39 +60,8 @@ function PillTag({ label }: { label: string }) {
   );
 }
 
-function isEmptyRichText(html: string): boolean {
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").trim() === "";
-}
-
 function storeRichText(html: string): string {
   return isEmptyRichText(html) ? "" : html;
-}
-
-function toEditorHtml(value: string | undefined): string {
-  const raw = value ?? "";
-  if (!raw.trim()) return "";
-  if (/<\/?[a-z][\s\S]*>/i.test(raw)) return raw;
-  return raw
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br>")}</p>`)
-    .join("");
-}
-
-function dayHasUserContent(day: ItineraryDay): boolean {
-  return Boolean(
-    day.title?.trim() ||
-      !isEmptyRichText(day.description ?? "") ||
-      day.activitiesIncluded?.trim() ||
-      day.highlights?.trim() ||
-      day.internalNotes?.trim() ||
-      day.mobilityWarning?.trim() ||
-      day.supplierNotes?.trim() ||
-      day.dietaryNotes?.trim() ||
-      day.imageUrl?.trim() ||
-      day.breakfast ||
-      day.lunch ||
-      day.dinner
-  );
 }
 
 function DayImageUpload({
@@ -231,10 +163,6 @@ function DayImageUpload({
   );
 }
 
-function savedDaysKey(days: ItineraryDay[] | null | undefined): string {
-  return JSON.stringify(days ?? []);
-}
-
 interface DayCardProps {
   day: ItineraryDay;
   isOpen: boolean;
@@ -319,7 +247,11 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
             <Label className={labelClass}>Description</Label>
             <BlogRichTextEditor
               value={day.description ?? ""}
-              onChange={(html) => update({ description: storeRichText(html) })}
+              onChange={(html) => {
+                const next = storeRichText(html);
+                if (next === (day.description ?? "")) return;
+                update({ description: next });
+              }}
               placeholder="Structure this day for clients — morning, afternoon, evening, transfers, and what they will see…"
               defaultHeight={180}
               minHeight={120}
@@ -428,57 +360,51 @@ export default function ItineraryForm({
   isSaving = false,
   initialData,
   packageDurationDays,
+  packageId = null,
 }: ItineraryFormProps) {
   const duration = parseDurationDays(packageDurationDays);
-  const incomingDays = initialData?.days;
-  const incomingKey = savedDaysKey(incomingDays);
-  const lastIncomingKey = useRef(incomingKey);
-  const lastDuration = useRef(duration);
+  const savedDays = useMemo(() => coerceItineraryDays(initialData), [initialData]);
+  const savedKey = JSON.stringify(savedDays);
+  const sourceKey = `${packageId ?? "new"}|${duration}|${savedKey}`;
 
+  const [appliedSourceKey, setAppliedSourceKey] = useState(sourceKey);
   const [days, setDays] = useState<ItineraryDay[]>(() =>
-    buildDaysForDuration(duration, incomingDays)
+    resolveItineraryDays(
+      packageDurationDays,
+      savedDays,
+      readItineraryDraft(packageId)
+    )
   );
   const [openDayNumber, setOpenDayNumber] = useState<number | null>(() =>
     duration >= 1 ? 1 : null
   );
+  const daysRef = useRef(days);
+  daysRef.current = days;
+
+  if (appliedSourceKey !== sourceKey) {
+    const nextDays = resolveItineraryDays(
+      packageDurationDays,
+      savedDays,
+      readItineraryDraft(packageId),
+      days
+    );
+    setAppliedSourceKey(sourceKey);
+    setDays(nextDays);
+    const nextOpen =
+      duration < 1 ? null : openDayNumber != null && openDayNumber <= Math.max(duration, nextDays.length) ? openDayNumber : 1;
+    if (nextOpen !== openDayNumber) setOpenDayNumber(nextOpen);
+  }
 
   useEffect(() => {
-    const savedChanged = lastIncomingKey.current !== incomingKey;
-    const durationChanged = lastDuration.current !== duration;
-    lastIncomingKey.current = incomingKey;
-    lastDuration.current = duration;
-
-    if (!savedChanged && !durationChanged) return;
-
-    setDays((prev) => {
-      const incomingHasContent = (incomingDays ?? []).some(dayHasUserContent);
-      const prevHasContent = prev.some(dayHasUserContent);
-
-      // Empty generated tabs must yield to saved itinerary when it arrives later.
-      if (savedChanged && incomingHasContent && !prevHasContent) {
-        return buildDaysForDuration(duration, incomingDays);
-      }
-
-      if (durationChanged) {
-        return buildDaysForDuration(
-          duration,
-          prev.length || prevHasContent ? prev : incomingDays
-        );
-      }
-
-      // Keep in-progress edits when parent re-stamps the same package.
-      if (prevHasContent) return prev;
-      return buildDaysForDuration(duration, incomingDays ?? prev);
-    });
-
-    if (!durationChanged) return;
-
-    setOpenDayNumber((prev) => {
-      if (duration < 1) return null;
-      if (prev != null && prev <= duration) return prev;
-      return 1;
-    });
-  }, [duration, incomingKey, incomingDays]);
+    if (!packageId) return;
+    if (days.some(dayHasUserContent)) {
+      writeItineraryDraft(packageId, days);
+      return;
+    }
+    // Package duration can arrive a render later. Don't drop a stored draft before those days exist.
+    if (duration < 1 || savedDays.some(dayHasUserContent)) return;
+    clearItineraryDraft(packageId);
+  }, [packageId, days, duration, savedDays]);
 
   const updateDay = (index: number, day: ItineraryDay) => {
     setDays((prev) => prev.map((d, i) => (i === index ? day : d)));
@@ -520,11 +446,20 @@ export default function ItineraryForm({
 
       <div className="bg-[#FFFBEB] border border-[#FCD34D] rounded-[12px] p-4">
         <p className="text-sm text-[#92400E] mb-3 leading-relaxed">
-          {duration >= 1 ? (
+          {days.length >= 1 ? (
             <>
-              Package duration is <strong>{duration} day{duration === 1 ? "" : "s"}</strong>
-              {" — "}
-              {duration} itinerary tab{duration === 1 ? "" : "s"} created automatically.
+              {duration >= 1 ? (
+                <>
+                  Package duration is <strong>{duration} day{duration === 1 ? "" : "s"}</strong>
+                  {" — "}
+                  {days.length} itinerary day{days.length === 1 ? "" : "s"} ready to edit.
+                </>
+              ) : (
+                <>
+                  {days.length} itinerary day{days.length === 1 ? "" : "s"} restored.
+                  Set <strong>Days</strong> under Package Basics if this count should change.
+                </>
+              )}
             </>
           ) : (
             <>
@@ -575,7 +510,12 @@ export default function ItineraryForm({
 
         <Button
           type="button"
-          onClick={() => onNext({ days })}
+          onClick={() => {
+            const payload = { days: daysRef.current };
+            void Promise.resolve(onNext(payload)).then((saved) => {
+              if (saved) clearItineraryDraft(packageId);
+            });
+          }}
           disabled={isSaving}
           data-package-step-save="" className={stepSaveButtonClass}
         >

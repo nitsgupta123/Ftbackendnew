@@ -3,6 +3,7 @@ import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Icon } from "../ui/icons";
 
 import type { InclusionsData } from "@/lib/package-types";
+import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,18 @@ interface InclusionsFormProps extends StepFormBaseProps {
   onNext: (data: InclusionsData) => void;
   onPrevious: () => void;
   initialData?: InclusionsData | null;
+  /** Notes still stored on Package Basics until this step is saved. */
+  legacyImportantInfo?: string;
+}
+
+function readImportantInfo(
+  data: InclusionsData | null | undefined,
+  legacyImportantInfo?: string
+): string {
+  if (data && Object.prototype.hasOwnProperty.call(data, "importantInfo")) {
+    return data.importantInfo ?? "";
+  }
+  return legacyImportantInfo ?? "";
 }
 
 function asStringArray(value: unknown, fallback: string[] = []): string[] {
@@ -26,18 +39,22 @@ function asStringArray(value: unknown, fallback: string[] = []): string[] {
   return fallback;
 }
 
-function inclusionsSyncKey(data: InclusionsData | null | undefined): string | null {
-  if (!data) return null;
+function inclusionsSyncKey(
+  data: InclusionsData | null | undefined,
+  legacyImportantInfo?: string
+): string | null {
+  if (!data && !legacyImportantInfo) return null;
   return JSON.stringify({
-    included: asStringArray(data.included),
-    excluded: asStringArray(data.excluded),
-    optionalAddons: asStringArray(data.optionalAddons),
-    localFees: data.localFees ?? "",
-    nonRefundable: data.nonRefundable ?? "",
-    consultantMustExplain: data.consultantMustExplain ?? true,
-    flightsIncluded: data.flightsIncluded ?? false,
-    trainIncluded: data.trainIncluded ?? false,
-    transfersIncluded: data.transfersIncluded ?? true,
+    included: asStringArray(data?.included),
+    excluded: asStringArray(data?.excluded),
+    optionalAddons: asStringArray(data?.optionalAddons),
+    localFees: data?.localFees ?? "",
+    nonRefundable: data?.nonRefundable ?? "",
+    importantInfo: readImportantInfo(data, legacyImportantInfo),
+    consultantMustExplain: data?.consultantMustExplain ?? true,
+    flightsIncluded: data?.flightsIncluded ?? false,
+    trainIncluded: data?.trainIncluded ?? false,
+    transfersIncluded: data?.transfersIncluded ?? true,
   });
 }
 
@@ -411,6 +428,7 @@ export default function InclusionsForm({
   onNext,
   onPrevious,
   initialData,
+  legacyImportantInfo,
   isSaving = false,
 }: InclusionsFormProps) {
   const [included, setIncluded] = useState<string[]>(() => asStringArray(initialData?.included));
@@ -421,6 +439,9 @@ export default function InclusionsForm({
 
   const [localFees, setLocalFees] = useState(initialData?.localFees ?? "");
   const [nonRefundable, setNonRefundable] = useState(initialData?.nonRefundable ?? "");
+  const [importantInfo, setImportantInfo] = useState(() =>
+    readImportantInfo(initialData, legacyImportantInfo)
+  );
   const [consultantMustExplain, setConsultantMustExplain] = useState(
     initialData?.consultantMustExplain ?? true
   );
@@ -432,25 +453,28 @@ export default function InclusionsForm({
     initialData?.transfersIncluded ?? true
   );
 
-  const syncKey = inclusionsSyncKey(initialData);
+  const syncKey = inclusionsSyncKey(initialData, legacyImportantInfo);
   const lastSyncedKey = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!syncKey || !initialData) return;
+    if (!syncKey) return;
     // Only re-hydrate when saved/server inclusions actually change (not on new object refs).
     if (lastSyncedKey.current === syncKey) return;
     lastSyncedKey.current = syncKey;
 
-    setIncluded(asStringArray(initialData.included));
-    setExcluded(asStringArray(initialData.excluded));
-    setOptionalAddons(asStringArray(initialData.optionalAddons));
-    setLocalFees(initialData.localFees ?? "");
-    setNonRefundable(initialData.nonRefundable ?? "");
-    setConsultantMustExplain(initialData.consultantMustExplain ?? true);
-    setFlightsIncluded(initialData.flightsIncluded ?? false);
-    setTrainIncluded(initialData.trainIncluded ?? false);
-    setTransfersIncluded(initialData.transfersIncluded ?? true);
-  }, [syncKey, initialData]);
+    if (initialData) {
+      setIncluded(asStringArray(initialData.included));
+      setExcluded(asStringArray(initialData.excluded));
+      setOptionalAddons(asStringArray(initialData.optionalAddons));
+      setLocalFees(initialData.localFees ?? "");
+      setNonRefundable(initialData.nonRefundable ?? "");
+      setConsultantMustExplain(initialData.consultantMustExplain ?? true);
+      setFlightsIncluded(initialData.flightsIncluded ?? false);
+      setTrainIncluded(initialData.trainIncluded ?? false);
+      setTransfersIncluded(initialData.transfersIncluded ?? true);
+    }
+    setImportantInfo(readImportantInfo(initialData, legacyImportantInfo));
+  }, [syncKey, initialData, legacyImportantInfo]);
 
   const textareaClass =
     "w-full min-h-[140px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300 resize-y";
@@ -528,6 +552,23 @@ export default function InclusionsForm({
         />
       </div>
 
+      <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
+        <h3 className="text-sm font-bold text-[#1F2A44] mb-1">Important Notes</h3>
+        <p className="text-xs text-gray-400 mb-3 leading-relaxed">
+          Shown to clients. Use the toolbar for bold, lists, and links. Typical
+          notes: rates subject to availability, visa not included, seasonal
+          surcharge, physical requirements, booking conditions.
+        </p>
+        <BlogRichTextEditor
+          value={importantInfo}
+          onChange={setImportantInfo}
+          placeholder="Enter important notes that will be visible to clients…"
+          defaultHeight={180}
+          minHeight={140}
+          maxHeight={600}
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
           <Label className="block text-sm font-bold text-[#1F2A44] mb-3">
@@ -582,6 +623,7 @@ export default function InclusionsForm({
               optionalAddons,
               localFees,
               nonRefundable,
+              importantInfo,
               consultantMustExplain,
               flightsIncluded,
               trainIncluded,

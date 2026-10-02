@@ -120,7 +120,7 @@ function renderPackageAttachmentHtml(input: {
   const sections: string[] = [
     renderOverview(basics, pkg),
     renderHotels(pkg.hotels),
-    renderInclusions(pkg.inclusions),
+    renderInclusions(pkg.inclusions, basics?.importantInfo),
   ];
 
   if (includeItinerary) {
@@ -197,7 +197,6 @@ function renderOverview(
   addRow(rows, "Ending point", basics?.endingPoint);
   addRow(rows, "Short intro", htmlToText(basics?.shortIntro));
   addRow(rows, "Overview", htmlToText(basics?.packageOverview));
-  addRow(rows, "Important info", htmlToText(basics?.importantInfo));
 
   if (!rows.length) return "";
   return `<h2>Package overview</h2>${definitionTable(rows)}`;
@@ -282,9 +281,31 @@ function renderHotels(hotels: HotelEntry[] | null | undefined): string {
   return `<h2>Hotels</h2>${cards}`;
 }
 
-function renderInclusions(data: InclusionsData | null | undefined): string {
-  if (!data) return "";
+function storedImportantInfo(
+  data: InclusionsData | null | undefined,
+  legacyImportantInfo?: string
+): string {
+  if (data && Object.prototype.hasOwnProperty.call(data, "importantInfo")) {
+    return data.importantInfo ?? "";
+  }
+  return legacyImportantInfo ?? "";
+}
+
+function renderInclusions(
+  data: InclusionsData | null | undefined,
+  legacyImportantInfo?: string
+): string {
+  const importantHtml = richHtmlBlock(storedImportantInfo(data, legacyImportantInfo));
+  if (!data && !importantHtml) return "";
   const chunks: string[] = [];
+  if (importantHtml) {
+    chunks.push(
+      `<p><strong>Important notes</strong></p><div class="rte">${importantHtml}</div>`
+    );
+  }
+  if (!data) {
+    return `<h2>Inclusions</h2>${chunks.join("\n")}`;
+  }
   const flags = [
     data.flightsIncluded ? "Flights included" : "",
     data.trainIncluded ? "Train included" : "",

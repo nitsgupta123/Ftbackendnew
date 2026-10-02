@@ -5,6 +5,7 @@ import { Icon } from "../ui/icons";
 import { packageBasicsSchema, type PackageBasicsValues } from "@/lib/validation";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { listActiveCategories } from "@/lib/category-api";
+import { listWebsiteLandingPages } from "@/lib/page-api";
 import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -29,30 +30,6 @@ import {
   getCityOptionsForCountries,
   splitDestinationList,
 } from "@/lib/package-destinations";
-
-const CATEGORY_LANDING_OPTIONS = [
-  "Family holidays",
-  "Couples holidays",
-  "First-time travellers",
-  "Muslim-friendly holidays",
-  "Luxury travel",
-  "Nature holidays",
-  "Multi-generational trips",
-  "Honeymoon",
-  "Babymoon",
-  "Retiree-friendly holidays",
-  "Adventure trips",
-  "School holiday trips",
-  "Safari holidays",
-  "Cruise holidays",
-  "Wellness holidays",
-  "Corporate incentive trips",
-  "MICE travel",
-  "Private tours",
-  "Group tours",
-  "City breaks",
-  "Island escapes",
-];
 
 const SHORT_INTRO_HELP =
   "This appears on category pages, related package sections and package cards where clients only see a short description before clicking in.";
@@ -272,6 +249,10 @@ export default function PackageBasicsForm({
     { id: number; name: string }[]
   >([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [landingOptions, setLandingOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
+  const [landingPagesLoading, setLandingPagesLoading] = useState(true);
   const {
     register,
     handleSubmit,
@@ -349,6 +330,32 @@ export default function PackageBasicsForm({
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLandingPages() {
+      setLandingPagesLoading(true);
+      try {
+        const pages = await listWebsiteLandingPages();
+        if (!cancelled) {
+          setLandingOptions(
+            pages.map((page) => ({
+              value: page.slug,
+              label: page.title,
+            }))
+          );
+        }
+      } catch {
+        if (!cancelled) setLandingOptions([]);
+      } finally {
+        if (!cancelled) setLandingPagesLoading(false);
+      }
+    }
+    loadLandingPages();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const categorySelectOptions = useMemo(
     () =>
       categoryOptions.map((c) => ({
@@ -363,11 +370,6 @@ export default function PackageBasicsForm({
     [selectedCountry]
   );
 
-  const landingSelectOptions = useMemo(
-    () => CATEGORY_LANDING_OPTIONS.map((name) => ({ value: name, label: name })),
-    []
-  );
-
   const onCountryChange = (country: string) => {
     setValue("countriesCovered", country, {
       shouldDirty: true,
@@ -378,7 +380,10 @@ export default function PackageBasicsForm({
 
   const packageTitleRegister = register("packageTitle");
   const onSubmit = (data: PackageBasicsValues) => {
-    onNext(data);
+    onNext({
+      ...data,
+      importantInfo: initialData?.importantInfo ?? data.importantInfo ?? "",
+    });
   };
 
   const inputClass =
@@ -715,19 +720,21 @@ export default function PackageBasicsForm({
             />
           </div>
 
-          {/* Package themes (stored as landingPages — separate from Package Categories) */}
+          {/* Website landing pages from tbl_post (Deals, sales, luxury) */}
           <div className="mb-6">
             <Controller
               control={control}
               name="landingPages"
               render={({ field }) => (
                 <SearchableMultiSelect
-                  label="Package themes"
-                  options={landingSelectOptions}
+                  label="Landing pages"
+                  options={landingOptions}
                   selectedValues={field.value || []}
                   onChange={field.onChange}
-                  placeholder="Search themes…"
-                  helperText="Audience / style themes for merchandising. Separate from Package Categories."
+                  loading={landingPagesLoading}
+                  placeholder="Search landing pages…"
+                  emptyMessage="No live landing pages found."
+                  helperText="Live pages from the website, such as Hot Deals, Short Breaks, and Luxury Holiday. Separate from Package Categories."
                 />
               )}
             />
@@ -764,37 +771,22 @@ export default function PackageBasicsForm({
             )}
           </div>
 
-          {/* Important Notes + Frontend Notes */}
-          <div className="grid grid-cols-1 gap-y-5 mb-6">
-            <div>
-              <Label htmlFor="importantInfo" className={labelClass}>
-                Important Notes
-              </Label>
-              <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
-                Rates subject to availability, visa not included, seasonal surcharge,
-                physical requirements, booking conditions.
-              </p>
-              <Textarea
-                id="importantInfo"
-                placeholder="Enter important notes that will be visible to clients…"
-                rows={4}
-                className={textareaClass}
-                {...register("importantInfo")}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="frontendNotes" className={labelClass}>
-                Frontend Notes
-              </Label>
-              <Textarea
-                id="frontendNotes"
-                placeholder="Front-end summary or notes shown on the website…"
-                rows={4}
-                className={textareaClass}
-                {...register("frontendNotes")}
-              />
-            </div>
+          {/* Frontend Notes — website summary. Important Notes live on Inclusions. */}
+          <div className="mb-6">
+            <Label htmlFor="frontendNotes" className={labelClass}>
+              Frontend Notes
+            </Label>
+            <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
+              Website summary and marketing copy for the public package page.
+              Booking conditions belong in Inclusions → Important Notes.
+            </p>
+            <Textarea
+              id="frontendNotes"
+              placeholder="Front-end summary or notes shown on the website…"
+              rows={4}
+              className={textareaClass}
+              {...register("frontendNotes")}
+            />
           </div>
 
           {/* Seasonal package — highlighted box */}

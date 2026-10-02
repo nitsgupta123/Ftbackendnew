@@ -11,6 +11,7 @@ import {
 } from "../../src/lib/page-repository";
 import type { ListPagesParams, PageStatus } from "../../src/lib/page-types";
 import { createPageSchema, updatePageSchema } from "../../src/lib/validation";
+import { listWebsiteLandingPages } from "../../src/lib/landing-page-repository";
 import { getRequestAudit, requireModuleAccess, requireSuperAdmin } from "../lib/audit";
 
 const VALID_STATUSES: PageStatus[] = ["draft", "published", "archived"];
@@ -23,6 +24,18 @@ function parseStatus(value?: string): PageStatus | "all" | undefined {
 export const registerPageRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", requireModuleAccess("pages"));
+
+  app.get("/landing-options", async (_request, reply) => {
+    try {
+      const landingPages = await listWebsiteLandingPages();
+      return reply.send({ landingPages });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: error instanceof Error ? error.message : "Failed to list landing pages",
+      });
+    }
+  });
 
   app.get("/stats", async (_request, reply) => {
     try {

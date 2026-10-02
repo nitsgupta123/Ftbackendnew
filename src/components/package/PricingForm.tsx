@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Icon } from "../ui/icons";
 import type {
   BookingRange,
@@ -48,9 +48,15 @@ const DEPARTURE_STATUSES: { value: DepartureStatus; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const CHILD_TYPES: ChildPriceType[] = [
+  "child_with_bed",
+  "child_without_bed",
+  "infant",
+];
+
 const CHILD_TYPE_LABELS: Record<ChildPriceType, string> = {
   child_with_bed: "Child With Bed",
-  child_without_bed: "Child Without Bed",
+  child_without_bed: "Child No Bed",
   infant: "Infant",
 };
 
@@ -131,10 +137,44 @@ function createAdultTiers(): PricingAdultTier[] {
   }));
 }
 
+function createChildRows(): PricingChildRow[] {
+  return CHILD_TYPES.map((type) => ({
+    id: uid("child"),
+    type,
+    netPrice: "",
+    margin: "",
+    retailPrice: "",
+  }));
+}
+
+function ensureChildRows(rows: PricingChildRow[] | undefined): PricingChildRow[] {
+  const existing = rows ?? [];
+  return CHILD_TYPES.map((type) => {
+    const found = existing.find((row) => row.type === type);
+    return (
+      found ?? {
+        id: uid("child"),
+        type,
+        netPrice: "",
+        margin: "",
+        retailPrice: "",
+      }
+    );
+  });
+}
+
+function ensurePricing(pricing: PricingDetailsBlock | undefined): PricingDetailsBlock {
+  return {
+    adultTiers: pricing?.adultTiers?.length ? pricing.adultTiers : createAdultTiers(),
+    childRows: ensureChildRows(pricing?.childRows),
+    promotions: pricing?.promotions ?? [],
+  };
+}
+
 function createPricingDetails(): PricingDetailsBlock {
   return {
     adultTiers: createAdultTiers(),
-    childRows: [],
+    childRows: createChildRows(),
     promotions: [],
   };
 }
@@ -222,7 +262,10 @@ function hydrateCategories(initial?: PricingData | null): HotelCategoryPricing[]
       return {
         category: key,
         bookingRanges: existing.bookingRanges?.length
-          ? existing.bookingRanges
+          ? existing.bookingRanges.map((range) => ({
+              ...range,
+              pricing: ensurePricing(range.pricing),
+            }))
           : createHotelCategory(key).bookingRanges,
         departureMonths: existing.departureMonths?.length
           ? existing.departureMonths
@@ -348,114 +391,57 @@ function ChildPricingSection({
   rows: PricingChildRow[];
   onChange: (rows: PricingChildRow[]) => void;
 }) {
-  const enabledTypes = new Set(rows.map((row) => row.type));
+  const ordered = ensureChildRows(rows);
 
-  const addType = (type: ChildPriceType) => {
-    if (enabledTypes.has(type)) return;
-    onChange([
-      ...rows,
-      {
-        id: uid("child"),
-        type,
-        netPrice: "",
-        margin: "",
-        retailPrice: "",
-      },
-    ]);
-  };
-
-  const update = (id: string, field: keyof PricingChildRow, value: string) => {
-    onChange(rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
-  };
-
-  const remove = (id: string) => {
-    onChange(rows.filter((row) => row.id !== id));
+  const update = (type: ChildPriceType, field: keyof PricingChildRow, value: string) => {
+    onChange(
+      ordered.map((row) => (row.type === type ? { ...row, [field]: value } : row)),
+    );
   };
 
   return (
-    <div>
-      <p className="text-sm text-gray-400 mb-3">
-        Child pricing is hidden by default. Add a price type only when it applies.
-      </p>
-      <div className="flex flex-wrap gap-2 mb-4">
-        {(
-          [
-            "child_with_bed",
-            "child_without_bed",
-            "infant",
-          ] as ChildPriceType[]
-        ).map((type) => (
-          <Button
-            key={type}
-            type="button"
-            disabled={enabledTypes.has(type)}
-            onClick={() => addType(type)}
-            className={
-              enabledTypes.has(type)
-                ? `${addButtonOutlineClass} mt-0 opacity-50 cursor-not-allowed`
-                : `${addButtonOutlineClass} mt-0`
-            }
-          >
-            <Icon name="Plus" size={14} />
-            Add {CHILD_TYPE_LABELS[type]} Price
-          </Button>
-        ))}
-      </div>
-
-      {rows.length > 0 && (
-        <div className="overflow-x-auto -mx-2 sm:mx-0">
-          <div className="min-w-[720px] px-2 sm:px-0">
-            <div className="grid grid-cols-[1.3fr_1fr_1fr_1fr_88px] gap-3 text-xs font-semibold text-[#1F2A44] uppercase tracking-wide pb-3 border-b border-gray-100">
-              <span>Type</span>
-              <span>Net Price</span>
-              <span>Margin</span>
-              <span>Retail Price</span>
-              <span>Actions</span>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {rows.map((row) => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-[1.3fr_1fr_1fr_1fr_88px] gap-3 py-2.5 items-center"
-                >
-                  <span className="text-sm font-medium text-[#1F2A44]">
-                    {CHILD_TYPE_LABELS[row.type]}
-                  </span>
-                  <Input
-                    type="text"
-                    className={tableInputClass}
-                    value={row.netPrice}
-                    onChange={(e) => update(row.id, "netPrice", e.target.value)}
-                    placeholder="0.00"
-                  />
-                  <Input
-                    type="text"
-                    className={tableInputClass}
-                    value={row.margin}
-                    onChange={(e) => update(row.id, "margin", e.target.value)}
-                    placeholder="0%"
-                  />
-                  <Input
-                    type="text"
-                    className={tableInputClass}
-                    value={row.retailPrice}
-                    onChange={(e) => update(row.id, "retailPrice", e.target.value)}
-                    placeholder="0.00"
-                  />
-                  <button
-                    type="button"
-                    className={iconBtnClass}
-                    title="Remove"
-                    onClick={() => remove(row.id)}
-                  >
-                    <Icon name="Trash2" size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+    <div className="overflow-x-auto -mx-2 sm:mx-0">
+      <div className="min-w-[640px] px-2 sm:px-0">
+        <div className="grid grid-cols-[1.3fr_1fr_1fr_1fr] gap-3 text-xs font-semibold text-[#1F2A44] uppercase tracking-wide pb-3 border-b border-gray-100">
+          <span>Type</span>
+          <span>Net Price</span>
+          <span>Margin</span>
+          <span>Retail Price</span>
         </div>
-      )}
+        <div className="divide-y divide-gray-50">
+          {ordered.map((row) => (
+            <div
+              key={row.type}
+              className="grid grid-cols-[1.3fr_1fr_1fr_1fr] gap-3 py-2.5 items-center"
+            >
+              <span className="text-sm font-medium text-[#1F2A44]">
+                {CHILD_TYPE_LABELS[row.type]}
+              </span>
+              <Input
+                type="text"
+                className={tableInputClass}
+                value={row.netPrice}
+                onChange={(e) => update(row.type, "netPrice", e.target.value)}
+                placeholder="0.00"
+              />
+              <Input
+                type="text"
+                className={tableInputClass}
+                value={row.margin}
+                onChange={(e) => update(row.type, "margin", e.target.value)}
+                placeholder="0%"
+              />
+              <Input
+                type="text"
+                className={tableInputClass}
+                value={row.retailPrice}
+                onChange={(e) => update(row.type, "retailPrice", e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -593,15 +579,17 @@ function PromotionsSection({
 function PricingDetailsEditor({
   pricing,
   onChange,
+  afterPax,
 }: {
   pricing: PricingDetailsBlock;
   onChange: (pricing: PricingDetailsBlock) => void;
+  afterPax?: ReactNode;
 }) {
   return (
     <div className="space-y-6">
       <div>
         <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">Adult Pricing</h4>
-        <div className={nestedCardClass}>
+        <div className="bg-white rounded-[12px] border border-[#E5E7EB] p-4">
           <AdultPricingTable
             rows={pricing.adultTiers}
             onChange={(adultTiers) => onChange({ ...pricing, adultTiers })}
@@ -611,7 +599,7 @@ function PricingDetailsEditor({
 
       <div>
         <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">Child Pricing</h4>
-        <div className={nestedCardClass}>
+        <div className="bg-white rounded-[12px] border border-[#E5E7EB] p-4">
           <ChildPricingSection
             rows={pricing.childRows}
             onChange={(childRows) => onChange({ ...pricing, childRows })}
@@ -619,9 +607,11 @@ function PricingDetailsEditor({
         </div>
       </div>
 
+      {afterPax}
+
       <div>
         <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">Promotions</h4>
-        <div className={nestedCardClass}>
+        <div className="bg-white rounded-[12px] border border-[#E5E7EB] p-4">
           <PromotionsSection
             rows={pricing.promotions}
             onChange={(promotions) => onChange({ ...pricing, promotions })}
@@ -738,6 +728,151 @@ function BlackoutDatesSection({
   );
 }
 
+function BookingRangesEditor({
+  ranges,
+  onChange,
+}: {
+  ranges: BookingRange[];
+  onChange: (ranges: BookingRange[]) => void;
+}) {
+  const rangeFromDateRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const updateRange = (id: string, patch: Partial<BookingRange>) => {
+    onChange(ranges.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  return (
+    <div className="space-y-6">
+      {ranges.length === 0 && (
+        <p className="text-sm text-gray-400">
+          Add a season to set adult, child, and infant prices.
+        </p>
+      )}
+      {ranges.map((range) => (
+        <div
+          key={range.id}
+          className="rounded-[12px] border border-[#E5E7EB] bg-[#F8F9FB] p-4 space-y-6"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-[#1F2A44]">
+                {range.name || "Untitled season"}
+              </h4>
+              <p className="text-xs text-gray-500 mt-1">
+                {range.fromDate || range.toDate
+                  ? `${formatDisplayDate(range.fromDate)} – ${formatDisplayDate(range.toDate)}`
+                  : "Set the season dates, then enter prices for this season only."}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className={iconBtnClass}
+                title="Duplicate season"
+                onClick={() => {
+                  const duplicate: BookingRange = {
+                    ...range,
+                    id: uid("range"),
+                    name: `${range.name || "Season"} (copy)`,
+                    blackouts: range.blackouts.map((row) => ({
+                      ...row,
+                      id: uid("blackout"),
+                    })),
+                    pricing: clonePricing(range.pricing),
+                  };
+                  onChange([...ranges, duplicate]);
+                }}
+              >
+                <Icon name="Copy" size={14} />
+              </button>
+              <button
+                type="button"
+                className={iconBtnClass}
+                title="Delete season"
+                onClick={() => onChange(ranges.filter((item) => item.id !== range.id))}
+              >
+                <Icon name="Trash2" size={14} />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr_auto] gap-3 items-end">
+            <div>
+              <Label className={labelClass}>Season name</Label>
+              <Input
+                type="text"
+                className={inputClass}
+                value={range.name}
+                onChange={(e) => updateRange(range.id, { name: e.target.value })}
+                placeholder="e.g. High Season"
+              />
+            </div>
+            <div>
+              <Label className={labelClass}>From date</Label>
+              <DateInput
+                value={range.fromDate}
+                className={`${inputClass} pr-9 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
+                inputRef={(el) => {
+                  rangeFromDateRefs.current[range.id] = el;
+                }}
+                onChange={(value) => updateRange(range.id, { fromDate: value })}
+              />
+            </div>
+            <div>
+              <Label className={labelClass}>To date</Label>
+              <DateInput
+                value={range.toDate}
+                className={`${inputClass} pr-9 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
+                onChange={(value) => updateRange(range.id, { toDate: value })}
+              />
+            </div>
+            <button
+              type="button"
+              className={`${iconBtnClass} mb-1.5`}
+              title="Edit dates"
+              onClick={() => openDatePicker(rangeFromDateRefs.current[range.id])}
+            >
+              <Icon name="Pencil" size={14} />
+            </button>
+          </div>
+
+          <PricingDetailsEditor
+            pricing={ensurePricing(range.pricing)}
+            onChange={(pricing) => updateRange(range.id, { pricing })}
+            afterPax={
+              <div>
+                <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">
+                  Blackout dates
+                </h4>
+                <div className="bg-white rounded-[12px] border border-[#E5E7EB] p-4">
+                  <BlackoutDatesSection
+                    rows={range.blackouts}
+                    onChange={(blackouts) => updateRange(range.id, { blackouts })}
+                  />
+                </div>
+              </div>
+            }
+          />
+        </div>
+      ))}
+
+      <Button
+        type="button"
+        className={addButtonDarkClass}
+        onClick={() =>
+          onChange([
+            ...ranges,
+            createBookingRange(`Season ${ranges.length + 1}`),
+          ])
+        }
+      >
+        <Icon name="Plus" size={14} />
+        Add Season
+      </Button>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Main PricingForm                                                          */
 /* -------------------------------------------------------------------------- */
@@ -755,18 +890,11 @@ export default function PricingForm({
     () => hydrateCategories(initialData),
   );
   const [activeCategory, setActiveCategory] = useState<HotelCategoryKey>("3star");
-  const [activeRangeId, setActiveRangeId] = useState<string | null>(null);
   const [activeMonthId, setActiveMonthId] = useState<string | null>(null);
   const [activeDepartureId, setActiveDepartureId] = useState<string | null>(null);
-  const rangeFromDateRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const departureDateRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const category = hotelCategories.find((item) => item.category === activeCategory)!;
-
-  const selectedRange =
-    category.bookingRanges.find((range) => range.id === activeRangeId) ??
-    category.bookingRanges[0] ??
-    null;
 
   const selectedMonth =
     category.departureMonths.find((month) => month.id === activeMonthId) ??
@@ -777,11 +905,6 @@ export default function PricingForm({
     selectedMonth?.dates.find((date) => date.id === activeDepartureId) ??
     selectedMonth?.dates[0] ??
     null;
-
-  const editBookingRange = (rangeId: string) => {
-    setActiveRangeId(rangeId);
-    openDatePicker(rangeFromDateRefs.current[rangeId]);
-  };
 
   const editDepartureDate = (departureId: string) => {
     setActiveDepartureId(departureId);
@@ -813,9 +936,9 @@ export default function PricingForm({
           <Icon name="Info" size={16} className="text-gray-400" />
         </div>
         <p className="text-sm text-gray-400 leading-relaxed max-w-3xl">
-          Configure General Package or Fixed Departure pricing by hotel category.
-          Each category keeps its own booking ranges or departure dates, adult and
-          child tiers, blackouts, and promotions.
+          Each hotel category has its own seasons. Every season keeps a separate
+          adult, child, and infant price. General Package and Fixed Departure both
+          use these seasons. Fixed Departure also lists the dates customers can book.
         </p>
       </div>
 
@@ -884,7 +1007,6 @@ export default function PricingForm({
                 type="button"
                 onClick={() => {
                   setActiveCategory(tab.key);
-                  setActiveRangeId(null);
                   setActiveMonthId(null);
                   setActiveDepartureId(null);
                 }}
@@ -900,220 +1022,25 @@ export default function PricingForm({
           })}
         </div>
 
-        {pricingType === "general" ? (
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <h4 className="text-sm font-semibold text-[#1F2A44]">
-                  Booking ranges
-                </h4>
-              </div>
-              <div className={nestedCardClass}>
-                <div className="overflow-x-auto -mx-2 sm:mx-0">
-                  <div className="min-w-[700px] px-2 sm:px-0">
-                    <div className="grid grid-cols-[1.4fr_1fr_1fr_120px] gap-3 text-xs font-semibold text-[#1F2A44] uppercase tracking-wide pb-3 border-b border-gray-100">
-                      <span>Booking Range Name</span>
-                      <span>From Date</span>
-                      <span>To Date</span>
-                      <span>Actions</span>
-                    </div>
-                    <div className="divide-y divide-gray-50">
-                      {category.bookingRanges.map((range) => {
-                        const selected = selectedRange?.id === range.id;
-                        return (
-                          <div
-                            key={range.id}
-                            className={`grid grid-cols-[1.4fr_1fr_1fr_120px] gap-3 py-2.5 items-center rounded-[8px] ${
-                              selected ? "bg-[#FFF9EB]/80" : ""
-                            }`}
-                          >
-                            <Input
-                              type="text"
-                              className={tableInputClass}
-                              value={range.name}
-                              onChange={(e) =>
-                                updateCategory(activeCategory, (current) => ({
-                                  ...current,
-                                  bookingRanges: current.bookingRanges.map((item) =>
-                                    item.id === range.id
-                                      ? { ...item, name: e.target.value }
-                                      : item,
-                                  ),
-                                }))
-                              }
-                              onFocus={() => setActiveRangeId(range.id)}
-                              placeholder="e.g. Low Season"
-                            />
-                            <DateInput
-                              value={range.fromDate}
-                              inputRef={(el) => {
-                                rangeFromDateRefs.current[range.id] = el;
-                              }}
-                              onChange={(value) =>
-                                updateCategory(activeCategory, (current) => ({
-                                  ...current,
-                                  bookingRanges: current.bookingRanges.map((item) =>
-                                    item.id === range.id
-                                      ? { ...item, fromDate: value }
-                                      : item,
-                                  ),
-                                }))
-                              }
-                              onFocus={() => setActiveRangeId(range.id)}
-                            />
-                            <DateInput
-                              value={range.toDate}
-                              onChange={(value) =>
-                                updateCategory(activeCategory, (current) => ({
-                                  ...current,
-                                  bookingRanges: current.bookingRanges.map((item) =>
-                                    item.id === range.id
-                                      ? { ...item, toDate: value }
-                                      : item,
-                                  ),
-                                }))
-                              }
-                              onFocus={() => setActiveRangeId(range.id)}
-                            />
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                className={iconBtnClass}
-                                title="Edit dates"
-                                onClick={() => editBookingRange(range.id)}
-                              >
-                                <Icon name="Pencil" size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                className={iconBtnClass}
-                                title="Delete"
-                                onClick={() => {
-                                  updateCategory(activeCategory, (current) => ({
-                                    ...current,
-                                    bookingRanges: current.bookingRanges.filter(
-                                      (item) => item.id !== range.id,
-                                    ),
-                                  }));
-                                  if (activeRangeId === range.id) {
-                                    setActiveRangeId(null);
-                                  }
-                                }}
-                              >
-                                <Icon name="Trash2" size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    className={addButtonDarkClass}
-                    onClick={() =>
-                      updateCategory(activeCategory, (current) => {
-                        const next = createBookingRange(`Range ${current.bookingRanges.length + 1}`);
-                        setActiveRangeId(next.id);
-                        return {
-                          ...current,
-                          bookingRanges: [...current.bookingRanges, next],
-                        };
-                      })
-                    }
-                  >
-                    <Icon name="Plus" size={14} />
-                    Add Booking Range
-                  </Button>
-                  <Button
-                    type="button"
-                    className={addButtonOutlineClass}
-                    disabled={!selectedRange}
-                    onClick={() => {
-                      if (!selectedRange) return;
-                      updateCategory(activeCategory, (current) => {
-                        const duplicate: BookingRange = {
-                          ...selectedRange,
-                          id: uid("range"),
-                          name: `${selectedRange.name || "Range"} (copy)`,
-                          blackouts: selectedRange.blackouts.map((row) => ({
-                            ...row,
-                            id: uid("blackout"),
-                          })),
-                          pricing: clonePricing(selectedRange.pricing),
-                        };
-                        setActiveRangeId(duplicate.id);
-                        return {
-                          ...current,
-                          bookingRanges: [...current.bookingRanges, duplicate],
-                        };
-                      });
-                    }}
-                  >
-                    <Icon name="Copy" size={14} />
-                    Duplicate Booking Range
-                  </Button>
-                </div>
-              </div>
-            </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Prices below belong to this hotel category only. Each season has its own adult, child, and infant prices.
+        </p>
 
-            {selectedRange ? (
-              <div className="space-y-6">
-                <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-4">
-                  <p className="text-sm text-gray-500">
-                    Editing pricing for{" "}
-                    <span className="font-semibold text-[#1F2A44]">
-                      {selectedRange.name || "Untitled range"}
-                    </span>
-                    {selectedRange.fromDate || selectedRange.toDate
-                      ? ` · ${formatDisplayDate(selectedRange.fromDate)} – ${formatDisplayDate(selectedRange.toDate)}`
-                      : ""}
-                  </p>
-                </div>
+        <BookingRangesEditor
+          ranges={category.bookingRanges}
+          onChange={(bookingRanges) =>
+            updateCategory(activeCategory, (current) => ({
+              ...current,
+              bookingRanges,
+            }))
+          }
+        />
 
-                <div>
-                  <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">
-                    Blackout dates
-                  </h4>
-                  <div className={nestedCardClass}>
-                    <BlackoutDatesSection
-                      rows={selectedRange.blackouts}
-                      onChange={(blackouts) =>
-                        updateCategory(activeCategory, (current) => ({
-                          ...current,
-                          bookingRanges: current.bookingRanges.map((item) =>
-                            item.id === selectedRange.id
-                              ? { ...item, blackouts }
-                              : item,
-                          ),
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                <PricingDetailsEditor
-                  pricing={selectedRange.pricing}
-                  onChange={(pricing) =>
-                    updateCategory(activeCategory, (current) => ({
-                      ...current,
-                      bookingRanges: current.bookingRanges.map((item) =>
-                        item.id === selectedRange.id ? { ...item, pricing } : item,
-                      ),
-                    }))
-                  }
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-gray-400">
-                Add a booking range to configure blackouts and pricing.
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-6">
+        {pricingType === "fixed_departure" ? (
+          <div className="space-y-6 mt-6">
+            <p className="text-sm text-gray-500">
+              Departure dates are the dates a customer can book. Adult, child, and infant prices stay on the seasons above.
+            </p>
             <div>
               <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">
                 Departure months
@@ -1391,51 +1318,14 @@ export default function PricingForm({
                     </div>
                   </div>
                 </div>
-
-                {selectedDeparture ? (
-                  <div className="space-y-4">
-                    <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-4">
-                      <p className="text-sm text-gray-500">
-                        Editing pricing for departure{" "}
-                        <span className="font-semibold text-[#1F2A44]">
-                          {formatDisplayDate(selectedDeparture.date)}
-                        </span>
-                      </p>
-                    </div>
-                    <PricingDetailsEditor
-                      pricing={selectedDeparture.pricing}
-                      onChange={(pricing) =>
-                        updateCategory(activeCategory, (current) => ({
-                          ...current,
-                          departureMonths: current.departureMonths.map((month) =>
-                            month.id === selectedMonth.id
-                              ? {
-                                  ...month,
-                                  dates: month.dates.map((item) =>
-                                    item.id === selectedDeparture.id
-                                      ? { ...item, pricing }
-                                      : item,
-                                  ),
-                                }
-                              : month,
-                          ),
-                        }))
-                      }
-                    />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400">
-                    Add a departure date to configure pricing.
-                  </p>
-                )}
               </div>
             ) : (
               <p className="text-sm text-gray-400">
-                Add a departure month to manage dates and pricing.
+                Add a departure month to manage dates.
               </p>
             )}
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm px-6 py-4 flex items-center justify-between flex-wrap gap-3">

@@ -1904,9 +1904,12 @@ export default function BlogRichTextEditor({
   useEffect(() => {
     if (!editor) return;
     const currentHtml = fromEditorHtml(editor.getHTML());
-    if (value !== currentHtml) {
-      editor.commands.setContent(toEditorHtml(value || ""), { emitUpdate: false });
-    }
+    if (value === currentHtml) return;
+    const incomingEmpty = !value || value.replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").trim() === "";
+    const currentEmpty =
+      currentHtml.replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").trim() === "";
+    if (incomingEmpty && currentEmpty) return;
+    editor.commands.setContent(toEditorHtml(value || ""), { emitUpdate: false });
   }, [editor, value]);
 
   useEffect(() => {
