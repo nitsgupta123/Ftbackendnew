@@ -67,7 +67,7 @@ export interface MediaFrontendData {
   /** @deprecated Moved to Package Basics (`frontendNotes`) */
   frontEndSummary?: string;
   whyChooseThisPackage?: string;
-  /** @deprecated Moved to Package Basics (`importantInfo`) */
+  /** @deprecated Moved to Inclusions (`importantInfo`) */
   clientFacingNotes?: string;
 }
 
@@ -256,6 +256,8 @@ export interface InclusionsData {
   optionalAddons?: string[];
   localFees?: string;
   nonRefundable?: string;
+  /** Client-facing booking conditions (visa, availability, surcharges). */
+  importantInfo?: string;
   consultantMustExplain?: boolean;
   flightsIncluded?: boolean;
   trainIncluded?: boolean;
@@ -298,6 +300,8 @@ export interface ConsultantViewData {
 
 export interface SupplierQuoteToolData {
   quoteRequestType?: string;
+  /** Travel consultant's own reference, included in the supplier email subject */
+  referenceCode?: string;
   supplierToSendTo?: string;
   basedOnPackage?: string;
   replyDeadline?: string;

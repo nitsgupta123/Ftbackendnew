@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/icons";
 
+import { formatPackageDateTimeSgt } from "@/lib/format-date";
 import type { PackageRecord, ReviewPublishData } from "@/lib/package-types";
 import {
   getPackageReadiness,
+  type PackageReadiness,
   type ReadinessSectionCard,
   type ReadinessSignOffItem,
   type ReadinessStatus,
@@ -25,20 +27,59 @@ interface ReviewPublishFormProps extends StepFormBaseProps {
   packageData?: PackageRecord | null;
 }
 
-const ACTIVITY_LOG = [
-{
-  dateTime: "Auto timestamp",
-  user: "Current user",
-  section: "Pricing",
-  change: "Updated supplier net and markup tiers"
-},
-{
-  dateTime: "Auto timestamp",
-  user: "Current user",
-  section: "Media",
-  change: "Added hero image placeholder"
-}];
+interface ActivityLogRow {
+  dateTime: string;
+  user: string;
+  section: string;
+  change: string;
+}
 
+function activityDateTime(value: string | null | undefined): string {
+  const formatted = formatPackageDateTimeSgt(value);
+  return formatted === "—" ? "" : formatted;
+}
+
+function buildActivityLog(
+  packageData: PackageRecord | null | undefined,
+  readiness: PackageReadiness
+): ActivityLogRow[] {
+  const user =
+    packageData?.updated_by?.trim() ||
+    packageData?.created_by?.trim() ||
+    "Current user";
+  const updatedAt = activityDateTime(packageData?.updated_at || packageData?.created_at);
+  const createdAt = activityDateTime(packageData?.created_at);
+
+  const rows: ActivityLogRow[] = readiness.sectionCards
+    .filter((card) => Boolean(card.lastEdited) && card.lastEdited !== "Not started")
+    .map((card) => ({
+      dateTime: updatedAt,
+      user: card.lastEdited ?? user,
+      section: card.title,
+      change: card.status === "complete" ? "Completed" : "Updated",
+    }));
+
+  const publishedAt = activityDateTime(packageData?.review_publish?.publishedAt);
+  if (publishedAt) {
+    rows.unshift({
+      dateTime: publishedAt,
+      user,
+      section: "Review & Publish",
+      change: "Published",
+    });
+  }
+
+  if (createdAt && createdAt !== updatedAt) {
+    rows.push({
+      dateTime: createdAt,
+      user: packageData?.created_by?.trim() || user,
+      section: "Package",
+      change: "Created",
+    });
+  }
+
+  return rows;
+}
 
 const WORKFLOW_STEPS = [
 "Submit for review",
@@ -103,6 +144,10 @@ export default function ReviewPublishForm({
   isSaving = false
 }: ReviewPublishFormProps) {
   const readiness = useMemo(() => getPackageReadiness(packageData), [packageData]);
+  const activityLog = useMemo(
+    () => buildActivityLog(packageData, readiness),
+    [packageData, readiness]
+  );
   const [productReviewer, setProductReviewer] = useState(
     initialData?.productReviewer ?? ""
   );
@@ -258,18 +303,28 @@ export default function ReviewPublishForm({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {ACTIVITY_LOG.map((row, index) =>
-                <TableRow
-                  key={`${row.section}-${index}`}
-                  className={
-                  index % 2 === 0 ? "bg-white" : "bg-[#F9FAFB]"
-                  }>
-                  
-                    <TableCell className="px-4 py-3 text-gray-500">{row.dateTime}</TableCell>
-                    <TableCell className="px-4 py-3 text-gray-500">{row.user}</TableCell>
-                    <TableCell className="px-4 py-3 text-gray-500">{row.section}</TableCell>
-                    <TableCell className="px-4 py-3 text-gray-500">{row.change}</TableCell>
+                {activityLog.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                      No activity recorded yet.
+                    </TableCell>
                   </TableRow>
+                ) : (
+                  activityLog.map((row, index) =>
+                  <TableRow
+                    key={`${row.section}-${row.change}-${index}`}
+                    className={
+                    index % 2 === 0 ? "bg-white" : "bg-[#F9FAFB]"
+                    }>
+                    
+                      <TableCell className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {row.dateTime || "—"}
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500">{row.user}</TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500">{row.section}</TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500">{row.change}</TableCell>
+                    </TableRow>
+                  )
                 )}
               </TableBody>
             </Table>

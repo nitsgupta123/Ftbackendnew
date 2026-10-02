@@ -26,7 +26,10 @@ import { getAdminSettings } from "../../src/lib/settings-repository";
 import { isEmailConfigured, sendMail } from "../../src/lib/email";
 import { isValidEmail, parseEmailList } from "../../src/lib/email-list";
 import { buildQuoteEmailAttachments } from "../../src/lib/package-quote-attachment";
-import { withQuoteEmailSignature } from "../../src/lib/supplier-quote-email";
+import {
+  applyReferenceCodeToSubject,
+  withQuoteEmailSignature,
+} from "../../src/lib/supplier-quote-email";
 
 const VALID_STATUSES: PackageStatus[] = [
   "draft",
@@ -286,6 +289,15 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
         includeItinerary: quotePayload.includeDayByDayItinerary !== false,
       });
 
+      const referenceCode =
+        typeof quotePayload.referenceCode === "string" ? quotePayload.referenceCode.trim() : "";
+      if (!referenceCode) {
+        return reply.status(400).send({
+          error: "Add your reference code so it appears in the subject line",
+        });
+      }
+      const subject = applyReferenceCodeToSubject(parsed.data.subject, referenceCode);
+
       const signedBody = withQuoteEmailSignature(parsed.data.body, {
         name: request.user?.name,
         role: request.user?.role,
@@ -296,7 +308,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
         to: toEmails,
         cc: managementCc,
         bcc: managementBcc,
-        subject: parsed.data.subject,
+        subject,
         text: signedBody,
         replyTo: settings.support_email || undefined,
         attachments,
@@ -307,9 +319,10 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
       const nextQuote: SupplierQuoteToolData = {
         ...existingQuote,
         ...quotePayload,
+        referenceCode,
         toEmails: parsed.data.to,
         additionalEmails: parsed.data.additionalTo,
-        emailSubject: parsed.data.subject,
+        emailSubject: subject,
         emailBody: parsed.data.body,
         emailSignature: editedSignature || quotePayload.emailSignature,
         lastSentAt: new Date().toISOString(),

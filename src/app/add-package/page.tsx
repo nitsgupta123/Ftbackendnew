@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AdminShell from "@/components/layout/AdminShell";
 import PageHeader from "@/components/package/PageHeader";
@@ -62,6 +62,8 @@ export default function AddPackagePage() {
   const [appliedTemplateName, setAppliedTemplateName] = useState<string | null>(null);
   const templateAppliedRef = useRef(false);
   const saveDraftOnlyRef = useRef(false);
+  const stepPanelRef = useRef<HTMLDivElement>(null);
+  const skipInitialStepScroll = useRef(true);
 
   const breadcrumbs = [
     { label: "Dashboard", href: "/" },
@@ -171,8 +173,31 @@ export default function AddPackagePage() {
       return;
     }
     setCurrentStep(step);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const params = new URLSearchParams(window.location.search);
+    params.set("step", String(step));
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
   };
+
+  const scrollStepToTop = () => {
+    const panel = stepPanelRef.current;
+    if (!panel) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    const stickyHeader = 64;
+    const top = panel.getBoundingClientRect().top + window.scrollY - stickyHeader - 16;
+    window.scrollTo({ top: Math.max(0, top), left: 0, behavior: "auto" });
+  };
+
+  useLayoutEffect(() => {
+    if (skipInitialStepScroll.current) {
+      skipInitialStepScroll.current = false;
+      return;
+    }
+    scrollStepToTop();
+    const frame = window.requestAnimationFrame(scrollStepToTop);
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentStep]);
 
   const persistPackage = async (
     step: number,
@@ -182,7 +207,7 @@ export default function AddPackagePage() {
     if (!canEditStep(step)) {
       setSaveError("You do not have permission to edit this module.");
       saveDraftOnlyRef.current = false;
-      return;
+      return false;
     }
     const draftOnly = saveDraftOnlyRef.current;
     saveDraftOnlyRef.current = false;
@@ -224,8 +249,10 @@ export default function AddPackagePage() {
       if (effectiveNextStep) {
         goToStep(effectiveNextStep);
       }
+      return true;
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Failed to save package");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -234,7 +261,7 @@ export default function AddPackagePage() {
   const saveStepAndContinue = async (step: number, data?: unknown) => {
     const field = PACKAGE_STEP_FIELDS[step];
     const payload: UpdatePackageInput = field && data !== undefined ? { [field]: data } : {};
-    await persistPackage(step, payload, step < 14 ? step + 1 : undefined);
+    return persistPackage(step, payload, step < 14 ? step + 1 : undefined);
   };
 
   const handleStepClick = (step: number) => {
@@ -319,7 +346,7 @@ export default function AddPackagePage() {
       setAppliedTemplateName(null);
       setSaveSuccess(`Duplicated "${source.package_title || "package"}" as a new draft`);
       window.history.replaceState(null, "", `/add-package?id=${saved.id}`);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.requestAnimationFrame(scrollStepToTop);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Failed to duplicate package");
     } finally {
@@ -407,6 +434,7 @@ export default function AddPackagePage() {
           <ItineraryForm
             initialData={packageData?.itinerary ?? undefined}
             packageDurationDays={packageData?.package_basics?.days}
+            packageId={packageData?.id ?? packageId}
             onNext={(data) => saveStepAndContinue(5, data)}
             onPrevious={handlePrevious}
             isSaving={isSaving}
@@ -425,6 +453,7 @@ export default function AddPackagePage() {
         return (
           <InclusionsForm
             initialData={packageData?.inclusions ?? undefined}
+            legacyImportantInfo={packageData?.package_basics?.importantInfo}
             onNext={(data) => saveStepAndContinue(7, data)}
             onPrevious={handlePrevious}
             isSaving={isSaving}
@@ -580,7 +609,7 @@ export default function AddPackagePage() {
               </div>
             </aside>
 
-            <div className="flex-1 min-w-0">
+            <div ref={stepPanelRef} className="min-w-0 flex-1 [overflow-anchor:none]">
               <div className="transition-all duration-300 ease-in-out">
                 {renderStepForm()}
               </div>

@@ -104,6 +104,7 @@ export const packageBasicsSchema = z.object({
   /** @deprecated Managed in Inclusions; kept optional for existing package data */
   transfersIncluded: z.boolean().optional(),
   isSeasonalPackage: z.boolean(),
+  /** @deprecated Managed in Inclusions; kept so existing Package Basics rows still load */
   importantInfo: z.string().optional(),
   frontendNotes: z.string().optional(),
 });

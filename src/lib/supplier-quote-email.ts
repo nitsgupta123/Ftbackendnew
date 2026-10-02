@@ -28,7 +28,20 @@ export function packageAttachmentFilename(title?: string | null): string {
 export function buildQuoteEmailSubject(data: SupplierQuoteToolData): string {
   const packageName = data.basedOnPackage?.trim() || "package enquiry";
   const typeLabel = quoteTypeLabel(data.quoteRequestType);
-  return `Quote request — ${typeLabel} — ${packageName}`;
+  const reference = data.referenceCode?.trim();
+  return ["Quote request", typeLabel, reference, packageName].filter(Boolean).join(" — ");
+}
+
+/** Keep a TC reference code in the subject even if the preview was edited by hand. */
+export function applyReferenceCodeToSubject(subject: string, referenceCode: string): string {
+  const code = referenceCode.trim();
+  const current = subject.trim();
+  if (!code) return current;
+  const segments = current.split(/\s+—\s+/).map((segment) => segment.trim());
+  if (segments.some((segment) => segment.toLowerCase() === code.toLowerCase())) {
+    return current;
+  }
+  return current ? `${current} — ${code}` : code;
 }
 
 export function buildQuoteEmailBody(

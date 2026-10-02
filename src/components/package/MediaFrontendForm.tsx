@@ -441,8 +441,9 @@ export default function MediaFrontendForm({
               <p className="text-sm text-[#6B5E1A] leading-relaxed">
                 Use supplier-owned images, licensed images, or images with clear
                 permission. Do not upload images without a source. Alt text should
-                describe the image naturally for accessibility and SEO. Important
-                Info and Frontend Notes are managed in Package Basics.
+                describe the image naturally for accessibility and SEO. Frontend
+                Notes are managed in Package Basics. Important Notes are managed
+                in Inclusions.
               </p>
             </div>
           </div>

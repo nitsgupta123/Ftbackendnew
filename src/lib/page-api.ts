@@ -45,6 +45,19 @@ function buildQuery(params: ListPagesParams): string {
   return qs ? `?${qs}` : "";
 }
 
+export async function listWebsiteLandingPages(): Promise<
+  { id: number; title: string; slug: string }[]
+> {
+  const response = await fetch(apiUrl("/api/pages/landing-options"), {
+    cache: "no-store",
+    headers: requestHeaders(),
+  });
+  const data = await parseApiResponse<{
+    landingPages: { id: number; title: string; slug: string }[];
+  }>(response);
+  return data.landingPages;
+}
+
 export async function listPages(params: ListPagesParams = {}): Promise<ListPagesResult> {
   const response = await fetch(apiUrl(`/api/pages${buildQuery(params)}`), {
     cache: "no-store",

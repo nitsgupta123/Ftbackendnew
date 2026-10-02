@@ -114,13 +114,14 @@ function parsePackageRow(row: RowDataPacket): PackageRecord {
 
   for (const column of JSON_COLUMNS) {
     const value = row[column];
-    if (value === undefined) {
+    if (value === undefined || value === null) {
       parsed[column] = null;
       continue;
     }
-    if (typeof value === "string") {
+    if (typeof value === "string" || Buffer.isBuffer(value)) {
+      const raw = typeof value === "string" ? value : value.toString("utf8");
       try {
-        parsed[column] = JSON.parse(value);
+        parsed[column] = raw ? JSON.parse(raw) : null;
       } catch {
         parsed[column] = null;
       }
