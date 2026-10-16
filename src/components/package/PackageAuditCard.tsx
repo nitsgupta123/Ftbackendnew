@@ -1,3 +1,4 @@
+import { useAuth } from "@/components/auth/AuthProvider";
 import { DEFAULT_AUDIT_USER } from "@/lib/audit-context";
 import { formatPackageDateTime } from "@/lib/format-date";
 import type { PackageRecord } from "@/lib/package-types";
@@ -11,11 +12,12 @@ function formatAuditDateTime(value: string | null | undefined): string {
 }
 
 export default function PackageAuditCard({ packageData }: PackageAuditCardProps) {
+  const { user } = useAuth();
   const createdBy = packageData?.created_by ?? null;
   const updatedBy = packageData?.updated_by ?? null;
   const createdAt = packageData?.created_at ?? null;
   const updatedAt = packageData?.updated_at ?? null;
-  const actingUser = updatedBy ?? createdBy ?? DEFAULT_AUDIT_USER;
+  const actingUser = user?.fullName || DEFAULT_AUDIT_USER;
   const createdSummary = createdBy
     ? `${createdBy} · ${formatAuditDateTime(createdAt)}`
     : "—";

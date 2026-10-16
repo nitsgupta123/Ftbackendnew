@@ -62,7 +62,7 @@ export default function PackageDashboardPage() {
       <ListPageHeader
         icon="LayoutDashboard"
         title="Package Dashboard"
-        description="Travel packages from tbl_packages in fayyaz_new."
+        description="Overview of every travel package by status, plus recent activity."
         action={{ label: "Add New Package", href: "/add-package", icon: "Plus" }}
       />
 
