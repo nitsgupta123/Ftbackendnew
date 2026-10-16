@@ -16,7 +16,7 @@ const REMOTE_FETCH_TIMEOUT_MS = 10_000;
 const REMOTE_MAX_BYTES = 15 * 1024 * 1024;
 
 function getLegacyAssetBaseUrl() {
-  const base = process.env.LEGACY_ASSET_BASE_URL ?? "https://fayyaztravels.com/";
+  const base = process.env.LEGACY_ASSET_BASE_URL ?? "https://fayyaztravels.com/backend/";
   return base.endsWith("/") ? base : `${base}/`;
 }
 

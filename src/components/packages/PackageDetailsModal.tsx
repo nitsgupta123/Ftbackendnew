@@ -11,7 +11,7 @@ import {
 import type { PackageRecord } from "@/lib/package-types";
 import { sanitizeHtml } from "@/lib/sanitize-html";
 import { formatPackageDateTime } from "@/lib/format-date";import { Button } from "@/components/ui/button";
-import { resolveMediaSrc } from "@/lib/package-images";
+import { resolveMediaSrc, toEditorHtml } from "@/lib/package-images";
 
 interface PackageDetailsModalProps {
   pkg: PackageRecord | null;
@@ -80,7 +80,7 @@ function DetailField({ label, value }: {label: string;value: unknown;}) {
           <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</dt>
           <dd
             className="blog-editor-content blog-content-preview mt-1 text-sm text-gray-900 break-words"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(toEditorHtml(value)) }}
           />
         </div>
       );

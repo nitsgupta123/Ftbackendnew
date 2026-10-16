@@ -71,6 +71,7 @@ import {
   SeparatorHorizontal,
 } from "lucide-react";
 import { uploadMediaFile } from "@/lib/media-api";
+import { fromEditorHtml, toEditorHtml } from "@/lib/package-images";
 
 type MediaAlign = "left" | "center" | "right";
 
@@ -1840,7 +1841,7 @@ export default function BlogRichTextEditor({
         emptyEditorClass: "is-editor-empty",
       }),
     ],
-    content: value || "",
+    content: toEditorHtml(value || ""),
     editorProps: {
       attributes: {
         class:
@@ -1869,7 +1870,7 @@ export default function BlogRichTextEditor({
       },
     },
     onUpdate({ editor: currentEditor }) {
-      onChange(currentEditor.getHTML());
+      onChange(fromEditorHtml(currentEditor.getHTML()));
     },
   });
 
@@ -1902,9 +1903,9 @@ export default function BlogRichTextEditor({
 
   useEffect(() => {
     if (!editor) return;
-    const currentHtml = editor.getHTML();
+    const currentHtml = fromEditorHtml(editor.getHTML());
     if (value !== currentHtml) {
-      editor.commands.setContent(value || "", { emitUpdate: false });
+      editor.commands.setContent(toEditorHtml(value || ""), { emitUpdate: false });
     }
   }, [editor, value]);
 

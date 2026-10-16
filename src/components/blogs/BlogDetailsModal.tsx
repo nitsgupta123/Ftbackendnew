@@ -7,7 +7,7 @@ import { listPackages } from "@/lib/package-api";
 import { formatPackageDateTime, formatPackageDateTimeSgt } from "@/lib/format-date";
 import { sanitizeHtml } from "@/lib/sanitize-html";
 import { Button } from "@/components/ui/button";
-import { resolveMediaSrc } from "@/lib/package-images";
+import { resolveMediaSrc, toEditorHtml } from "@/lib/package-images";
 
 
 interface BlogDetailsModalProps {
@@ -160,7 +160,7 @@ export default function BlogDetailsModal({ post, onClose }: BlogDetailsModalProp
               <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Content Preview</h3>
               <div
                 className="blog-content-preview prose prose-sm max-w-none text-gray-700 border border-[#E5E7EB] rounded-xl p-4 bg-gray-50/50"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(toEditorHtml(post.content)) }}
               />
             </div>
           )}

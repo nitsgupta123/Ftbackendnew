@@ -1,9 +1,18 @@
 import type { PackageRecord } from "./package-types";
 
-const DEFAULT_ASSET_BASE = "https://fayyaztravels.com";
+/** Legacy site files are stored as "uploads/..." but served from the /backend/ folder. */
+const DEFAULT_ASSET_BASE = "https://fayyaztravels.com/backend";
+const LEGACY_UPLOADS_URL = /^https?:\/\/(?:www\.)?fayyaztravels\.com\/uploads\//i;
+const LEGACY_UPLOADS_BASE = "https://fayyaztravels.com/backend/uploads/";
+const ASSET_ROUTE = "/api/legacy-assets/";
 
 export function normalizeLegacyImagePath(path: string): string {
   return path.trim().replace(/^\/+/, "");
+}
+
+/** Old absolute links point at fayyaztravels.com/uploads/, which 404s; the files live under /backend/uploads/. */
+export function fixLegacyUploadUrl(url: string): string {
+  return url.replace(LEGACY_UPLOADS_URL, LEGACY_UPLOADS_BASE);
 }
 
 /**
@@ -14,8 +23,37 @@ export function normalizeLegacyImagePath(path: string): string {
 export function resolveMediaSrc(path: string | null | undefined): string | undefined {
   const trimmed = path?.trim();
   if (!trimmed) return undefined;
-  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
-  return `/api/legacy-assets/${normalizeLegacyImagePath(trimmed)}`;
+  if (/^(data:|blob:)/i.test(trimmed)) return trimmed;
+  if (/^https?:/i.test(trimmed)) return fixLegacyUploadUrl(trimmed);
+  return `${ASSET_ROUTE}${normalizeLegacyImagePath(trimmed)}`;
+}
+
+function mapImageSrcs(html: string, map: (src: string) => string): string {
+  return html.replace(
+    /(<img\b[^>]*?\ssrc=)(["'])(.*?)\2/gi,
+    (_match, prefix: string, quote: string, src: string) => `${prefix}${quote}${map(src)}${quote}`
+  );
+}
+
+/**
+ * Rich-text HTML as stored → HTML whose images load inside the panel. Root-relative
+ * "/uploads/..." images are shared by panel uploads and legacy files, so they go through
+ * the asset route; reverse with fromEditorHtml before saving.
+ */
+export function toEditorHtml(html: string): string {
+  if (!html) return html;
+  return mapImageSrcs(html, (src) => {
+    if (LEGACY_UPLOADS_URL.test(src)) return fixLegacyUploadUrl(src);
+    if (src.startsWith("/uploads/")) return `${ASSET_ROUTE}${src.slice(1)}`;
+    return src;
+  });
+}
+
+export function fromEditorHtml(html: string): string {
+  if (!html) return html;
+  return mapImageSrcs(html, (src) =>
+    src.startsWith(`${ASSET_ROUTE}uploads/`) ? `/${src.slice(ASSET_ROUTE.length)}` : src
+  );
 }
 
 export function getLegacyAssetBaseUrl(): string {
@@ -55,7 +93,7 @@ export function resolvePackageImageUrl(path: string | null | undefined): string 
 
   const trimmed = path.trim();
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
+    return fixLegacyUploadUrl(trimmed);
   }
 
   const normalized = normalizeLegacyImagePath(trimmed);
@@ -67,11 +105,11 @@ export function resolvePackageProxyUrl(path: string | null | undefined): string 
 
   const trimmed = path.trim();
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return `/api/legacy-assets/remote?url=${encodeURIComponent(trimmed)}`;
+    return `${ASSET_ROUTE}remote?url=${encodeURIComponent(fixLegacyUploadUrl(trimmed))}`;
   }
 
   const normalized = normalizeLegacyImagePath(trimmed);
-  return `/api/legacy-assets/${normalized}`;
+  return `${ASSET_ROUTE}${normalized}`;
 }
 
 export function getPackageImageUrl(pkg: PackageRecord): string | null {

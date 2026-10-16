@@ -4,7 +4,7 @@ import type { CmsPageRecord } from "@/lib/page-types";
 import { formatPackageDateTime } from "@/lib/format-date";
 import { sanitizeHtml } from "@/lib/sanitize-html";
 import { Button } from "@/components/ui/button";
-import { resolveMediaSrc } from "@/lib/package-images";
+import { resolveMediaSrc, toEditorHtml } from "@/lib/package-images";
 
 
 interface PageDetailsModalProps {
@@ -127,7 +127,7 @@ export default function PageDetailsModal({ page, onClose }: PageDetailsModalProp
               <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Content Preview</h3>
               <div
                 className="prose prose-sm max-w-none text-gray-700 border border-[#E5E7EB] rounded-xl p-4 bg-gray-50/50"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.content) }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(toEditorHtml(page.content)) }}
               />
             </div>
           )}
