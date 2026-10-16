@@ -414,16 +414,9 @@ export default function InclusionsForm({
   isSaving = false,
 }: InclusionsFormProps) {
   const [included, setIncluded] = useState<string[]>(() => asStringArray(initialData?.included));
-  const [excluded, setExcluded] = useState<string[]>(() =>
-    asStringArray(initialData?.excluded, [
-      "International",
-      "Visa fees",
-      "Travel insura",
-      "City tax or to",
-    ])
-  );
+  const [excluded, setExcluded] = useState<string[]>(() => asStringArray(initialData?.excluded));
   const [optionalAddons, setOptionalAddons] = useState<string[]>(() =>
-    asStringArray(initialData?.optionalAddons, ["Travel insura", "Visa support", "Private guide"])
+    asStringArray(initialData?.optionalAddons)
   );
 
   const [localFees, setLocalFees] = useState(initialData?.localFees ?? "");

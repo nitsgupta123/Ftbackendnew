@@ -1,5 +1,5 @@
 import type { DashboardOverview } from "./dashboard-types";
-import { getStoredToken, getStoredUser } from "./auth-storage";
+import { getStoredUser } from "./auth-storage";
 import { AUDIT_USER_HEADER } from "./audit-context";
 import { parseApiResponse } from "./parse-api-response";
 
@@ -11,10 +11,6 @@ function apiUrl(path: string) {
 
 function requestHeaders(): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const user = getStoredUser();
   if (user?.fullName) {
     headers[AUDIT_USER_HEADER] = user.fullName;

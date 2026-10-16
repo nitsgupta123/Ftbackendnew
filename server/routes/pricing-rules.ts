@@ -18,7 +18,7 @@ import {
   createPricingRuleSchema,
   updatePricingRuleSchema,
 } from "../../src/lib/validation";
-import { getRequestAudit, requireSuperAdmin } from "../lib/audit";
+import { getRequestAudit, requireModuleAccess, requireSuperAdmin } from "../lib/audit";
 
 const VALID_STATUSES: PricingRuleStatus[] = ["active", "inactive"];
 const VALID_SCOPES: PricingRuleScopeType[] = [
@@ -44,6 +44,7 @@ function parseScope(value?: string): PricingRuleScopeType | "all" | undefined {
 
 export const registerPricingRulesRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("pricing_rules"));
 
   app.get("/stats", async (_request, reply) => {
     try {

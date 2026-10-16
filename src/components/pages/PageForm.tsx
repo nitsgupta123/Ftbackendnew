@@ -4,8 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Icon } from "@/components/ui/icons";
 import { createPageSchema, type CreatePageFormValues } from "@/lib/validation";
 import { slugify } from "@/lib/slug";
-import type { CmsPageRecord } from "@/lib/page-types";
-import { PAGE_TYPE_OPTIONS } from "@/lib/page-types";
+import type { CmsPageRecord, PageTypeOption } from "@/lib/page-types";
+import { listPageTypes } from "@/lib/page-api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ interface PageFormProps {
 }
 
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 function LabeledToggleSwitch({
   label,
@@ -82,6 +83,7 @@ export default function PageForm({
   const slugValue = useWatch({ control, name: "slug" }) ?? "";
   const featuredImagePath = useWatch({ control, name: "featured_image_path" }) ?? "";
   const [slugTouched, setSlugTouched] = useState(false);
+  const [pageTypes, setPageTypes] = useState<PageTypeOption[]>([]);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const featuredImageInputRef = useRef<HTMLInputElement>(null);
@@ -98,6 +100,12 @@ export default function PageForm({
       setImageUploading(false);
     }
   }
+
+  useEffect(() => {
+    listPageTypes()
+      .then(setPageTypes)
+      .catch(() => setPageTypes([]));
+  }, []);
 
   useEffect(() => {
     if (initialData) {
@@ -202,14 +210,30 @@ export default function PageForm({
               >
                 Page Type
               </Label>
-              <NativeSelect id="page_type" className={inputClass} {...register("page_type")}>
-                <option value="">General</option>
-                {PAGE_TYPE_OPTIONS.filter((o) => o.value).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Controller
+                control={control}
+                name="page_type"
+                render={({ field }) => (
+                  <NativeSelect
+                    id="page_type"
+                    className={inputClass}
+                    value={field.value ?? ""}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                    ref={field.ref}
+                  >
+                    <option value="">No template</option>
+                    {field.value && !pageTypes.some((option) => option.value === field.value) && (
+                      <option value={field.value}>{field.value}</option>
+                    )}
+                    {pageTypes.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                )}
+              />
             </div>
 
             <div>
@@ -266,7 +290,7 @@ export default function PageForm({
                   <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-[#F8F9FB]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={featuredImagePath}
+                      src={resolveMediaSrc(featuredImagePath)}
                       alt="Hero image preview"
                       className="h-40 w-full object-cover"
                     />

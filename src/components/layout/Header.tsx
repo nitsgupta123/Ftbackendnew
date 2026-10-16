@@ -3,6 +3,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { Icon } from "../ui/icons";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { usePermissions } from "@/components/auth/PermissionsProvider";
+import { navHrefModules } from "@/lib/permission-types";
 import { getUserInitials } from "@/lib/auth-storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +58,7 @@ export default function Header({
   sidebarCollapsed = false,
 }: HeaderProps) {
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -151,14 +154,17 @@ export default function Header({
   }, [packages, searchQuery]);
 
   const quickLinkResults = useMemo(() => {
+    const allowedLinks = QUICK_LINKS.filter((link) =>
+      navHrefModules(link.href).every((moduleKey) => can(moduleKey, "view"))
+    );
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return QUICK_LINKS.slice(0, 5);
-    return QUICK_LINKS.filter(
+    if (!q) return allowedLinks.slice(0, 5);
+    return allowedLinks.filter(
       (link) =>
         link.label.toLowerCase().includes(q) ||
         link.keywords.some((keyword) => keyword.includes(q) || q.includes(keyword))
     ).slice(0, 5);
-  }, [searchQuery]);
+  }, [searchQuery, can]);
 
   const goToSearchResults = (query: string) => {
     const q = query.trim();
@@ -337,82 +343,84 @@ export default function Header({
           )}
         </div>
 
-        <div ref={notificationsRef} className="relative">
-          <Button
-            type="button"
-            variant="ghost"
-            aria-label="Notifications"
-            aria-expanded={notificationsOpen}
-            onClick={() => {
-              setNotificationsOpen((open) => !open);
-              void ensureNotificationsLoaded();
-            }}
-            className={`relative w-10 p-0 text-gray-500 hover:text-gray-700 ${headerControlClass}`}
-          >
-            <Icon name="Bell" size={18} />
-            {openEnquiries.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full border-2 border-white bg-red-500" />
-            )}
-          </Button>
+        {can("enquiries", "view") && (
+          <div ref={notificationsRef} className="relative">
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Notifications"
+              aria-expanded={notificationsOpen}
+              onClick={() => {
+                setNotificationsOpen((open) => !open);
+                void ensureNotificationsLoaded();
+              }}
+              className={`relative w-10 p-0 text-gray-500 hover:text-gray-700 ${headerControlClass}`}
+            >
+              <Icon name="Bell" size={18} />
+              {openEnquiries.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full border-2 border-white bg-red-500" />
+              )}
+            </Button>
 
-          {notificationsOpen && (
-            <div className="absolute top-full right-0 z-30 mt-2 w-[320px] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-lg sm:w-[360px]">
-              <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Notifications</p>
-                  <p className="text-xs text-gray-500">
-                    {notificationsLoading
-                      ? "Loading open enquiries..."
-                      : `${openEnquiries.length} open enquir${openEnquiries.length === 1 ? "y" : "ies"}`}
-                  </p>
+            {notificationsOpen && (
+              <div className="absolute top-full right-0 z-30 mt-2 w-[320px] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-lg sm:w-[360px]">
+                <div className="flex items-center justify-between border-b border-[#E5E7EB] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Notifications</p>
+                    <p className="text-xs text-gray-500">
+                      {notificationsLoading
+                        ? "Loading open enquiries..."
+                        : `${openEnquiries.length} open enquir${openEnquiries.length === 1 ? "y" : "ies"}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="max-h-[320px] overflow-y-auto">
+                  {notificationsLoading && (
+                    <p className="px-4 py-6 text-center text-sm text-gray-500">Loading...</p>
+                  )}
+                  {!notificationsLoading && openEnquiries.length === 0 && (
+                    <p className="px-4 py-6 text-center text-sm text-gray-500">
+                      No open enquiries right now.
+                    </p>
+                  )}
+                  {!notificationsLoading &&
+                    openEnquiries.map((enquiry) => (
+                      <button
+                        key={enquiry.id}
+                        type="button"
+                        className="flex w-full flex-col gap-0.5 border-b border-[#F3F4F6] px-4 py-3 text-left hover:bg-gray-50"
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          navigate("/enquiry");
+                        }}
+                      >
+                        <span className="truncate text-sm font-medium text-gray-900">
+                          {enquiryDisplayName(enquiry)}
+                        </span>
+                        <span className="truncate text-xs text-gray-500">
+                          {enquiry.destinationName || enquiry.destination || "Enquiry"} ·{" "}
+                          {formatPackageDateTime(enquiry.insertDate)}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+                <div className="border-t border-[#E5E7EB] p-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-9 w-full justify-center rounded-lg text-sm font-medium text-[#B48A2C] hover:bg-[#B48A2C]/5"
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      navigate("/enquiry");
+                    }}
+                  >
+                    View all enquiries
+                  </Button>
                 </div>
               </div>
-              <div className="max-h-[320px] overflow-y-auto">
-                {notificationsLoading && (
-                  <p className="px-4 py-6 text-center text-sm text-gray-500">Loading...</p>
-                )}
-                {!notificationsLoading && openEnquiries.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-gray-500">
-                    No open enquiries right now.
-                  </p>
-                )}
-                {!notificationsLoading &&
-                  openEnquiries.map((enquiry) => (
-                    <button
-                      key={enquiry.id}
-                      type="button"
-                      className="flex w-full flex-col gap-0.5 border-b border-[#F3F4F6] px-4 py-3 text-left hover:bg-gray-50"
-                      onClick={() => {
-                        setNotificationsOpen(false);
-                        navigate("/enquiry");
-                      }}
-                    >
-                      <span className="truncate text-sm font-medium text-gray-900">
-                        {enquiryDisplayName(enquiry)}
-                      </span>
-                      <span className="truncate text-xs text-gray-500">
-                        {enquiry.destinationName || enquiry.destination || "Enquiry"} ·{" "}
-                        {formatPackageDateTime(enquiry.insertDate)}
-                      </span>
-                    </button>
-                  ))}
-              </div>
-              <div className="border-t border-[#E5E7EB] p-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-9 w-full justify-center rounded-lg text-sm font-medium text-[#B48A2C] hover:bg-[#B48A2C]/5"
-                  onClick={() => {
-                    setNotificationsOpen(false);
-                    navigate("/enquiry");
-                  }}
-                >
-                  View all enquiries
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         <Button
           type="button"

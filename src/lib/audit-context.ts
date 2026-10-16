@@ -20,6 +20,8 @@ export const DEFAULT_AUDIT_USER = readEnv("VITE_AUDIT_USER") || "Admin User";
 
 export interface PackageAuditContext {
   user: string;
+  /** tbl_user.id of the signed-in admin, when known. */
+  userId?: number;
 }
 
 export function resolveAuditUser(headerValue?: string | string[] | null): string {

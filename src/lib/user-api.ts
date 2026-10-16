@@ -1,5 +1,4 @@
 import type { AdminUser } from "./auth-types";
-import { getStoredToken } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 import type {
   AdminUserStats,
@@ -16,10 +15,6 @@ function apiUrl(path: string) {
 
 function requestHeaders(includeJson = false): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   if (includeJson) {
     headers["Content-Type"] = "application/json";
   }
@@ -53,6 +48,20 @@ export async function listUsers(params: ListUsersParams = {}): Promise<ListUsers
     headers: requestHeaders(),
   });
   return parseApiResponse<ListUsersResult>(response);
+}
+
+/** The API caps page size at 100, so screens that need every user page through. */
+export async function listAllUsers(
+  params: Omit<ListUsersParams, "page" | "limit"> = {}
+): Promise<ListUsersResult> {
+  const limit = 100;
+  const first = await listUsers({ ...params, page: 1, limit });
+  const users = [...first.users];
+  for (let page = 2; page <= first.totalPages; page += 1) {
+    const next = await listUsers({ ...params, page, limit });
+    users.push(...next.users);
+  }
+  return { ...first, users, page: 1, limit: users.length, totalPages: 1 };
 }
 
 export async function createUser(

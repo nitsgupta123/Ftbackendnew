@@ -1,4 +1,5 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import {
   countAdminUsers,
   countAllAdminUsers,
@@ -11,8 +12,8 @@ import {
   passwordMatchesAdmin,
   refreshEmailVerificationToken,
   resetAdminPasswordByToken,
-  toAuthTokenPayload,
   touchAdminLastLogin,
+  upgradeLegacyPasswordHash,
   verifyAdminEmailByToken,
   verifyAdminPassword,
 } from "../../src/lib/auth-repository";
@@ -26,6 +27,7 @@ import { isEmailConfigured } from "../../src/lib/email";
 import { sendAdminPasswordResetEmail } from "../../src/lib/password-reset-email";
 import { sendAdminVerificationEmail } from "../../src/lib/verification-email";
 import { sendRouteError } from "../lib/errors";
+import { clearSession, issueSession } from "../plugins/auth";
 import { z } from "zod";
 
 const INVALID_CREDENTIALS = "Invalid email or password";
@@ -41,8 +43,16 @@ const resendSchema = z.object({
   email: z.string().trim().email("Invalid email address"),
 });
 
+/**
+ * Self-signup as the first (Super Admin) account is opt-in, otherwise anyone who reaches
+ * an empty deployment first owns it. Prefer `npm run admin:seed` on the server.
+ */
+function isBootstrapSignupAllowed(): boolean {
+  return process.env.ALLOW_BOOTSTRAP_SIGNUP === "true";
+}
+
 function isPublicSignupAllowed(existingUserCount: number): boolean {
-  if (existingUserCount === 0) return true;
+  if (existingUserCount === 0) return isBootstrapSignupAllowed();
   return process.env.ALLOW_PUBLIC_SIGNUP === "true";
 }
 
@@ -50,8 +60,29 @@ function allowPasswordResetBypass(): boolean {
   return process.env.ADMIN_PASSWORD_RESET_BYPASS === "true";
 }
 
+/**
+ * Keyed by IP + submitted email so a single account cannot be brute-forced even when
+ * every request arrives from the same reverse-proxy IP.
+ */
+const authRateLimit = (max: number) => ({
+  config: {
+    rateLimit: {
+      max,
+      timeWindow: "15 minutes",
+      hook: "preHandler" as const,
+      keyGenerator: (request: FastifyRequest) => {
+        const body = request.body as { email?: unknown } | undefined;
+        const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+        return `${request.ip}|${email}`;
+      },
+    },
+  },
+});
+
 export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/signup", async (request, reply) => {
+  await app.register(rateLimit, { global: false });
+
+  app.post("/signup", authRateLimit(10), async (request, reply) => {
     try {
       const existingCount = await countAllAdminUsers();
       if (!isPublicSignupAllowed(existingCount)) {
@@ -80,11 +111,16 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
       const verifiedCount = await countAdminUsers();
 
       if (verifiedCount === 0 && !existing) {
+        if (!isBootstrapSignupAllowed()) {
+          return reply.status(403).send({
+            error:
+              "No admin account exists yet. Create the first Super Admin on the server with `npm run admin:seed`.",
+          });
+        }
         const user = await createBootstrapAdminUser({ email, password, fullName });
-        const token = await reply.jwtSign(toAuthTokenPayload(user));
+        await issueSession(reply, user);
         return reply.status(201).send({
           status: "authenticated",
-          token,
           user,
         });
       }
@@ -109,7 +145,6 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
           email: pending.email,
           message:
             "Check your email (and spam folder) for a verification link. You will appear in User Management after verification.",
-          previewUrl: mailResult.previewUrl,
           mailMode: mailResult.mode,
         });
       } catch (mailError) {
@@ -128,7 +163,7 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/resend-verification", async (request, reply) => {
+  app.post("/resend-verification", authRateLimit(5), async (request, reply) => {
     try {
       const parsed = resendSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -154,8 +189,6 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
         return reply.send({
           status: "ok",
           message: "If that email needs verification, a new link has been sent.",
-          previewUrl: mailResult.previewUrl,
-          mailMode: mailResult.mode,
         });
       }
 
@@ -186,10 +219,9 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const token = await reply.jwtSign(toAuthTokenPayload(user));
+      await issueSession(reply, user);
       return reply.send({
         status: "authenticated",
-        token,
         user,
         message: "Email verified. Your account is now active.",
       });
@@ -199,7 +231,7 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/login", async (request, reply) => {
+  app.post("/login", authRateLimit(10), async (request, reply) => {
     try {
       const parsed = loginSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -224,27 +256,37 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(401).send({ error: INVALID_CREDENTIALS });
       }
 
+      await upgradeLegacyPasswordHash(row, password);
       await touchAdminLastLogin(row.id);
       const user = await findAdminById(row.id);
       if (!user) {
         return reply.status(401).send({ error: INVALID_CREDENTIALS });
       }
 
-      const token = await reply.jwtSign(toAuthTokenPayload(user));
-      return reply.send({ token, user });
+      await issueSession(reply, user);
+      return reply.send({ user });
     } catch (error) {
       app.log.error(error);
       return sendRouteError(reply, error, "Login failed");
     }
   });
 
-  app.post("/forgot-password", async (request, reply) => {
+  app.post("/forgot-password", authRateLimit(5), async (request, reply) => {
     try {
       const parsed = forgotPasswordSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({
           error: "Validation failed",
           details: parsed.error.flatten().fieldErrors,
+        });
+      }
+
+      // Checked before the account lookup so known and unknown emails get the same response.
+      const bypass = allowPasswordResetBypass();
+      if (!isEmailConfigured() && !bypass) {
+        return reply.status(503).send({
+          error:
+            "Email delivery is not configured. Ask a Super Admin to reset your password from User Management.",
         });
       }
 
@@ -255,25 +297,15 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
         return reply.send({ status: "ok", message: RESET_GENERIC });
       }
 
-      // Prefer email when configured; otherwise return an on-screen bypass link for admins.
-      if (!isEmailConfigured() || allowPasswordResetBypass()) {
-        if (!isEmailConfigured() && !allowPasswordResetBypass()) {
-          return reply.status(503).send({
-            error:
-              "Email delivery is not configured. Ask a Super Admin to reset your password from User Management, or set ADMIN_PASSWORD_RESET_BYPASS=true.",
-          });
-        }
-        if (allowPasswordResetBypass()) {
-          const resetPath = `/reset-password?token=${encodeURIComponent(pending.token)}`;
-          app.log.warn({ email: pending.email }, "Password reset bypass link issued");
-          return reply.send({
-            status: "ok",
-            message: RESET_GENERIC,
-            bypass: true,
-            resetPath,
-            previewUrl: resetPath,
-          });
-        }
+      // The reset link must never be returned to the requester (anyone can call this endpoint).
+      // With the bypass enabled it is written to the server log for operators instead.
+      if (bypass) {
+        const resetPath = `/reset-password?token=${encodeURIComponent(pending.token)}`;
+        app.log.warn({ email: pending.email, resetPath }, "Password reset bypass link issued");
+      }
+
+      if (!isEmailConfigured()) {
+        return reply.send({ status: "ok", message: RESET_GENERIC });
       }
 
       try {
@@ -282,24 +314,10 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
           { email: pending.email, mailMode: mailResult.mode },
           "Password reset email sent"
         );
-        return reply.send({
-          status: "ok",
-          message: RESET_GENERIC,
-          previewUrl: mailResult.previewUrl,
-          mailMode: mailResult.mode,
-        });
+        return reply.send({ status: "ok", message: RESET_GENERIC });
       } catch (mailError) {
         app.log.error(mailError);
-        if (allowPasswordResetBypass()) {
-          const resetPath = `/reset-password?token=${encodeURIComponent(pending.token)}`;
-          return reply.send({
-            status: "ok",
-            message: RESET_GENERIC,
-            bypass: true,
-            resetPath,
-            previewUrl: resetPath,
-          });
-        }
+        if (bypass) return reply.send({ status: "ok", message: RESET_GENERIC });
         return reply.status(503).send({
           error: "Could not send password reset email. Please try again later.",
         });
@@ -331,10 +349,9 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
       }
 
       await touchAdminLastLogin(user.id);
-      const token = await reply.jwtSign(toAuthTokenPayload(user));
+      await issueSession(reply, user);
       return reply.send({
         status: "authenticated",
-        token,
         user,
         message: "Password updated. You are now signed in.",
       });
@@ -342,6 +359,11 @@ export const registerAuthRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return sendRouteError(reply, error, "Password reset failed");
     }
+  });
+
+  app.post("/logout", async (_request, reply) => {
+    clearSession(reply);
+    return reply.send({ status: "ok" });
   });
 
   app.get(

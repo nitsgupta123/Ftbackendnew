@@ -1,21 +1,20 @@
-import { createHash } from "node:crypto";
+import bcrypt from "bcrypt";
 import mysql from "mysql2/promise";
 import { config } from "dotenv";
 
 config({ path: ".env.local" });
 config();
 
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "admin@ftadmin.local").trim().toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "FtAdmin@12345";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
 const ADMIN_NAME = process.env.ADMIN_NAME ?? "FT Super Admin";
 
-function md5(password) {
-  return createHash("md5").update(password, "utf8").digest("hex");
-}
-
 async function main() {
-  if (ADMIN_PASSWORD.length < 8) {
-    throw new Error("ADMIN_PASSWORD must be at least 8 characters");
+  if (!ADMIN_EMAIL) {
+    throw new Error("Set ADMIN_EMAIL for the Super Admin account");
+  }
+  if (ADMIN_PASSWORD.length < 12) {
+    throw new Error("Set ADMIN_PASSWORD (at least 12 characters) for the Super Admin account");
   }
 
   const connection = await mysql.createConnection({
@@ -27,7 +26,7 @@ async function main() {
   });
 
   try {
-    const passwordHash = md5(ADMIN_PASSWORD);
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
     const parts = ADMIN_NAME.trim().split(/\s+/);
     const firstName = parts[0] ?? ADMIN_NAME;
     const lastName = parts.slice(1).join(" ");
@@ -42,7 +41,8 @@ async function main() {
     if (existing.length > 0) {
       await connection.query(
         `UPDATE tbl_user
-         SET password = ?, first_name = ?, last_name = ?, user_type = '1', status = 1, edit_date = NOW()
+         SET password = ?, first_name = ?, last_name = ?, user_type = '1', status = 1,
+             email_verified = 1, edit_date = NOW()
          WHERE id = ?`,
         [passwordHash, firstName, lastName, existing[0].id]
       );
@@ -52,17 +52,16 @@ async function main() {
         `INSERT INTO tbl_user (
            user_name, password, user_email, first_name, last_name,
            country_code, phone, birthday, place_birth, gender, country, user_img,
-           insert_date, edit_date, user_type, status, user_id
-         ) VALUES (?, ?, ?, ?, ?, '', '', '', '', '', '', '', NOW(), NOW(), '1', 1, 0)`,
+           insert_date, edit_date, user_type, status, email_verified, user_id
+         ) VALUES (?, ?, ?, ?, ?, '', '', '', '', '', '', '', NOW(), NOW(), '1', 1, 1, 0)`,
         [ADMIN_EMAIL, passwordHash, ADMIN_EMAIL, firstName, lastName]
       );
       console.log("Created super admin account in tbl_user:");
     }
 
     console.log(`  Email:    ${ADMIN_EMAIL}`);
-    console.log(`  Password: ${ADMIN_PASSWORD}`);
     console.log(`  Role:     super_admin (user_type=1)`);
-    console.log("\nSign in at http://localhost:3000/panel/login");
+    console.log("\nSign in at /panel/login with the password from ADMIN_PASSWORD.");
   } finally {
     await connection.end();
   }

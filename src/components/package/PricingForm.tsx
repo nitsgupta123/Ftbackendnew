@@ -799,6 +799,7 @@ export default function PricingForm({
 
   const handleSave = () => {
     onNext({
+      ...(initialData ?? {}),
       pricingType,
       hotelCategories,
     });

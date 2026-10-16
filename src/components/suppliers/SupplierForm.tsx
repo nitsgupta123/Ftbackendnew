@@ -185,6 +185,7 @@ export default function SupplierForm({
           <Input
             id="country"
             className={inputClass}
+            maxLength={120}
             {...register("country")}
             placeholder="e.g. Australia"
           />
@@ -207,6 +208,7 @@ export default function SupplierForm({
           <Input
             id="city_tour_area"
             className={inputClass}
+            maxLength={500}
             {...register("city_tour_area")}
             placeholder="e.g. Melbourne, Sydney"
           />
@@ -234,6 +236,7 @@ export default function SupplierForm({
           <Input
             id="company_name"
             className={inputClass}
+            maxLength={255}
             {...register("company_name")}
             placeholder="e.g. Pure Travel Group"
           />
@@ -259,6 +262,7 @@ export default function SupplierForm({
           <Input
             id="contact_person"
             className={inputClass}
+            maxLength={500}
             {...register("contact_person")}
             placeholder="Contact name(s)"
           />
@@ -269,6 +273,7 @@ export default function SupplierForm({
           <Input
             id="website"
             className={inputClass}
+            maxLength={500}
             {...register("website")}
             placeholder="www.example.com"
           />
@@ -338,6 +343,7 @@ export default function SupplierForm({
           <Input
             id="tc_poc_fixed_departure"
             className={inputClass}
+            maxLength={255}
             {...register("tc_poc_fixed_departure")}
             placeholder="Travel consultant POC"
           />
@@ -348,6 +354,7 @@ export default function SupplierForm({
           <Input
             id="relationship_owner"
             className={inputClass}
+            maxLength={255}
             {...register("relationship_owner")}
             placeholder="e.g. Miko, Muhammad, Namrata"
           />

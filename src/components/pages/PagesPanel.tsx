@@ -3,15 +3,15 @@ import { Icon } from "@/components/ui/icons";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
 import PageListTable from "@/components/pages/PageListTable";
 import PageDetailsModal from "@/components/pages/PageDetailsModal";
-import { getPageStats, listPages } from "@/lib/page-api";
+import { getPageStats, listPages, listPageTypes } from "@/lib/page-api";
 import {
   PAGE_SORT_OPTIONS,
   PAGE_STATUS_FILTER_OPTIONS,
-  PAGE_TYPE_OPTIONS,
   type CmsPageRecord,
   type PageStats,
   type PageStatus,
   type PageStatusFilter,
+  type PageTypeOption,
 } from "@/lib/page-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,7 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<PageStatusFilter>(defaultStatus ?? "all");
   const [typeFilter, setTypeFilter] = useState("");
+  const [pageTypes, setPageTypes] = useState<PageTypeOption[]>([]);
   const [sort, setSort] = useState<"published_at" | "created_at" | "title" | "display_order">(
     "display_order"
   );
@@ -120,6 +121,12 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
     });
   }, [loadStats, loadPages]);
 
+  useEffect(() => {
+    listPageTypes()
+      .then(setPageTypes)
+      .catch(() => setPageTypes([]));
+  }, []);
+
   const prevDefaultStatus = useRef(defaultStatus);
   useEffect(() => {
     if (defaultStatus && defaultStatus !== prevDefaultStatus.current) {
@@ -138,15 +145,13 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
     return "No pages found. Create your first page to get started.";
   }, [search, statusFilter]);
 
-  const inNavOnPage = useMemo(() => pages.filter((p) => p.show_in_nav).length, [pages]);
-
   const statCards = useMemo(() => {
     const busy = loading || statsLoading;
 
     if (defaultStatus === "published") {
       return [
         { label: "Published Pages", value: busy ? "—" : total, icon: "CheckCircle", accent: "#27AE60" },
-        { label: "In Navigation", value: busy ? "—" : inNavOnPage, icon: "Menu" },
+        { label: "In Navigation", value: busy ? "—" : (stats?.in_nav ?? 0), icon: "Menu" },
         { label: "All Pages", value: busy ? "—" : (stats?.total ?? 0), icon: "FileStack" },
       ];
     }
@@ -170,7 +175,7 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
       { label: "Published", value: busy ? "—" : (stats?.published ?? 0), icon: "CheckCircle", accent: "#27AE60" },
       { label: "In Navigation", value: busy ? "—" : (stats?.in_nav ?? 0), icon: "Menu" },
     ];
-  }, [defaultStatus, inNavOnPage, loading, stats, statsLoading, total]);
+  }, [defaultStatus, loading, stats, statsLoading, total]);
 
   return (
     <>
@@ -201,7 +206,7 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search by title, slug, or excerpt..."
+              placeholder="Search by title, slug, or content..."
               className={`w-full pl-9 pr-3 ${filterControlClass}`}
             />
           </div>
@@ -234,8 +239,9 @@ export default function PagesPanel({ defaultStatus, hideStatusFilter = false }: 
               wrapperClassName="w-auto shrink-0"
               className={`min-w-[130px] px-3 pr-9 ${filterControlClass}`}
             >
-              {PAGE_TYPE_OPTIONS.map((option) => (
-                <option key={option.value || "all"} value={option.value}>
+              <option value="">All templates</option>
+              {pageTypes.map((option) => (
+                <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}

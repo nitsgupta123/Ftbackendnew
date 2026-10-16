@@ -1,41 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { resetRolePermissions, updateRolePermissions } from "@/lib/permission-api";
-import { updateUser } from "@/lib/user-api";
 import type { AdminRole } from "@/lib/auth-types";
 import type { AccessModuleDefinition, ModulePermission } from "@/lib/permission-types";
-import type {
-  ActivityItem,
-  ExtendedPermission,
-  ManageableUser,
-  PermissionKey,
-  RoleMeta,
-} from "./types";
-import { nowIsoSgt } from "@/lib/format-date";
-
-const LOCAL_STORAGE_ROLE_META = "ftadmin-role-meta-v1";
-
-function readLocalStorageJson<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function nowIso(): string {
-  return nowIsoSgt();
-}
-
-function slugify(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
+import type { ActivityItem, ExtendedPermission, PermissionKey } from "./types";
 
 export function normalizeExtended(list: ModulePermission[]): ExtendedPermission[] {
   return list.map((row) => ({
@@ -77,17 +44,30 @@ function permissionsEqual(a: ExtendedPermission[], b: ExtendedPermission[]): boo
   });
 }
 
-type RoleFormState = {
-  roleName: string;
-  description: string;
-  department: string;
-  designation: string;
-  assignUsers: number[];
-};
+function applyToggle(row: ExtendedPermission, field: PermissionKey, value: boolean): ExtendedPermission {
+  const next = { ...row, [field]: value };
+  if (field === "canCreate" || field === "canEdit" || field === "canApprove") {
+    next.canCreate = value;
+    next.canEdit = value;
+    next.canApprove = value;
+  }
+  if (
+    (field === "canCreate" || field === "canEdit" || field === "canDelete" || field === "canApprove") &&
+    value
+  ) {
+    next.canView = true;
+  }
+  if (field === "canView" && !value) {
+    next.canCreate = false;
+    next.canEdit = false;
+    next.canDelete = false;
+    next.canApprove = false;
+  }
+  return next;
+}
 
 type UseRolePermissionsArgs = {
   canManage: boolean;
-  allUsers: ManageableUser[];
   currentUserName?: string;
   formatRoleLabel: (role: string) => string;
   refreshMyPermissions: () => Promise<void>;
@@ -96,43 +76,20 @@ type UseRolePermissionsArgs = {
 
 export function useRolePermissions({
   canManage,
-  allUsers,
   currentUserName,
   formatRoleLabel,
   refreshMyPermissions,
   onPushActivity,
 }: UseRolePermissionsArgs) {
   const [rolePermissions, setRolePermissions] = useState<Record<string, ExtendedPermission[]>>({});
-  const [roleMeta, setRoleMeta] = useState<Record<string, RoleMeta>>(() =>
-    readLocalStorageJson<Record<string, RoleMeta>>(LOCAL_STORAGE_ROLE_META, {})
-  );
   const [selectedRole, setSelectedRole] = useState<string>("admin");
   const [draft, setDraft] = useState<ExtendedPermission[]>([]);
   const [saved, setSaved] = useState<ExtendedPermission[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [roleModalOpen, setRoleModalOpen] = useState(false);
-  const [editingRoleKey, setEditingRoleKey] = useState<string | null>(null);
-  const [roleForm, setRoleForm] = useState<RoleFormState>({
-    roleName: "",
-    description: "",
-    department: "",
-    designation: "",
-    assignUsers: [],
-  });
-  const [deleteRoleKey, setDeleteRoleKey] = useState<string | null>(null);
-  const [pendingAccessRequests, setPendingAccessRequests] = useState(4);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_ROLE_META, JSON.stringify(roleMeta));
-  }, [roleMeta]);
 
   const availableRoles = useMemo(() => Object.keys(rolePermissions), [rolePermissions]);
-  const selectedRolePermissions = useMemo(
-    () => rolePermissions[selectedRole] ?? [],
-    [rolePermissions, selectedRole]
-  );
   const dirty = useMemo(() => !permissionsEqual(draft, saved), [draft, saved]);
   const draftMap = useMemo(() => new Map(draft.map((p) => [p.moduleKey, p])), [draft]);
 
@@ -163,44 +120,13 @@ export function useRolePermissions({
         setDraft(next);
         setSaved(clonePermissions(next));
       }
-      setRoleMeta((prev) => {
-        const next = { ...prev };
-        for (const role of Object.keys(mappedPermissions)) {
-          if (next[role]) continue;
-          next[role] = {
-            key: role,
-            description: `${formatRoleLabel(role)} role permissions`,
-            department: "General",
-            designation: "Team Member",
-            createdBy: "System",
-            createdDate: nowIso(),
-          };
-        }
-        return next;
-      });
     },
-    [formatRoleLabel]
+    []
   );
 
   const setPermission = (moduleKey: string, field: PermissionKey, value: boolean) => {
     setDraft((prev) =>
-      prev.map((row) => {
-        if (row.moduleKey !== moduleKey) return row;
-        const next = { ...row, [field]: value };
-        if (
-          (field === "canCreate" || field === "canEdit" || field === "canDelete" || field === "canApprove") &&
-          value
-        ) {
-          next.canView = true;
-        }
-        if (field === "canView" && !value) {
-          next.canCreate = false;
-          next.canEdit = false;
-          next.canDelete = false;
-          next.canApprove = false;
-        }
-        return next;
-      })
+      prev.map((row) => (row.moduleKey === moduleKey ? applyToggle(row, field, value) : row))
     );
     setSuccess(null);
   };
@@ -212,23 +138,7 @@ export function useRolePermissions({
   ) => {
     const keys = new Set(groupModules.map((m) => m.key));
     setDraft((prev) =>
-      prev.map((row) => {
-        if (!keys.has(row.moduleKey)) return row;
-        const next = { ...row, [field]: value };
-        if (
-          (field === "canCreate" || field === "canEdit" || field === "canDelete" || field === "canApprove") &&
-          value
-        ) {
-          next.canView = true;
-        }
-        if (field === "canView" && !value) {
-          next.canCreate = false;
-          next.canEdit = false;
-          next.canDelete = false;
-          next.canApprove = false;
-        }
-        return next;
-      })
+      prev.map((row) => (keys.has(row.moduleKey) ? applyToggle(row, field, value) : row))
     );
     setSuccess(null);
   };
@@ -289,153 +199,8 @@ export function useRolePermissions({
     }
   };
 
-  const openRoleModal = (roleKey?: string) => {
-    if (!canManage) return;
-    if (roleKey) {
-      const meta = roleMeta[roleKey];
-      setEditingRoleKey(roleKey);
-      setRoleForm({
-        roleName: formatRoleLabel(roleKey),
-        description: meta?.description ?? "",
-        department: meta?.department ?? "",
-        designation: meta?.designation ?? "",
-        assignUsers: allUsers.filter((userRow) => userRow.role === roleKey).map((u) => u.id),
-      });
-    } else {
-      setEditingRoleKey(null);
-      setRoleForm({
-        roleName: "",
-        description: "",
-        department: "",
-        designation: "",
-        assignUsers: [],
-      });
-    }
-    setRoleModalOpen(true);
-  };
-
-  const submitRoleModal = async () => {
-    if (!canManage) return;
-    const key = editingRoleKey ?? slugify(roleForm.roleName);
-    if (!key) {
-      setError("Role name is required.");
-      return;
-    }
-    const existing = rolePermissions[key];
-    const seed = existing ?? clonePermissions(selectedRolePermissions.length ? selectedRolePermissions : draft);
-    setRolePermissions((prev) => ({ ...prev, [key]: seed }));
-    setRoleMeta((prev) => ({
-      ...prev,
-      [key]: {
-        key,
-        description: roleForm.description || `${formatRoleLabel(key)} permissions`,
-        department: roleForm.department || "General",
-        designation: roleForm.designation || "Team Member",
-        createdBy: editingRoleKey
-          ? (prev[key]?.createdBy ?? currentUserName ?? "Super Admin")
-          : currentUserName ?? "Super Admin",
-        createdDate: editingRoleKey ? (prev[key]?.createdDate ?? nowIso()) : nowIso(),
-      },
-    }));
-    for (const userId of roleForm.assignUsers) {
-      const target = allUsers.find((userRow) => userRow.id === userId);
-      if (!target) continue;
-      try {
-        await updateUser(target.id, {
-          fullName: target.fullName,
-          role: key,
-          isActive: target.isActive,
-        });
-      } catch {
-        // Continue.
-      }
-    }
-    if (!existing) {
-      try {
-        await updateRolePermissions(key as AdminRole, { permissions: toBasePermissions(seed) });
-      } catch {
-        // Keep local role.
-      }
-    }
-    onPushActivity({
-      actor: currentUserName ?? "Super Admin",
-      employee: editingRoleKey ? "Role Edited" : "Role Created",
-      permission: formatRoleLabel(key),
-      previousAccess: editingRoleKey ? "Existing role" : "Not available",
-      newAccess: editingRoleKey ? "Updated role metadata" : "Role added",
-    });
-    setSelectedRole(key);
-    setDraft(clonePermissions(seed));
-    setSaved(clonePermissions(seed));
-    setRoleModalOpen(false);
-    setSuccess(editingRoleKey ? "Role updated successfully." : "New role created successfully.");
-    setPendingAccessRequests((prev) => Math.max(0, prev - 1));
-  };
-
-  const duplicateRole = async (roleKey: string) => {
-    if (!canManage) return;
-    const source = rolePermissions[roleKey];
-    if (!source) return;
-    const newKey = `${roleKey}_copy_${Math.floor(Math.random() * 1000)}`;
-    setRolePermissions((prev) => ({ ...prev, [newKey]: clonePermissions(source) }));
-    setRoleMeta((prev) => ({
-      ...prev,
-      [newKey]: {
-        key: newKey,
-        description: `Duplicate of ${formatRoleLabel(roleKey)}`,
-        department: roleMeta[roleKey]?.department ?? "General",
-        designation: roleMeta[roleKey]?.designation ?? "Team Member",
-        createdBy: currentUserName ?? "Super Admin",
-        createdDate: nowIso(),
-      },
-    }));
-    try {
-      await updateRolePermissions(newKey as AdminRole, { permissions: toBasePermissions(source) });
-    } catch {
-      // keep local
-    }
-    onPushActivity({
-      actor: currentUserName ?? "Super Admin",
-      employee: "Role Duplicated",
-      permission: `${formatRoleLabel(roleKey)} -> ${formatRoleLabel(newKey)}`,
-      previousAccess: "Source role",
-      newAccess: "Duplicate role",
-    });
-    setSuccess(`Role duplicated as ${formatRoleLabel(newKey)}.`);
-  };
-
-  const deleteRole = async (protectedRoles: Set<string>) => {
-    if (!deleteRoleKey || !canManage || protectedRoles.has(deleteRoleKey)) return;
-    const assigned = allUsers.filter((userRow) => userRow.role === deleteRoleKey);
-    if (assigned.length > 0) {
-      setError(`Cannot delete "${formatRoleLabel(deleteRoleKey)}" while ${assigned.length} users are assigned.`);
-      return;
-    }
-    setRolePermissions((prev) => {
-      const next = { ...prev };
-      delete next[deleteRoleKey];
-      return next;
-    });
-    setRoleMeta((prev) => {
-      const next = { ...prev };
-      delete next[deleteRoleKey];
-      return next;
-    });
-    if (selectedRole === deleteRoleKey) applyRole("admin");
-    onPushActivity({
-      actor: currentUserName ?? "Super Admin",
-      employee: "Role Deleted",
-      permission: formatRoleLabel(deleteRoleKey),
-      previousAccess: "Role available",
-      newAccess: "Role removed",
-    });
-    setDeleteRoleKey(null);
-    setSuccess("Role removed.");
-  };
-
   return {
     rolePermissions,
-    roleMeta,
     selectedRole,
     draft,
     saving,
@@ -444,13 +209,6 @@ export function useRolePermissions({
     dirty,
     draftMap,
     availableRoles,
-    roleModalOpen,
-    editingRoleKey,
-    roleForm,
-    deleteRoleKey,
-    pendingAccessRequests,
-    setRoleForm,
-    setDeleteRoleKey,
     setSuccess,
     setError,
     setRolePermissions,
@@ -460,10 +218,5 @@ export function useRolePermissions({
     toggleAllInGroup,
     save,
     resetDefaults,
-    openRoleModal,
-    submitRoleModal,
-    duplicateRole,
-    deleteRole,
-    setRoleModalOpen,
   };
 }

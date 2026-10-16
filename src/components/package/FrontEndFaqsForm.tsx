@@ -23,14 +23,19 @@ const VISIBILITY_OPTIONS = ["Show on front-end", "Hide from front-end"];
 export default function FrontEndFaqsForm({
   onNext,
   onPrevious,
+  initialData,
   isSaving = false
 }: FrontEndFaqsFormProps) {
-  const [faqs, setFaqs] = useState<FaqItem[]>([{
-    id: "1",
-    question: "Is this package suitable for f",
-    visibility: "Show on front-end",
-    answer: ""
-  }]);
+  const [faqs, setFaqs] = useState<FaqItem[]>(() =>
+    initialData?.length
+      ? initialData.map((faq, index) => ({
+          id: faq.id || String(index + 1),
+          question: faq.question ?? "",
+          answer: faq.answer ?? "",
+          visibility: faq.visibility || VISIBILITY_OPTIONS[0]
+        }))
+      : [{ id: "1", question: "", visibility: VISIBILITY_OPTIONS[0], answer: "" }]
+  );
   const inputClass = "w-full h-[48px] px-4 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-colors";
   const selectClass = `${inputClass} cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27=%27none%27 stroke=%27%239CA3AF%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E')] bg-[length:12px] bg-[right_16px_center] bg-no-repeat pr-10`;
   const labelClass = "block text-sm font-semibold text-[#1F2A44] mb-2";
@@ -143,7 +148,7 @@ export default function FrontEndFaqsForm({
           Incomplete sections stay as draft.
         </p>
 
-        <Button type="button" onClick={() => onNext(faqs)} disabled={isSaving} data-package-step-save="" className={stepSaveButtonClass}>
+        <Button type="button" onClick={() => onNext(faqs.filter(faq => faq.question.trim() || faq.answer.trim()))} disabled={isSaving} data-package-step-save="" className={stepSaveButtonClass}>
           
           {saveButtonLabel(isSaving)}
           <Icon name="ChevronRight" size={16} />

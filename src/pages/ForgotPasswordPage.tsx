@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 export default function ForgotPasswordPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [bypassPath, setBypassPath] = useState<string | null>(null);
 
   const {
     register,
@@ -29,15 +28,9 @@ export default function ForgotPasswordPage() {
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null);
     setSuccessMessage(null);
-    setBypassPath(null);
     try {
       const result = await forgotPasswordRequest(values.email);
       setSuccessMessage(result.message);
-      if (result.bypass && result.resetPath) {
-        setBypassPath(result.resetPath);
-      } else if (result.previewUrl?.startsWith("http")) {
-        setBypassPath(result.previewUrl);
-      }
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Could not start password reset"
@@ -47,8 +40,8 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthLayout
-      title="Account recovery"
-      subtitle="Enter your admin email to reset your password"
+      title="Forgot password"
+      subtitle="Enter your admin email and we'll send you a reset link"
       footer={
         <>
           Remembered it?{" "}
@@ -67,30 +60,6 @@ export default function ForgotPasswordPage() {
         {successMessage && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             {successMessage}
-            {bypassPath && (
-              <p className="mt-2 break-all">
-                {bypassPath.startsWith("http") ? (
-                  <>
-                    Preview:{" "}
-                    <a
-                      href={bypassPath}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline font-medium"
-                    >
-                      {bypassPath}
-                    </a>
-                  </>
-                ) : (
-                  <>
-                    Bypass link:{" "}
-                    <Link to={bypassPath} className="underline font-medium">
-                      Set a new password
-                    </Link>
-                  </>
-                )}
-              </p>
-            )}
           </div>
         )}
 

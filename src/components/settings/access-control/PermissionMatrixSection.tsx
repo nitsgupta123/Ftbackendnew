@@ -75,10 +75,8 @@ export default function PermissionMatrixSection({
                       {(
                         [
                           ["canView", "View"],
-                          ["canCreate", "Create"],
-                          ["canEdit", "Edit"],
+                          ["canEdit", "Create / Edit"],
                           ["canDelete", "Delete"],
-                          ["canApprove", "Approve"],
                         ] as const
                       ).map(([field, label]) => (
                         <th
@@ -133,7 +131,7 @@ export default function PermissionMatrixSection({
                             </div>
                           </td>
                           {(
-                            ["canView", "canCreate", "canEdit", "canDelete", "canApprove"] as const
+                            ["canView", "canEdit", "canDelete"] as const
                           ).map((field) => (
                             <td key={field} className="px-4 py-3.5 text-center">
                               <div className="inline-flex justify-center">

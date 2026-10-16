@@ -1,5 +1,6 @@
 import type {
   CreateSupplierInput,
+  CustomSupplierService,
   ListSuppliersParams,
   ListSuppliersResult,
   SupplierRecord,
@@ -7,7 +8,7 @@ import type {
   UpdateSupplierInput,
 } from "./supplier-types";
 import { AUDIT_USER_HEADER } from "./audit-context";
-import { getStoredToken, getStoredUser } from "./auth-storage";
+import { getStoredUser } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -18,10 +19,6 @@ function apiUrl(path: string) {
 
 function requestHeaders(includeJson = false): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const user = getStoredUser();
   if (user?.fullName) {
     headers[AUDIT_USER_HEADER] = user.fullName;
@@ -105,4 +102,21 @@ export async function deleteSupplier(id: number) {
     headers: requestHeaders(),
   });
   return parseApiResponse<{ ok: boolean }>(response);
+}
+
+export async function listCustomSupplierServices() {
+  const response = await fetch(apiUrl("/api/suppliers/custom-services"), {
+    cache: "no-store",
+    headers: requestHeaders(),
+  });
+  return parseApiResponse<{ services: CustomSupplierService[] }>(response);
+}
+
+export async function addCustomSupplierService(input: CustomSupplierService) {
+  const response = await fetch(apiUrl("/api/suppliers/custom-services"), {
+    method: "POST",
+    headers: requestHeaders(true),
+    body: JSON.stringify(input),
+  });
+  return parseApiResponse<{ services: CustomSupplierService[] }>(response);
 }

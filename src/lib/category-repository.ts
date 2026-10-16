@@ -1,14 +1,23 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import type { PackageAuditContext } from "./audit-context";
+import { loadUserNameMap, userLabel } from "./user-names";
 import { query, sqlLimit, sqlOffset } from "./db";
 import { toIsoSgtOrNow } from "./format-date";
 import { LEGACY_TABLES, SETTINGS_BLOB } from "./legacy-tables";
 import {
   getSettingBlobById,
   insertSettingBlob,
+  listSettingBlobs,
   updateSettingBlob,
 } from "./legacy-settings-store";
 import { slugify, uniqueSlug } from "./slug";
+import {
+  deleteCategoryExtras,
+  getCategoryExtras,
+  getCategoryExtrasMap,
+  saveCategoryExtras,
+  type CategoryExtras,
+} from "./post-extras-store";
 import type {
   CreateCategoryInput,
   ListCategoriesParams,
@@ -34,24 +43,50 @@ function toIso(value: unknown): string {
   );
 }
 
-function parseCategoryRow(row: RowDataPacket): PackageCategoryRecord {
+/** Number of non-deleted packages assigned to each category. */
+async function packageCountsByCategory(): Promise<Map<number, number>> {
+  const blobs = await listSettingBlobs<{ category_ids?: number[] }>(SETTINGS_BLOB.packageCategories);
+  const counts = new Map<number, number>();
+  if (!blobs.length) return counts;
+  const live = await query<RowDataPacket[]>(
+    `SELECT id FROM ${LEGACY_TABLES.packages}
+     WHERE IFNULL(status, 0) != 0 AND id IN (${blobs.map(() => "?").join(",")})`,
+    blobs.map((blob) => blob.id)
+  );
+  const liveIds = new Set(live.map((row) => Number(row.id)));
+  for (const blob of blobs) {
+    if (!liveIds.has(blob.id)) continue;
+    for (const categoryId of new Set((blob.category_ids ?? []).map(Number))) {
+      counts.set(categoryId, (counts.get(categoryId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function parseCategoryRow(
+  row: RowDataPacket,
+  extras: CategoryExtras = {},
+  counts?: Map<number, number>,
+  userNames: Map<number, string> = new Map()
+): PackageCategoryRecord {
+  const createdBy = userLabel(row.user_id, userNames);
   return {
     id: Number(row.id),
     name: String(row.cat_title ?? ""),
     slug: String(row.cat_slug ?? ""),
-    description: row.cat_content ?? null,
-    icon_path: null,
-    image_path: row.cat_img ?? null,
-    display_order: Number(row.id),
+    description: row.cat_content || null,
+    icon_path: extras.icon_path ?? null,
+    image_path: row.cat_img || null,
+    display_order: Number.isInteger(extras.display_order) ? Number(extras.display_order) : 0,
     status: statusFromInt(row.status),
-    is_featured: false,
-    seo_meta_title: row.meta_title ?? null,
-    seo_meta_description: row.meta_discription ?? null,
-    created_by: null,
-    updated_by: null,
+    is_featured: extras.is_featured === true,
+    seo_meta_title: row.meta_title || null,
+    seo_meta_description: row.meta_discription || null,
+    created_by: createdBy,
+    updated_by: extras.updated_by || createdBy,
     created_at: toIso(row.insert_date),
     updated_at: toIso(row.edit_date ?? row.insert_date),
-    total_packages: row.total_packages !== undefined ? Number(row.total_packages) : undefined,
+    total_packages: counts ? counts.get(Number(row.id)) ?? 0 : undefined,
   };
 }
 
@@ -66,9 +101,9 @@ async function listExistingSlugs(excludeId?: number): Promise<string[]> {
 
 async function isNameTaken(name: string, excludeId?: number): Promise<boolean> {
   const sql = excludeId
-    ? `SELECT id FROM ${CATEGORIES_TABLE} WHERE LOWER(cat_title) = LOWER(?) AND id != ? LIMIT 1`
-    : `SELECT id FROM ${CATEGORIES_TABLE} WHERE LOWER(cat_title) = LOWER(?) LIMIT 1`;
-  const params = excludeId ? [name, excludeId] : [name];
+    ? `SELECT id FROM ${CATEGORIES_TABLE} WHERE cat_type = ? AND LOWER(cat_title) = LOWER(?) AND id != ? LIMIT 1`
+    : `SELECT id FROM ${CATEGORIES_TABLE} WHERE cat_type = ? AND LOWER(cat_title) = LOWER(?) LIMIT 1`;
+  const params = excludeId ? [PACKAGE_CAT_TYPE, name, excludeId] : [PACKAGE_CAT_TYPE, name];
   const rows = await query<RowDataPacket[]>(sql, params);
   return rows.length > 0;
 }
@@ -106,7 +141,7 @@ export async function listCategories(
     activeOnly = false,
   } = params;
 
-  const conditions: string[] = [`(c.cat_type = ? OR c.cat_type = 'products')`];
+  const conditions: string[] = [`c.cat_type = ?`];
   const values: (string | number)[] = [PACKAGE_CAT_TYPE];
 
   if (activeOnly || status === "active") {
@@ -121,9 +156,37 @@ export async function listCategories(
   }
 
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
-  const sortColumn = sort === "created_at" ? "c.insert_date" : "c.id";
   const sortOrder = order === "desc" ? "DESC" : "ASC";
 
+  if (sort !== "created_at") {
+    // display_order lives in tbl_settings, so this sort is applied after loading.
+    const allRows = await query<RowDataPacket[]>(
+      `SELECT c.* FROM ${CATEGORIES_TABLE} c ${whereClause}`,
+      values
+    );
+    const extrasMap = await getCategoryExtrasMap(allRows.map((row) => Number(row.id)));
+    const counts = await packageCountsByCategory();
+    const userNames = await loadUserNameMap(allRows.map((row) => row.user_id));
+    const direction = sortOrder === "ASC" ? 1 : -1;
+    const sorted = allRows
+      .map((row) => parseCategoryRow(row, extrasMap.get(Number(row.id)), counts, userNames))
+      .sort(
+        (a, b) =>
+          (a.display_order - b.display_order || a.name.localeCompare(b.name)) * direction
+      );
+    const safeLimit = sqlLimit(limit);
+    const safePage = Math.max(page, 1);
+    const offset = sqlOffset((safePage - 1) * safeLimit);
+    return {
+      categories: sorted.slice(offset, offset + safeLimit),
+      total: sorted.length,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(sorted.length / safeLimit) || 1,
+    };
+  }
+
+  const sortColumn = "c.insert_date";
   const countRows = await query<RowDataPacket[]>(
     `SELECT COUNT(*) AS total FROM ${CATEGORIES_TABLE} c ${whereClause}`,
     values
@@ -141,8 +204,11 @@ export async function listCategories(
     values
   );
 
+  const extrasMap = await getCategoryExtrasMap(rows.map((row) => Number(row.id)));
+  const counts = await packageCountsByCategory();
+  const userNames = await loadUserNameMap(rows.map((row) => row.user_id));
   return {
-    categories: rows.map(parseCategoryRow),
+    categories: rows.map((row) => parseCategoryRow(row, extrasMap.get(Number(row.id)), counts, userNames)),
     total,
     page: safePage,
     limit: safeLimit,
@@ -152,11 +218,24 @@ export async function listCategories(
 
 export async function getCategoryById(id: number): Promise<PackageCategoryRecord | null> {
   const rows = await query<RowDataPacket[]>(
-    `SELECT * FROM ${CATEGORIES_TABLE} WHERE id = ? LIMIT 1`,
-    [id]
+    `SELECT * FROM ${CATEGORIES_TABLE} WHERE id = ? AND cat_type = ? LIMIT 1`,
+    [id, PACKAGE_CAT_TYPE]
   );
   if (!rows.length) return null;
-  return parseCategoryRow(rows[0]);
+  return parseCategoryRow(
+    rows[0],
+    await getCategoryExtras(id),
+    await packageCountsByCategory(),
+    await loadUserNameMap([rows[0].user_id])
+  );
+}
+
+function extrasFromInput(input: UpdateCategoryInput): CategoryExtras {
+  return {
+    display_order: input.display_order,
+    is_featured: input.is_featured,
+    icon_path: input.icon_path !== undefined ? input.icon_path?.trim() || null : undefined,
+  };
 }
 
 export async function createCategory(
@@ -168,7 +247,7 @@ export async function createCategory(
   if (await isNameTaken(name)) throw new Error("A category with this name already exists");
 
   const slug = await resolveCategorySlug(name, input.slug);
-  const userId = 0;
+  const userId = audit?.userId ?? 0;
 
   const result = await query<ResultSetHeader>(
     `INSERT INTO ${CATEGORIES_TABLE} (
@@ -179,17 +258,17 @@ export async function createCategory(
     [
       name,
       slug,
-      input.description?.trim() || null,
-      input.image_path?.trim() || null,
-      input.seo_meta_title?.trim() || null,
-      input.seo_meta_description?.trim() || null,
+      input.description?.trim() || "",
+      input.image_path?.trim() || "",
+      input.seo_meta_title?.trim() || "",
+      input.seo_meta_description?.trim() || "",
       PACKAGE_CAT_TYPE,
       statusToInt(input.status),
       userId,
     ]
   );
 
-  void audit;
+  await saveCategoryExtras(result.insertId, { ...extrasFromInput(input), updated_by: audit?.user });
   const created = await getCategoryById(result.insertId);
   if (!created) throw new Error("Failed to load category after create");
   return created;
@@ -198,7 +277,7 @@ export async function createCategory(
 export async function updateCategory(
   id: number,
   input: UpdateCategoryInput,
-  _audit?: PackageAuditContext
+  audit?: PackageAuditContext
 ): Promise<PackageCategoryRecord | null> {
   const existing = await getCategoryById(id);
   if (!existing) return null;
@@ -209,7 +288,10 @@ export async function updateCategory(
     throw new Error("A category with this name already exists");
   }
 
-  const slug = await resolveCategorySlug(name, input.slug ?? existing.slug, id);
+  const slug =
+    input.slug === undefined || input.slug === existing.slug
+      ? existing.slug
+      : await resolveCategorySlug(name, input.slug, id);
 
   await query<ResultSetHeader>(
     `UPDATE ${CATEGORIES_TABLE} SET
@@ -221,31 +303,37 @@ export async function updateCategory(
       meta_discription = ?,
       status = ?,
       edit_date = NOW()
-     WHERE id = ?`,
+     WHERE id = ? AND cat_type = ?`,
     [
       name,
       slug,
-      input.description !== undefined ? input.description?.trim() || null : existing.description,
-      input.image_path !== undefined ? input.image_path?.trim() || null : existing.image_path,
-      input.seo_meta_title !== undefined
+      (input.description !== undefined ? input.description?.trim() || null : existing.description) ?? "",
+      (input.image_path !== undefined ? input.image_path?.trim() || null : existing.image_path) ?? "",
+      (input.seo_meta_title !== undefined
         ? input.seo_meta_title?.trim() || null
-        : existing.seo_meta_title,
-      input.seo_meta_description !== undefined
+        : existing.seo_meta_title) ?? "",
+      (input.seo_meta_description !== undefined
         ? input.seo_meta_description?.trim() || null
-        : existing.seo_meta_description,
+        : existing.seo_meta_description) ?? "",
       input.status !== undefined ? statusToInt(input.status) : statusToInt(existing.status),
       id,
+      PACKAGE_CAT_TYPE,
     ]
   );
 
+  await saveCategoryExtras(id, { ...extrasFromInput(input), updated_by: audit?.user });
   return getCategoryById(id);
 }
 
 export async function deleteCategory(id: number): Promise<boolean> {
   const result = await query<ResultSetHeader>(
-    `UPDATE ${CATEGORIES_TABLE} SET status = 2, edit_date = NOW() WHERE id = ?`,
-    [id]
+    `DELETE FROM ${CATEGORIES_TABLE} WHERE id = ? AND cat_type = ?`,
+    [id, PACKAGE_CAT_TYPE]
   );
+  if (result.affectedRows > 0) {
+    await deleteCategoryExtras(id);
+    await removeCategoryFromPackages(id);
+  }
   return result.affectedRows > 0;
 }
 
@@ -253,13 +341,36 @@ export async function syncPackageCategories(
   packageId: number,
   categoryIds: number[]
 ): Promise<void> {
-  const uniqueIds = [...new Set(categoryIds.filter((id) => Number.isInteger(id) && id > 0))];
+  const requested = [
+    ...new Set(categoryIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)),
+  ];
+  const valid = requested.length
+    ? await query<RowDataPacket[]>(
+        `SELECT id FROM ${CATEGORIES_TABLE}
+         WHERE cat_type = ? AND id IN (${requested.map(() => "?").join(",")})`,
+        [PACKAGE_CAT_TYPE, ...requested]
+      )
+    : [];
+  const validIds = new Set(valid.map((row) => Number(row.id)));
+  const uniqueIds = requested.filter((id) => validIds.has(id));
   const payload = { id: packageId, category_ids: uniqueIds };
   const existing = await getSettingBlobById(SETTINGS_BLOB.packageCategories, packageId);
   if (existing) {
     await updateSettingBlob(SETTINGS_BLOB.packageCategories, packageId, payload);
   } else {
     await insertSettingBlob(SETTINGS_BLOB.packageCategories, `pkg_${packageId}`, payload);
+  }
+}
+
+async function removeCategoryFromPackages(categoryId: number): Promise<void> {
+  const blobs = await listSettingBlobs<{ category_ids?: number[] }>(SETTINGS_BLOB.packageCategories);
+  for (const blob of blobs) {
+    const ids = (blob.category_ids ?? []).map(Number);
+    if (!ids.includes(categoryId)) continue;
+    await updateSettingBlob(SETTINGS_BLOB.packageCategories, blob.id, {
+      id: blob.id,
+      category_ids: ids.filter((id) => id !== categoryId),
+    });
   }
 }
 
@@ -286,9 +397,9 @@ export async function getPackageCategorySummary(packageId: number): Promise<{
   const placeholders = ids.map(() => "?").join(", ");
   const rows = await query<RowDataPacket[]>(
     `SELECT id, cat_title AS name FROM ${CATEGORIES_TABLE}
-     WHERE id IN (${placeholders})
+     WHERE id IN (${placeholders}) AND cat_type = ?
      ORDER BY cat_title ASC`,
-    ids
+    [...ids, PACKAGE_CAT_TYPE]
   );
   return {
     ids: rows.map((r) => Number(r.id)),
@@ -301,7 +412,7 @@ export async function listActiveCategoryOptions(): Promise<
 > {
   const rows = await query<RowDataPacket[]>(
     `SELECT id, cat_title AS name, cat_slug AS slug FROM ${CATEGORIES_TABLE}
-     WHERE status = 1 AND (cat_type = ? OR cat_type = 'products')
+     WHERE status = 1 AND cat_type = ?
      ORDER BY cat_title ASC`,
     [PACKAGE_CAT_TYPE]
   );

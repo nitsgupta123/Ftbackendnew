@@ -1,4 +1,3 @@
-import { getStoredToken } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 import type {
   EnquiryRecord,
@@ -15,10 +14,6 @@ function apiUrl(path: string) {
 
 function requestHeaders(includeJson = false): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   if (includeJson) {
     headers["Content-Type"] = "application/json";
   }

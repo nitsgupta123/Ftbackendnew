@@ -12,6 +12,9 @@ const MIME_TYPES: Record<string, string> = {
   ".avif": "image/avif",
 };
 
+const REMOTE_FETCH_TIMEOUT_MS = 10_000;
+const REMOTE_MAX_BYTES = 15 * 1024 * 1024;
+
 function getLegacyAssetBaseUrl() {
   const base = process.env.LEGACY_ASSET_BASE_URL ?? "https://fayyaztravels.com/";
   return base.endsWith("/") ? base : `${base}/`;
@@ -56,10 +59,20 @@ function isAllowedRemoteUrl(urlString: string): boolean {
   return parsed.hostname.toLowerCase() === allowed.hostname.toLowerCase();
 }
 
+/** Files uploaded through this panel live in ./uploads and are referenced as "/uploads/...". */
+const PANEL_ROOT = process.cwd();
+
 async function readLocalAsset(assetPath: string) {
+  if (normalizeAssetPath(assetPath).startsWith("uploads/")) {
+    const own = await readAssetFromRoot(PANEL_ROOT, assetPath);
+    if (own) return own;
+  }
   const root = getLegacyAssetRootPath();
   if (!root) return null;
+  return readAssetFromRoot(root, assetPath);
+}
 
+async function readAssetFromRoot(root: string, assetPath: string) {
   const normalized = normalizeAssetPath(assetPath);
   if (!normalized || normalized.includes("\0") || normalized.split(/[/\\]/).includes("..")) {
     return null;
@@ -93,6 +106,7 @@ async function fetchRemoteAsset(sourceUrl: string) {
       "User-Agent": "ftadmin/1.0",
     },
     redirect: "error",
+    signal: AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -104,7 +118,15 @@ async function fetchRemoteAsset(sourceUrl: string) {
     return null;
   }
 
+  const declaredLength = Number(response.headers.get("content-length") ?? 0);
+  if (declaredLength > REMOTE_MAX_BYTES) {
+    return null;
+  }
+
   const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length > REMOTE_MAX_BYTES) {
+    return null;
+  }
 
   return { buffer, contentType };
 }

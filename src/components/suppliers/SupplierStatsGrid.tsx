@@ -80,10 +80,12 @@ export default function SupplierStatsGrid({
       />
       <StatCard
         label="Inactive"
-        value={format(stats?.inactive ?? 0)}
+        value={format((stats?.inactive ?? 0) + (stats?.do_not_use ?? 0))}
         icon="XCircle"
         accent="#64748B"
-        hint="Not currently in use"
+        hint={
+          busy ? "Not currently in use" : `Includes ${(stats?.do_not_use ?? 0).toLocaleString()} marked do not use`
+        }
       />
       <StatCard
         label="With Issues"

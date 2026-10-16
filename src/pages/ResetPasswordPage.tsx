@@ -10,7 +10,6 @@ import {
   resetPasswordSchema,
   type ResetPasswordFormValues,
 } from "@/lib/auth-validation";
-import { setStoredAuth } from "@/lib/auth-storage";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,8 +39,7 @@ export default function ResetPasswordPage() {
   const onSubmit = handleSubmit(async (values) => {
     setSubmitError(null);
     try {
-      const result = await resetPasswordRequest(values.token, values.password);
-      setStoredAuth(result.token, result.user);
+      await resetPasswordRequest(values.token, values.password);
       await refreshUser().catch(() => undefined);
       navigate("/", { replace: true });
     } catch (error) {

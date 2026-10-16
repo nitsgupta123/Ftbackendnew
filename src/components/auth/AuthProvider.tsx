@@ -10,14 +10,14 @@ import {
 import {
   fetchCurrentUser,
   loginRequest,
+  logoutRequest,
   signupRequest,
   verifyEmailRequest,
 } from "@/lib/auth-api";
 import {
   clearStoredAuth,
-  getStoredToken,
   getStoredUser,
-  setStoredAuth,
+  setStoredUser,
 } from "@/lib/auth-storage";
 import type {
   AdminUser,
@@ -30,7 +30,6 @@ const SESSION_CHECK_TIMEOUT_MS = 8_000;
 
 interface AuthContextValue {
   user: AdminUser | null;
-  token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (input: LoginInput) => Promise<void>;
@@ -56,30 +55,26 @@ function isUnauthorizedError(error: unknown): boolean {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const applySession = useCallback((nextToken: string, nextUser: AdminUser) => {
-    setStoredAuth(nextToken, nextUser);
-    setToken(nextToken);
+  const applySession = useCallback((nextUser: AdminUser) => {
+    setStoredUser(nextUser);
     setUser(nextUser);
   }, []);
 
   const clearSession = useCallback(() => {
     clearStoredAuth();
-    setToken(null);
     setUser(null);
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const storedToken = getStoredToken();
-    if (!storedToken) {
-      clearSession();
-      return;
+    try {
+      const { user: currentUser } = await fetchCurrentUser();
+      applySession(currentUser);
+    } catch (error) {
+      if (isUnauthorizedError(error)) clearSession();
+      throw error;
     }
-
-    const { user: currentUser } = await fetchCurrentUser();
-    applySession(storedToken, currentUser);
   }, [applySession, clearSession]);
 
   useLayoutEffect(() => {
@@ -88,35 +83,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const timeoutId = window.setTimeout(() => controller.abort(), SESSION_CHECK_TIMEOUT_MS);
 
     async function bootstrap() {
-      const storedToken = getStoredToken();
+      // Restore the cached profile before paint so RouteGuard does not stick;
+      // the httpOnly session cookie is then validated with /me.
       const cachedUser = getStoredUser();
-
-      if (!storedToken) {
-        if (!cancelled) {
-          clearSession();
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      // Restore cached session before paint so RouteGuard does not stick.
-      if (!cancelled) {
-        setToken(storedToken);
-        if (cachedUser) {
-          setUser(cachedUser);
-          setIsLoading(false);
-        }
+      if (!cancelled && cachedUser) {
+        setUser(cachedUser);
+        setIsLoading(false);
       }
 
       try {
         const { user: currentUser } = await fetchCurrentUser(controller.signal);
         if (cancelled) return;
-        applySession(storedToken, currentUser);
+        applySession(currentUser);
       } catch (error) {
         if (cancelled || isAbortError(error)) {
           return;
         }
-        if (isUnauthorizedError(error)) {
+        if (isUnauthorizedError(error) || !cachedUser) {
           clearSession();
         }
       } finally {
@@ -136,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (input: LoginInput) => {
       const result = await loginRequest(input);
-      applySession(result.token, result.user);
+      applySession(result.user);
       setIsLoading(false);
     },
     [applySession]
@@ -146,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: SignupInput) => {
       const result = await signupRequest(input);
       if (result.status === "authenticated") {
-        applySession(result.token, result.user);
+        applySession(result.user);
         setIsLoading(false);
       }
       return result;
@@ -157,13 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyEmail = useCallback(
     async (verificationToken: string) => {
       const result = await verifyEmailRequest(verificationToken);
-      applySession(result.token, result.user);
+      applySession(result.user);
       setIsLoading(false);
     },
     [applySession]
   );
 
   const logout = useCallback(() => {
+    void logoutRequest().catch(() => undefined);
     clearSession();
     setIsLoading(false);
   }, [clearSession]);
@@ -171,16 +155,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      token,
       isLoading,
-      isAuthenticated: Boolean(token && user),
+      isAuthenticated: Boolean(user),
       login,
       signup,
       verifyEmail,
       logout,
       refreshUser,
     }),
-    [user, token, isLoading, login, signup, verifyEmail, logout, refreshUser]
+    [user, isLoading, login, signup, verifyEmail, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

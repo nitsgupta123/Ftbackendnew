@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   getUserPermissions,
   resetUserPermissions,
+  saveEmployeeProfile,
   updateUserPermissions,
 } from "@/lib/permission-api";
 import { updateUser } from "@/lib/user-api";
@@ -15,20 +16,6 @@ import type {
   PermissionKey,
 } from "./types";
 import { normalizeExtended, toBasePermissions } from "./useRolePermissions";
-
-const LOCAL_STORAGE_EMPLOYEE_PROFILES = "ftadmin-employee-profiles-v1";
-const STALE_OVERRIDES_KEY = "ftadmin-employee-overrides-v1";
-
-function readLocalStorageJson<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function extendedEqual(a: ExtendedPermission, b: ExtendedPermission): boolean {
   return (
@@ -58,8 +45,6 @@ type UseEmployeeOverridesArgs = {
   allUsers: ManageableUser[];
   rolePermissions: Record<string, ExtendedPermission[]>;
   fallbackPermissions: ExtendedPermission[];
-  defaultProfiles: Record<string, EmployeeProfile>;
-  fallbackProfile?: EmployeeProfile;
   currentUserName?: string;
   currentUserId?: number;
   onPushActivity: (entry: Omit<ActivityItem, "id" | "createdAt">) => void;
@@ -69,19 +54,11 @@ type UseEmployeeOverridesArgs = {
   refreshMyPermissions: () => Promise<void>;
 };
 
-const DEFAULT_FALLBACK_PROFILE: EmployeeProfile = {
-  designation: "Executive",
-  department: "Operations",
-  accessLevel: "Standard",
-};
-
 export function useEmployeeOverrides({
   canManage,
   allUsers,
   rolePermissions,
   fallbackPermissions,
-  defaultProfiles,
-  fallbackProfile = DEFAULT_FALLBACK_PROFILE,
   currentUserName,
   currentUserId,
   onPushActivity,
@@ -90,9 +67,7 @@ export function useEmployeeOverrides({
   onUsersUpdated,
   refreshMyPermissions,
 }: UseEmployeeOverridesArgs) {
-  const [employeeProfiles, setEmployeeProfiles] = useState<Record<number, EmployeeProfile>>(() =>
-    readLocalStorageJson<Record<number, EmployeeProfile>>(LOCAL_STORAGE_EMPLOYEE_PROFILES, {})
-  );
+  const [employeeProfiles, setEmployeeProfiles] = useState<Record<number, EmployeeProfile>>({});
   const [employeeOverrides, setEmployeeOverrides] = useState<EmployeeOverrides>({});
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -102,29 +77,13 @@ export function useEmployeeOverrides({
   const [loadingAccess, setLoadingAccess] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_EMPLOYEE_PROFILES, JSON.stringify(employeeProfiles));
-  }, [employeeProfiles]);
-
-  // Clear stale local-only overrides from older builds.
-  useEffect(() => {
-    try {
-      localStorage.removeItem(STALE_OVERRIDES_KEY);
-    } catch {
-      // ignore
+  const hydrateProfiles = (stored: Record<string, EmployeeProfile>) => {
+    const next: Record<number, EmployeeProfile> = {};
+    for (const [userId, profile] of Object.entries(stored)) {
+      const id = Number(userId);
+      if (Number.isInteger(id) && id > 0) next[id] = profile;
     }
-  }, []);
-
-  const hydrateDefaultProfilesForUsers = (users: ManageableUser[]) => {
-    setEmployeeProfiles((prev) => {
-      const next = { ...prev };
-      for (const userRow of users) {
-        if (next[userRow.id]) continue;
-        const key = userRow.fullName.trim().toLowerCase();
-        next[userRow.id] = defaultProfiles[key] ?? { ...fallbackProfile };
-      }
-      return next;
-    });
+    setEmployeeProfiles(next);
   };
 
   const departmentOptions = useMemo(() => {
@@ -191,12 +150,27 @@ export function useEmployeeOverrides({
     }
   };
 
-  const updateEmployeeProfile = (userId: number, patch: Partial<EmployeeProfile>) => {
+  const updateEmployeeProfile = async (userId: number, patch: Partial<EmployeeProfile>) => {
     if (!canManage) return;
-    setEmployeeProfiles((prev) => ({
-      ...prev,
-      [userId]: { ...(prev[userId] ?? fallbackProfile), ...patch },
-    }));
+    const previous = employeeProfiles[userId] as EmployeeProfile | undefined;
+    const next: EmployeeProfile = {
+      ...({ designation: "", department: "", accessLevel: "" } as EmployeeProfile),
+      ...previous,
+      ...patch,
+    };
+    setEmployeeProfiles((prev) => ({ ...prev, [userId]: next }));
+    try {
+      const { profile } = await saveEmployeeProfile(userId, next);
+      setEmployeeProfiles((prev) => ({ ...prev, [userId]: profile }));
+    } catch (err) {
+      setEmployeeProfiles((prev) => {
+        const reverted = { ...prev };
+        if (previous) reverted[userId] = previous;
+        else delete reverted[userId];
+        return reverted;
+      });
+      onError(err instanceof Error ? err.message : "Failed to save employee profile.");
+    }
   };
 
   const updateEmployeeRole = async (userId: number, nextRole: string) => {
@@ -233,6 +207,11 @@ export function useEmployeeOverrides({
     const current =
       employeeOverrides[selectedEmployee.id]?.[moduleKey] ?? { ...roleDefaults };
     const next = { ...current, [field]: value };
+    if (field === "canCreate" || field === "canEdit" || field === "canApprove") {
+      next.canCreate = value;
+      next.canEdit = value;
+      next.canApprove = value;
+    }
     if (
       (field === "canCreate" || field === "canEdit" || field === "canDelete" || field === "canApprove") &&
       value
@@ -257,14 +236,6 @@ export function useEmployeeOverrides({
         ...prev,
         [selectedEmployee.id]: userMap,
       };
-    });
-
-    onPushActivity({
-      actor: currentUserName ?? "Super Admin",
-      employee: selectedEmployee.fullName,
-      permission: `${moduleKey} ${field.replace("can", "")}`,
-      previousAccess: current[field] ? "ON" : "OFF",
-      newAccess: next[field] ? "ON" : "OFF",
     });
   };
 
@@ -301,7 +272,14 @@ export function useEmployeeOverrides({
     setSavingAccess(true);
     try {
       const overrides = Object.values(employeeOverrides[selectedEmployee.id] ?? {});
-      await updateUserPermissions(selectedEmployee.id, toBasePermissions(overrides));
+      const result = await updateUserPermissions(selectedEmployee.id, toBasePermissions(overrides));
+      onPushActivity({
+        actor: currentUserName ?? "Super Admin",
+        employee: selectedEmployee.fullName,
+        permission: "Employee permission overrides",
+        previousAccess: "Previous overrides",
+        newAccess: `${result.overrides.length} module override(s)`,
+      });
       onSuccess("Employee permission changes saved.");
       if (currentUserId === selectedEmployee.id) {
         await refreshMyPermissions();
@@ -339,6 +317,6 @@ export function useEmployeeOverrides({
     toggleEmployeePermission,
     resetSelectedEmployeeOverrides,
     saveEmployeeAccess,
-    hydrateDefaultProfilesForUsers,
+    hydrateProfiles,
   };
 }

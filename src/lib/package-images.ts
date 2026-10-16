@@ -6,6 +6,18 @@ export function normalizeLegacyImagePath(path: string): string {
   return path.trim().replace(/^\/+/, "");
 }
 
+/**
+ * Browser src for a stored image path. Relative paths (legacy "uploads/..." or panel
+ * "/uploads/...") go through the asset route, which serves panel uploads first and
+ * falls back to the legacy site.
+ */
+export function resolveMediaSrc(path: string | null | undefined): string | undefined {
+  const trimmed = path?.trim();
+  if (!trimmed) return undefined;
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
+  return `/api/legacy-assets/${normalizeLegacyImagePath(trimmed)}`;
+}
+
 export function getLegacyAssetBaseUrl(): string {
   let fromVite: string | undefined;
   try {

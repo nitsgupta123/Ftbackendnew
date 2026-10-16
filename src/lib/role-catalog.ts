@@ -1,9 +1,10 @@
-const STORAGE_KEY = "ftadmin-known-roles-v1";
+/**
+ * Session-only cache of role keys. tbl_roles (via GET /api/permissions) is the source of
+ * truth; this only lets open screens react to role changes made elsewhere in the panel.
+ */
 export const ROLE_CATALOG_CHANGED_EVENT = "ftadmin-roles-changed";
 
-function canUseStorage(): boolean {
-  return typeof window !== "undefined";
-}
+let knownRoles: string[] = [];
 
 export function normalizeRoleKey(input: string): string {
   return input
@@ -17,39 +18,24 @@ export function isValidRoleKey(role: string): boolean {
   return /^[a-z][a-z0-9_]*$/.test(role) && role.length >= 2 && role.length <= 60;
 }
 
-export function getKnownRolesFromStorage(): string[] {
-  if (!canUseStorage()) return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return Array.from(
-      new Set(
-        parsed
-          .map((value) => normalizeRoleKey(String(value ?? "")))
-          .filter((role) => isValidRoleKey(role))
-      )
+function publish(roles: string[]): string[] {
+  knownRoles = Array.from(
+    new Set(roles.map((role) => normalizeRoleKey(role)).filter((role) => isValidRoleKey(role)))
+  );
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(ROLE_CATALOG_CHANGED_EVENT, { detail: { roles: knownRoles } })
     );
-  } catch {
-    return [];
   }
+  return knownRoles;
+}
+
+export function getKnownRolesFromStorage(): string[] {
+  return [...knownRoles];
 }
 
 export function rememberKnownRoles(roles: string[]): string[] {
-  if (!canUseStorage()) return [];
-  const merged = Array.from(
-    new Set(
-      [...getKnownRolesFromStorage(), ...roles]
-        .map((role) => normalizeRoleKey(role))
-        .filter((role) => isValidRoleKey(role))
-    )
-  );
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-  window.dispatchEvent(
-    new CustomEvent(ROLE_CATALOG_CHANGED_EVENT, { detail: { roles: merged } })
-  );
-  return merged;
+  return publish([...knownRoles, ...roles]);
 }
 
 export function rememberKnownRole(role: string): string[] {
@@ -57,32 +43,15 @@ export function rememberKnownRole(role: string): string[] {
 }
 
 export function setKnownRoles(roles: string[]): string[] {
-  if (!canUseStorage()) return [];
-  const normalized = Array.from(
-    new Set(
-      roles
-        .map((role) => normalizeRoleKey(role))
-        .filter((role) => isValidRoleKey(role))
-    )
-  );
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-  window.dispatchEvent(
-    new CustomEvent(ROLE_CATALOG_CHANGED_EVENT, { detail: { roles: normalized } })
-  );
-  return normalized;
+  return publish(roles);
 }
 
 export function forgetKnownRole(role: string): string[] {
   const roleKey = normalizeRoleKey(role);
-  return setKnownRoles(
-    getKnownRolesFromStorage().filter((knownRole) => knownRole !== roleKey)
-  );
+  return publish(knownRoles.filter((knownRole) => knownRole !== roleKey));
 }
 
 export function replaceKnownRole(currentRole: string, nextRole: string): string[] {
   const currentKey = normalizeRoleKey(currentRole);
-  return setKnownRoles([
-    ...getKnownRolesFromStorage().filter((knownRole) => knownRole !== currentKey),
-    nextRole,
-  ]);
+  return publish([...knownRoles.filter((knownRole) => knownRole !== currentKey), nextRole]);
 }

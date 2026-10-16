@@ -4,7 +4,6 @@ import type {
   SignupInput,
   SignupResult,
 } from "./auth-types";
-import { getStoredToken } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -15,10 +14,6 @@ function apiUrl(path: string) {
 
 function authHeaders(includeJson = false): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   if (includeJson) {
     headers["Content-Type"] = "application/json";
   }
@@ -57,9 +52,6 @@ export async function forgotPasswordRequest(
 ): Promise<{
   status: "ok";
   message: string;
-  bypass?: boolean;
-  resetPath?: string;
-  previewUrl?: string;
 }> {
   const response = await fetch(apiUrl("/api/auth/forgot-password"), {
     method: "POST",
@@ -89,6 +81,6 @@ export async function fetchCurrentUser(signal?: AbortSignal) {
   return parseApiResponse<{ user: AuthResponse["user"] }>(response);
 }
 
-export function getAuthHeadersForApi(): HeadersInit {
-  return authHeaders();
+export async function logoutRequest(): Promise<void> {
+  await fetch(apiUrl("/api/auth/logout"), { method: "POST" });
 }

@@ -49,6 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Settings",
     icon: "Settings",
     children: [
+      { label: "General Settings", href: "/settings/general" },
       { label: "User Management", href: "/settings/user-management" },
       { label: "Role Management", href: "/settings/role-management" },
       { label: "Access Control", href: "/settings/roles" },

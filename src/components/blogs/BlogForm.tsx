@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
 import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 const GOLD = "#A68231";
 const MAX_RELATED_PACKAGES = 20;
@@ -418,6 +419,14 @@ export default function BlogForm({
                     ref={field.ref}
                   >
                     <option value="">No category</option>
+                    {field.value != null &&
+                      !categories.some((cat) => cat.id === field.value) && (
+                        <option value={String(field.value)}>
+                          {initialData?.category_id === field.value && initialData?.category_name
+                            ? `${initialData.category_name} (inactive)`
+                            : `Category #${field.value}`}
+                        </option>
+                      )}
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name}
@@ -522,7 +531,7 @@ export default function BlogForm({
                   <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-[#F8F9FB]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={featuredImagePath}
+                      src={resolveMediaSrc(featuredImagePath)}
                       alt="Featured preview"
                       className="h-40 w-full object-cover"
                     />

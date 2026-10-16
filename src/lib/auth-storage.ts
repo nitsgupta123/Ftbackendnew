@@ -4,13 +4,8 @@ import {
 } from "./auth-config";
 import type { AdminUser } from "./auth-types";
 
-export function getStoredToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-}
-
-export function setStoredAuth(token: string, user: AdminUser): void {
-  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+/** Caches the signed-in profile for instant paint; the session itself is an httpOnly cookie. */
+export function setStoredUser(user: AdminUser): void {
   localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
 }
 

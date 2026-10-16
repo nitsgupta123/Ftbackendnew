@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import AdminShell from "@/components/layout/AdminShell";
 import ListPageHeader from "@/components/layout/ListPageHeader";
@@ -69,7 +70,7 @@ export default function PackageDashboardPage() {
         <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-100 text-sm">
           {error}
           {error === "Unauthorized" ? (
-            <> — please <a href="/login" className="underline font-medium">sign in again</a>.</>
+            <> — please <Link to="/login" className="underline font-medium">sign in again</Link>.</>
           ) : null}
         </div>
       )}

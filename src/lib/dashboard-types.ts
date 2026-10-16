@@ -19,7 +19,7 @@ export interface ChartDataPoint {
   pageViews: number;
 }
 
-export type ActivityStatus = "Published" | "Draft" | "Pending";
+export type ActivityStatus = "Published" | "Draft" | "Pending" | "Archived";
 
 export interface DashboardActivity {
   id: string;

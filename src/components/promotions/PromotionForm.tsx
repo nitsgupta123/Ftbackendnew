@@ -132,7 +132,7 @@ export default function PromotionForm({
       valid_from: toDateInput(initialData?.valid_from),
       valid_to: toDateInput(initialData?.valid_to),
       discount_type: initialData?.discount_type ?? "percentage",
-      value: initialData?.value ?? 15,
+      value: initialData?.value ?? (undefined as unknown as number),
       package_keys: initialData?.package_keys ?? [],
       is_active: initialData ? initialData.status === "active" : true,
     },

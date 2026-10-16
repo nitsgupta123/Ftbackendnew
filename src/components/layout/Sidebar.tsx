@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 
 import { Icon } from "../ui/icons";
@@ -9,7 +9,7 @@ import BrandLogo from "./BrandLogo";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
-import { NAV_HREF_MODULE } from "@/lib/permission-types";
+import { navHrefModules } from "@/lib/permission-types";
 
 function isNavPathActive(pathname: string, href: string): boolean {
   if (href === "/add-package") {
@@ -32,11 +32,6 @@ function hasActiveDescendant(pathname: string, item: NavItem): boolean {
 }
 
 function resolveModuleKey(item: NavItem): string | null {
-  if (item.href && NAV_HREF_MODULE[item.href]) {
-    return NAV_HREF_MODULE[item.href];
-  }
-  if (item.label === "Destinations") return null;
-  if (item.label === "Promotions") return null;
   if (item.label === "Blogs Management") return "blogs";
   if (item.label === "Page Management") return "pages";
   if (item.label === "Packages") return "packages";
@@ -59,8 +54,7 @@ function filterNavByPermission(
       }
 
       if (item.href) {
-        const hrefModule = NAV_HREF_MODULE[item.href];
-        if (hrefModule && !canView(hrefModule)) {
+        if (!navHrefModules(item.href).every((moduleKey) => canView(moduleKey))) {
           return null;
         }
         const { children: _omit, ...rest } = item;
@@ -93,7 +87,11 @@ function NavTreeItem({
 }) {
   const { pathname } = useLocation();
   const hasChildren = Boolean(item.children?.length);
-  const [expanded, setExpanded] = useState(() => hasActiveDescendant(pathname, item));
+  const containsActive = hasActiveDescendant(pathname, item);
+  const [expanded, setExpanded] = useState(containsActive);
+  useEffect(() => {
+    if (containsActive) setExpanded(true);
+  }, [containsActive]);
 
   const isActive =
     Boolean(item.href) &&

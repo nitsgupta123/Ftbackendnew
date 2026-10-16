@@ -168,11 +168,6 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
     return "No blog posts found. Write your first post to get started.";
   }, [search, statusFilter, authorFilter]);
 
-  const featuredOnPage = useMemo(
-    () => posts.filter((post) => post.is_featured).length,
-    [posts]
-  );
-
   const statCards = useMemo(() => {
     const busy = loading || statsLoading;
 
@@ -186,7 +181,7 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
         },
         {
           label: "Featured Posts",
-          value: busy ? "—" : featuredOnPage,
+          value: busy ? "—" : (stats?.featured ?? 0),
           icon: "Star",
         },
         {
@@ -271,7 +266,7 @@ export default function BlogsPanel({ defaultStatus, hideStatusFilter = false }: 
         icon: "Eye",
       },
     ];
-  }, [defaultStatus, loading, statsLoading, total, stats, featuredOnPage]);
+  }, [defaultStatus, loading, statsLoading, total, stats]);
 
   const createHref = "/blogs/new";
 

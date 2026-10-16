@@ -353,9 +353,9 @@ const UserManagementPanel = forwardRef<UserManagementPanelHandle>(
           {error === "Unauthorized" ? <>
               {" "}
               — please{" "}
-              <a href="/login" className="underline font-medium">
+              <Link to="/login" className="underline font-medium">
                 sign in again
-              </a>
+              </Link>
               .
             </> : null}
         </div>}

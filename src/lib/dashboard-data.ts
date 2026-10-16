@@ -8,7 +8,8 @@ export interface StatCardData {
   icon: string;
   iconBg: string;
   iconColor: string;
-  href: string;
+  /** Omitted for legacy content the panel has no module for. */
+  href?: string;
 }
 
 export interface QuickActionItem {
@@ -17,6 +18,7 @@ export interface QuickActionItem {
   href: string;
   iconBg: string;
   iconColor: string;
+  requiresEdit?: boolean;
 }
 
 export interface ActivityItem {
@@ -29,7 +31,7 @@ export interface ActivityItem {
   icon: string;
   iconBg: string;
   iconColor: string;
-  status?: "Published" | "Draft" | "Pending";
+  status?: "Published" | "Draft" | "Pending" | "Archived";
 }
 
 export interface ChartDataPoint {
@@ -59,7 +61,6 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-emerald-50",
     iconColor: "text-emerald-500",
     key: "destinations",
-    href: "/packages",
   },
   {
     label: "Total Packages",
@@ -75,7 +76,6 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-amber-50",
     iconColor: "text-amber-500",
     key: "testimonials",
-    href: "/enquiry",
   },
   {
     label: "Total Blogs",
@@ -91,7 +91,6 @@ export const STAT_CARD_CONFIG: StatCardConfig[] = [
     iconBg: "bg-red-50",
     iconColor: "text-red-500",
     key: "products",
-    href: "/packages/all",
   },
   {
     label: "Newsletter Subscribers",
@@ -110,6 +109,7 @@ export const QUICK_ACTIONS: QuickActionItem[] = [
     href: "/add-package",
     iconBg: "bg-violet-50",
     iconColor: "text-violet-500",
+    requiresEdit: true,
   },
   {
     label: "Write New Blog",
@@ -117,6 +117,7 @@ export const QUICK_ACTIONS: QuickActionItem[] = [
     href: "/blogs/new",
     iconBg: "bg-yellow-50",
     iconColor: "text-yellow-500",
+    requiresEdit: true,
   },
   {
     label: "Manage Packages",

@@ -8,6 +8,7 @@ import type { CmsPageRecord } from "@/lib/page-types";
 import { formatPackageDateTime } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 const STATUS_STYLES: Record<string, { badge: string; dot: string }> = {
   draft: {
@@ -49,7 +50,7 @@ function PageThumbnail({ page }: { page: CmsPageRecord }) {
 
   return (
     <img
-      src={page.featured_image_path}
+      src={resolveMediaSrc(page.featured_image_path)}
       alt={page.title}
       width={56}
       height={40}

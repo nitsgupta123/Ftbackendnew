@@ -130,7 +130,7 @@ export default function ReviewPublishForm({
     finalApprover,
     reviewNotes,
     submitAction,
-    publishedAt: submitAction === "publish" ? nowIsoSgt() : null
+    publishedAt: submitAction === "publish" ? nowIsoSgt() : initialData?.publishedAt ?? null
   });
 
   const handleSave = () => {

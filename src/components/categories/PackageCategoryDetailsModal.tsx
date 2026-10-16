@@ -1,6 +1,7 @@
 import { Icon } from "@/components/ui/icons";
 import type { PackageCategoryRecord } from "@/lib/category-types";
 import { formatPackageDateTime } from "@/lib/format-date";import { Button } from "@/components/ui/button";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 
 interface PackageCategoryDetailsModalProps {
@@ -42,7 +43,7 @@ export default function PackageCategoryDetailsModal({
         <div className="p-6 space-y-5">
           {imageSrc &&
           <img
-            src={imageSrc}
+            src={resolveMediaSrc(imageSrc)}
             alt={category.name}
             width={768}
             height={160}

@@ -108,7 +108,9 @@ function toHotelRows(data?: HotelEntry[] | null): HotelFormRow[] {
 }
 
 function toHotelEntries(rows: HotelFormRow[]): HotelEntry[] {
-  return rows.map(({ id: _id, ...hotel }) => hotel);
+  return rows
+    .filter((row) => String(row.hotelName ?? "").trim() || String(row.city ?? "").trim())
+    .map(({ id: _id, ...hotel }) => hotel);
 }
 
 interface HotelsFormProps extends StepFormBaseProps {

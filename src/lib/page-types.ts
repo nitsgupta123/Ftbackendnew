@@ -92,11 +92,8 @@ export const PAGE_SORT_OPTIONS = [
   { value: "title", label: "Title" },
 ] as const;
 
-export const PAGE_TYPE_OPTIONS = [
-  { value: "", label: "All types" },
-  { value: "about", label: "About" },
-  { value: "contact", label: "Contact" },
-  { value: "legal", label: "Legal" },
-  { value: "landing", label: "Landing" },
-  { value: "general", label: "General" },
-] as const;
+/** A website page template (tbl_post.post_template), sourced from tbl_settings 'template' rows. */
+export interface PageTypeOption {
+  value: string;
+  label: string;
+}

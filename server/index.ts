@@ -25,7 +25,8 @@ import { registerSettingsRoutes } from "./routes/settings";
 import { registerMediaRoutes } from "./routes/media";
 import { registerPermissionRoutes } from "./routes/permissions";
 import { registerSupplierRoutes } from "./routes/suppliers";
-import { getDbConfig, isDbConnectionError, verifyDbConnection } from "../src/lib/db";
+import { registerPromotionRoutes } from "./routes/promotions";
+import { isDbConnectionError, verifyDbConnection } from "../src/lib/db";
 import { getSafeErrorMessage } from "./lib/errors";
 import { startBlogPublishScheduler } from "./jobs/blog-publish-scheduler";
 
@@ -84,7 +85,6 @@ async function buildServer() {
   app.get("/health", async () => ({
     ok: true,
     service: "ftbackend",
-    database: getDbConfig().database,
   }));
 
   await registerAuthPlugin(app);
@@ -103,6 +103,7 @@ async function buildServer() {
   await app.register(registerMediaRoutes, { prefix: "/api/media" });
   await app.register(registerPermissionRoutes, { prefix: "/api/permissions" });
   await app.register(registerSupplierRoutes, { prefix: "/api/suppliers" });
+  await app.register(registerPromotionRoutes, { prefix: "/api/promotions" });
   await app.register(registerLegacyAssetRoutes, { prefix: "/api/legacy-assets" });
 
   if (existsSync(DIST_ROOT)) {
@@ -150,6 +151,13 @@ async function buildServer() {
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "no-referrer");
+    reply.header(
+      "Content-Security-Policy",
+      "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    );
+    if (process.env.NODE_ENV === "production") {
+      reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
     reply.header(
       "X-Robots-Tag",
       "noindex, nofollow, noarchive, nosnippet, noimageindex"

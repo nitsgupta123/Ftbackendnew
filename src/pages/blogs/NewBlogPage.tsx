@@ -33,9 +33,11 @@ export default function NewBlogPage() {
             ? "/blogs/scheduled"
             : post.status === "draft"
               ? "/blogs/drafts"
-              : post.status === "archived"
-                ? "/blogs/archived"
-                : "/blogs/all";
+              : post.status === "pending_review"
+                ? "/blogs/pending-review"
+                : post.status === "archived"
+                  ? "/blogs/archived"
+                  : "/blogs/all";
       navigate(listPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create blog post");

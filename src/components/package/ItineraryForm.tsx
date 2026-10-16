@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 interface ItineraryFormProps extends StepFormBaseProps {
   onNext: (data: ItineraryData) => void;
@@ -178,7 +179,7 @@ function DayImageUpload({
             <div className="overflow-hidden rounded-[10px] border border-[#E5E7EB] bg-white shrink-0 w-full sm:w-40">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={value}
+                src={resolveMediaSrc(value)}
                 alt="Day"
                 className="h-28 w-full object-cover"
               />

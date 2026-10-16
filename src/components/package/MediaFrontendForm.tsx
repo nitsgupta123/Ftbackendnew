@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import PackageRichTextEditor from "./PackageRichTextEditor";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 interface MediaFrontendFormProps extends StepFormBaseProps {
   onNext: (data: MediaFrontendData) => void;
@@ -102,7 +103,7 @@ function SingleUploadCard({
         <>
           <div className="mb-3 w-full overflow-hidden rounded-[8px] border border-[#F4C8D0] bg-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={value} alt={title} className="h-28 w-full object-cover" />
+            <img src={resolveMediaSrc(value)} alt={title} className="h-28 w-full object-cover" />
           </div>
           <h4 className="text-sm font-semibold text-[#1F2A44] mb-1">{title}</h4>
           {subtitle && <p className="text-xs text-[#D47786] mb-3">{subtitle}</p>}
@@ -275,7 +276,7 @@ export default function MediaFrontendForm({
         primaryCta: "Book Now",
         secondaryCta: "Speak to a Travel Consultant",
         whatsappNumber: "6594314389",
-        whatsappLink: "https://wa.me/6594314389?tex...",
+        whatsappLink: "https://wa.me/6594314389",
         desktopHeroImage: null,
         mobileHeroImage: null,
         packageCardImage: null,

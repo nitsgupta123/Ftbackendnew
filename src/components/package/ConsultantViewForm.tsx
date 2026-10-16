@@ -133,9 +133,12 @@ function ConsultantFieldCard({
 export default function ConsultantViewForm({
   onNext,
   onPrevious,
+  initialData,
   isSaving = false
 }: ConsultantViewFormProps) {
-  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [formValues, setFormValues] = useState<Record<string, string>>(
+    () => ({ ...(initialData ?? {}) }) as Record<string, string>
+  );
 
   const handleFieldChange = (key: string, value: string) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));

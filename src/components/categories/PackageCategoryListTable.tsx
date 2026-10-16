@@ -7,6 +7,7 @@ import { formatPackageDateTime } from "@/lib/format-date";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 const GOLD = "#A68231";
 
@@ -54,7 +55,7 @@ function CategoryImage({ category }: { category: PackageCategoryRecord }) {
 
   return (
     <img
-      src={src}
+      src={resolveMediaSrc(src)}
       alt={category.name}
       width={40}
       height={40}

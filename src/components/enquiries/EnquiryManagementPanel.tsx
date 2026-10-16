@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import EnquiryStatsGrid from "@/components/enquiries/EnquiryStatsGrid";
@@ -186,9 +187,9 @@ export default function EnquiryManagementPanel() {
                 <>
                   {" "}
                   — please{" "}
-                  <a href="/login" className="underline font-medium">
+                  <Link to="/login" className="underline font-medium">
                     sign in again
-                  </a>
+                  </Link>
                   .
                 </>
               ) : null}

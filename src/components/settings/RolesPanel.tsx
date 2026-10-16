@@ -1,19 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icons";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { usePermissions } from "@/components/auth/PermissionsProvider";
-import { getUserStats, listUsers } from "@/lib/user-api";
-import { getPermissions } from "@/lib/permission-api";
+import { getUserStats, listAllUsers } from "@/lib/user-api";
+import { getAccessMeta, getPermissions, recordAccessActivity } from "@/lib/permission-api";
 import { formatRoleLabel, type AdminUserStats } from "@/lib/user-types";
 import type {
   AccessModuleDefinition,
@@ -22,7 +12,9 @@ import type {
 import ActivityLogTable from "@/components/settings/access-control/ActivityLogTable";
 import EmployeeAccessDrawer from "@/components/settings/access-control/EmployeeAccessDrawer";
 import UserDesignationManagementSection from "@/components/settings/access-control/UserDesignationManagementSection";
-import RoleFormModal from "@/components/settings/access-control/RoleFormModal";
+import PermissionMatrixSection from "@/components/settings/access-control/PermissionMatrixSection";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 import type {
   ActivityItem,
   EmployeeProfile,
@@ -31,11 +23,9 @@ import type {
 } from "@/components/settings/access-control/types";
 import { normalizeExtended, useRolePermissions } from "@/components/settings/access-control/useRolePermissions";
 import { useEmployeeOverrides } from "@/components/settings/access-control/useEmployeeOverrides";
-import { nowIsoSgt } from "@/lib/format-date";
 
 const GOLD = "#A68231";
 const PROTECTED_ROLES = new Set(["owner", "super_admin"]);
-const LOCAL_STORAGE_ACTIVITY = "ftadmin-access-activity-v1";
 
 const GROUP_META: Record<
   AccessModuleGroup,
@@ -52,36 +42,6 @@ const GROUP_META: Record<
   },
 };
 
-/** Optional name-keyed profile seeds for known staff (company accounts only). */
-const DEFAULT_EMPLOYEE_PROFILES: Record<string, EmployeeProfile> = {
-  neetu: {
-    designation: "Package Manager",
-    department: "Package Department",
-    accessLevel: "Advanced",
-  },
-};
-
-const FALLBACK_EMPLOYEE_PROFILE: EmployeeProfile = {
-  designation: "Executive",
-  department: "Operations",
-  accessLevel: "Standard",
-};
-
-function readLocalStorageJson<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function nowIso(): string {
-  return nowIsoSgt();
-}
-
 export default function RolesPanel() {
   const { user } = useAuth();
   const { refresh: refreshMyPermissions } = usePermissions();
@@ -90,25 +50,23 @@ export default function RolesPanel() {
   const [stats, setStats] = useState<AdminUserStats | null>(null);
   const [allUsers, setAllUsers] = useState<ManageableUser[]>([]);
   const [modules, setModules] = useState<AccessModuleDefinition[]>([]);
-  const [activityLog, setActivityLog] = useState<ActivityItem[]>(() =>
-    readLocalStorageJson<ActivityItem[]>(LOCAL_STORAGE_ACTIVITY, [])
-  );
+  const [activityLog, setActivityLog] = useState<ActivityItem[]>([]);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const pushActivity = useCallback((entry: Omit<ActivityItem, "id" | "createdAt">) => {
-    setActivityLog((prev) => [
-      {
-        ...entry,
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        createdAt: nowIso(),
-      },
-      ...prev,
-    ]);
+    void recordAccessActivity([entry])
+      .then(({ entries }) => {
+        setActivityLog((prev) => [...entries, ...prev]);
+        setActivityError(null);
+      })
+      .catch((err: unknown) => {
+        setActivityError(err instanceof Error ? err.message : "Failed to record access activity");
+      });
   }, []);
 
   const roleState = useRolePermissions({
     canManage,
-    allUsers,
     currentUserName: user?.fullName,
     formatRoleLabel,
     refreshMyPermissions,
@@ -120,8 +78,6 @@ export default function RolesPanel() {
     allUsers,
     rolePermissions: roleState.rolePermissions,
     fallbackPermissions: roleState.rolePermissions.admin ?? roleState.draft,
-    defaultProfiles: DEFAULT_EMPLOYEE_PROFILES,
-    fallbackProfile: FALLBACK_EMPLOYEE_PROFILE,
     currentUserName: user?.fullName,
     currentUserId: user?.id,
     onPushActivity: pushActivity,
@@ -135,21 +91,21 @@ export default function RolesPanel() {
     setLoading(true);
     roleState.setError(null);
     try {
-      const [statsResult, permissionsResult, usersResult] = await Promise.all([
+      const [statsResult, permissionsResult, usersResult, accessMeta] = await Promise.all([
         getUserStats().catch(() => null),
         getPermissions(),
-        listUsers({
+        listAllUsers({
           role: "all",
           status: "all",
           sort: "created_at",
           order: "desc",
-          page: 1,
-          limit: 200,
         }),
+        getAccessMeta(),
       ]);
       if (statsResult) setStats(statsResult.stats);
       setAllUsers(usersResult.users);
-      employeeState.hydrateDefaultProfilesForUsers(usersResult.users);
+      employeeState.hydrateProfiles(accessMeta.employeeProfiles);
+      setActivityLog(accessMeta.activity);
       setModules(permissionsResult.modules);
       const mappedPermissions: Record<string, ExtendedPermission[]> = {};
       for (const matrix of permissionsResult.matrices) {
@@ -170,10 +126,6 @@ export default function RolesPanel() {
     // Intentionally load once on page open to avoid render-loop flicker.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_ACTIVITY, JSON.stringify(activityLog.slice(0, 60)));
-  }, [activityLog]);
 
   const modulesByGroup = useMemo(() => {
     const groups: AccessModuleGroup[] = ["panel", "package_builder"];
@@ -221,7 +173,7 @@ export default function RolesPanel() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
         {[
           {
             label: "Total Users",
@@ -252,12 +204,6 @@ export default function RolesPanel() {
             value: customRolesCount,
             icon: "Copy",
             accent: "#7C3AED",
-          },
-          {
-            label: "Pending Access Requests",
-            value: roleState.pendingAccessRequests,
-            icon: "AlertCircle",
-            accent: "#D97706",
           },
         ].map((item) => (
           <div
@@ -316,6 +262,59 @@ export default function RolesPanel() {
         )}
 
         <div className="p-5 space-y-6">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-[#1F2A44]">Role Permissions</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Default access for everyone assigned to the selected role.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <NativeSelect
+                  value={roleState.selectedRole}
+                  className="h-9 min-w-[180px] border-[#E5E7EB]"
+                  onChange={(e) => roleState.applyRole(e.target.value)}
+                >
+                  {roleState.availableRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {formatRoleLabel(role)}
+                    </option>
+                  ))}
+                </NativeSelect>
+                {canManage && !PROTECTED_ROLES.has(roleState.selectedRole) && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={roleState.saving}
+                      onClick={() => void roleState.resetDefaults()}
+                    >
+                      Reset to defaults
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={roleState.saving || !roleState.dirty}
+                      onClick={() => void roleState.save()}
+                      className="bg-[#A68231] hover:bg-[#8F6F28] text-white"
+                    >
+                      {roleState.saving ? "Saving…" : "Save role permissions"}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            <PermissionMatrixSection
+              canManage={canManage && !PROTECTED_ROLES.has(roleState.selectedRole)}
+              saving={roleState.saving}
+              loading={loading}
+              modulesByGroup={modulesByGroup}
+              draftMap={roleState.draftMap}
+              onToggleAllInGroup={roleState.toggleAllInGroup}
+              onSetPermission={roleState.setPermission}
+            />
+          </div>
+
           <UserDesignationManagementSection
             canManage={canManage}
             search={employeeState.search}
@@ -328,7 +327,9 @@ export default function RolesPanel() {
             onSearchChange={employeeState.setSearch}
             onRoleFilterChange={employeeState.setRoleFilter}
             onStatusFilterChange={employeeState.setStatusFilter}
-            onProfileChange={employeeState.updateEmployeeProfile}
+            onProfileChange={(userId, patch) => {
+              void employeeState.updateEmployeeProfile(userId, patch);
+            }}
             onRoleChange={(userId, role) => {
               void employeeState.updateEmployeeRole(userId, role);
             }}
@@ -339,6 +340,11 @@ export default function RolesPanel() {
 
         </div>
 
+        {activityError && (
+          <div className="mx-5 mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {activityError}
+          </div>
+        )}
         <ActivityLogTable activityLog={activityLog} />
 
         <div className="px-5 py-3 border-t border-[#E8ECF0] bg-[#FAFBFC] text-xs text-gray-500 flex flex-wrap items-center justify-between gap-2">
@@ -372,44 +378,6 @@ export default function RolesPanel() {
           void employeeState.saveEmployeeAccess();
         }}
       />
-
-      <RoleFormModal
-        open={roleState.roleModalOpen}
-        editingRoleKey={roleState.editingRoleKey}
-        roleForm={roleState.roleForm}
-        allUsers={allUsers}
-        onClose={() => roleState.setRoleModalOpen(false)}
-        onRoleFormChange={roleState.setRoleForm}
-        onSubmit={() => {
-          void roleState.submitRoleModal().then(() => reloadData());
-        }}
-      />
-
-      <AlertDialog open={Boolean(roleState.deleteRoleKey)} onOpenChange={(open) => !open && roleState.setDeleteRoleKey(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete role?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {roleState.deleteRoleKey
-                ? `This will remove ${formatRoleLabel(roleState.deleteRoleKey)}. Assigned users: ${
-                    allUsers.filter((userRow) => userRow.role === roleState.deleteRoleKey).length
-                  }. Protected roles cannot be deleted.`
-                : "Confirm role deletion."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                void roleState.deleteRole(PROTECTED_ROLES);
-              }}
-            >
-              Remove Role
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

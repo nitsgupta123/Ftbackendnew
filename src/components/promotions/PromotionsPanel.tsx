@@ -4,25 +4,24 @@ import PromotionListTable from "@/components/promotions/PromotionListTable";
 import PromotionForm, { type PromotionFormValues } from "@/components/promotions/PromotionForm";
 import { listAllPackages } from "@/lib/package-api";
 import {
-  SAMPLE_PROMOTIONS,
+  createPromotion,
+  deletePromotion,
+  listPromotions,
+  setPromotionStatus,
+  updatePromotion,
+} from "@/lib/promotion-api";
+import {
   packageOptionKey,
+  type PromotionInput,
   type PromotionPackageOption,
   type PromotionRecord,
 } from "@/lib/promotion-types";
 import { Button } from "@/components/ui/button";
-import { nowIsoSgt } from "@/lib/format-date";
 
 type FormMode = "create" | "edit" | null;
 
-let nextId = SAMPLE_PROMOTIONS.length + 1;
-
-function formValuesToRecord(
-  data: PromotionFormValues,
-  existing?: PromotionRecord | null
-): PromotionRecord {
-  const now = nowIsoSgt();
+function formValuesToInput(data: PromotionFormValues): PromotionInput {
   return {
-    id: existing?.id ?? nextId++,
     title: data.title.trim(),
     valid_from: data.valid_from || null,
     valid_to: data.valid_to || null,
@@ -30,9 +29,11 @@ function formValuesToRecord(
     value: data.value,
     package_keys: data.package_keys,
     status: data.is_active ? "active" : "inactive",
-    created_at: existing?.created_at ?? now,
-    updated_at: now,
   };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export interface PromotionsPanelHandle {
@@ -40,12 +41,26 @@ export interface PromotionsPanelHandle {
 }
 
 const PromotionsPanel = forwardRef<PromotionsPanelHandle>(function PromotionsPanel(_, ref) {
-  const [promotions, setPromotions] = useState<PromotionRecord[]>(SAMPLE_PROMOTIONS);
+  const [promotions, setPromotions] = useState<PromotionRecord[]>([]);
+  const [promotionsLoading, setPromotionsLoading] = useState(true);
   const [packageOptions, setPackageOptions] = useState<PromotionPackageOption[]>([]);
   const [packagesLoading, setPackagesLoading] = useState(true);
   const [formMode, setFormMode] = useState<FormMode>(null);
   const [editingPromotion, setEditingPromotion] = useState<PromotionRecord | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPromotions = useCallback(async () => {
+    setPromotionsLoading(true);
+    try {
+      const { promotions: rows } = await listPromotions();
+      setPromotions(rows);
+    } catch (err) {
+      setError(errorMessage(err, "Failed to load promotions"));
+    } finally {
+      setPromotionsLoading(false);
+    }
+  }, []);
 
   const loadPackages = useCallback(async () => {
     setPackagesLoading(true);
@@ -60,12 +75,9 @@ const PromotionsPanel = forwardRef<PromotionsPanelHandle>(function PromotionsPan
           }))
           .sort((a, b) => a.label.localeCompare(b.label))
       );
-    } catch {
-      setPackageOptions([
-        { key: "wizard:1", label: "9 Days Japan Golden Route with Hiroshima & Mount Fuji from Osaka" },
-        { key: "wizard:2", label: "9 Days Kazakhstan & Kyrgyzstan Romantic Honeymoon Tour" },
-        { key: "wizard:3", label: "9 Days Melbourne and Sydney Highlights Tour" },
-      ]);
+    } catch (err) {
+      setPackageOptions([]);
+      setError(errorMessage(err, "Failed to load packages"));
     } finally {
       setPackagesLoading(false);
     }
@@ -73,9 +85,10 @@ const PromotionsPanel = forwardRef<PromotionsPanelHandle>(function PromotionsPan
 
   useEffect(() => {
     queueMicrotask(() => {
+      void loadPromotions();
       void loadPackages();
     });
-  }, [loadPackages]);
+  }, [loadPackages, loadPromotions]);
 
   function openCreate() {
     setEditingPromotion(null);
@@ -98,55 +111,71 @@ const PromotionsPanel = forwardRef<PromotionsPanelHandle>(function PromotionsPan
 
   async function handleFormSubmit(data: PromotionFormValues) {
     setIsSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
-    const record = formValuesToRecord(data, editingPromotion);
-
-    if (formMode === "edit" && editingPromotion) {
-      setPromotions((prev) =>
-        prev.map((item) => (item.id === editingPromotion.id ? record : item))
-      );
-    } else {
-      setPromotions((prev) => [record, ...prev]);
-    }
-
-    setIsSaving(false);
-    setFormMode(null);
-    setEditingPromotion(null);
-  }
-
-  function handleToggleStatus(promotion: PromotionRecord) {
-    setPromotions((prev) =>
-      prev.map((item) =>
-        item.id === promotion.id
-          ? {
-              ...item,
-              status: item.status === "active" ? "inactive" : "active",
-              updated_at: nowIsoSgt(),
-            }
-          : item
-      )
-    );
-  }
-
-  function handleDelete(promotion: PromotionRecord) {
-    if (!window.confirm(`Delete "${promotion.title}"? This cannot be undone.`)) return;
-    setPromotions((prev) => prev.filter((item) => item.id !== promotion.id));
-    if (editingPromotion?.id === promotion.id) {
+    setError(null);
+    try {
+      const input = formValuesToInput(data);
+      if (formMode === "edit" && editingPromotion) {
+        const { promotion } = await updatePromotion(editingPromotion.id, input);
+        setPromotions((prev) => prev.map((item) => (item.id === promotion.id ? promotion : item)));
+      } else {
+        const { promotion } = await createPromotion(input);
+        setPromotions((prev) => [promotion, ...prev]);
+      }
       setFormMode(null);
       setEditingPromotion(null);
+    } catch (err) {
+      setError(errorMessage(err, "Failed to save promotion"));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleToggleStatus(promotion: PromotionRecord) {
+    setError(null);
+    try {
+      const { promotion: updated } = await setPromotionStatus(
+        promotion.id,
+        promotion.status === "active" ? "inactive" : "active"
+      );
+      setPromotions((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (err) {
+      setError(errorMessage(err, "Failed to update promotion status"));
+    }
+  }
+
+  async function handleDelete(promotion: PromotionRecord) {
+    if (!window.confirm(`Delete "${promotion.title}"? This cannot be undone.`)) return;
+    setError(null);
+    try {
+      await deletePromotion(promotion.id);
+      setPromotions((prev) => prev.filter((item) => item.id !== promotion.id));
+      if (editingPromotion?.id === promotion.id) {
+        setFormMode(null);
+        setEditingPromotion(null);
+      }
+    } catch (err) {
+      setError(errorMessage(err, "Failed to delete promotion"));
     }
   }
 
   return (
     <>
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
       <div className="rounded-xl border border-[#E5E7EB] bg-white shadow-sm overflow-hidden">
-        <PromotionListTable
-          promotions={promotions}
-          onEdit={openEdit}
-          onToggleStatus={handleToggleStatus}
-          onDelete={handleDelete}
-        />
+        {promotionsLoading ? (
+          <div className="px-5 py-10 text-center text-sm text-gray-500">Loading promotions…</div>
+        ) : (
+          <PromotionListTable
+            promotions={promotions}
+            onEdit={openEdit}
+            onToggleStatus={handleToggleStatus}
+            onDelete={handleDelete}
+          />
+        )}
       </div>
 
       {formMode && (
@@ -167,6 +196,7 @@ const PromotionsPanel = forwardRef<PromotionsPanelHandle>(function PromotionsPan
           </div>
           <div className="p-5">
             <PromotionForm
+              key={editingPromotion?.id ?? "new"}
               initialData={editingPromotion}
               packageOptions={packageOptions}
               packagesLoading={packagesLoading}

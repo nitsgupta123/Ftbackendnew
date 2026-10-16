@@ -1,10 +1,11 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import AuthLayout from "@/components/auth/AuthLayout";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { FORGOT_PASSWORD_PATH } from "@/lib/auth-paths";
 import { loginSchema, type LoginFormValues } from "@/lib/auth-validation";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -69,9 +70,17 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <Label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Password
-          </Label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <Label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password
+            </Label>
+            <Link
+              to={FORGOT_PASSWORD_PATH}
+              className="text-sm font-medium text-[#1F2A44] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <div className="relative">
             <Input
               id="password"

@@ -28,6 +28,7 @@ import { isEmailConfigured, sendMail } from "../../src/lib/email";
 import { isValidEmail, parseEmailList } from "../../src/lib/email-list";
 import { buildQuoteEmailAttachments } from "../../src/lib/package-quote-attachment";
 import { withQuoteEmailSignature } from "../../src/lib/supplier-quote-email";
+import { requireModuleAccess } from "../lib/audit";
 
 const VALID_STATUSES: PackageStatus[] = [
   "draft",
@@ -46,14 +47,18 @@ function parseStatus(value?: string): PackageStatus | undefined {
 
 function getRequestAudit(request: FastifyRequest) {
   if (request.user?.name) {
-    return { user: request.user.name };
+    const userId = Number(request.user.sub);
+    return { user: request.user.name, userId: Number.isInteger(userId) && userId > 0 ? userId : undefined };
   }
   return auditContextFromHeader(request.headers[AUDIT_USER_HEADER]);
 }
 
 const sendSupplierQuoteSchema = z.object({
-  to: z.array(z.string().trim().email()).min(1, "At least one recipient is required"),
-  additionalTo: z.array(z.string().trim().email()).optional().default([]),
+  to: z
+    .array(z.string().trim().email())
+    .min(1, "At least one recipient is required")
+    .max(20, "At most 20 recipients"),
+  additionalTo: z.array(z.string().trim().email()).max(20, "At most 20 recipients").optional().default([]),
   subject: z.string().trim().min(1, "Subject is required").max(500),
   body: z.string().trim().min(1, "Email body is required").max(20000),
   emailSignature: z.string().max(2000).optional(),
@@ -62,6 +67,7 @@ const sendSupplierQuoteSchema = z.object({
 
 export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("packages"));
 
   app.get("/stats", async (_request, reply) => {
     try {
@@ -111,7 +117,9 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get("/combined", async (_request, reply) => {
+  const packagePickerRoute = { config: { permissionModule: ["packages", "blogs"] } };
+
+  app.get("/combined", packagePickerRoute, async (_request, reply) => {
     try {
       const packages = await listAllPackages();
       return reply.send({ packages });
@@ -135,7 +143,7 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.get("/", async (request, reply) => {
+  app.get("/", packagePickerRoute, async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
       const parsedStatus = parseStatus(status);
@@ -230,7 +238,8 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  app.post("/:id/supplier-quotes/send", async (request, reply) => {
+  const supplierQuoteRoute = { config: { permissionModule: "supplier_quote_tool" } };
+  app.post("/:id/supplier-quotes/send", supplierQuoteRoute, async (request, reply) => {
     try {
       if (!isEmailConfigured()) {
         return reply.status(503).send({

@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcrypt";
 import { BCRYPT_ROUNDS } from "./auth-config";
 import { query, sqlLimit, sqlOffset, type QueryParam } from "./db";
@@ -124,7 +124,8 @@ async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-export async function resolveRoleTypeId(role: string): Promise<string> {
+/** Existing tbl_roles id for a role key, without creating one. */
+export async function findRoleTypeId(role: string): Promise<string | null> {
   const key = normalizeRoleKey(role);
   if (key === "super_admin" || key === "superadmin") return "1";
   if (key === "admin") return "2";
@@ -137,6 +138,12 @@ export async function resolveRoleTypeId(role: string): Promise<string> {
       return String(row.id);
     }
   }
+  return null;
+}
+
+export async function resolveRoleTypeId(role: string): Promise<string> {
+  const existing = await findRoleTypeId(role);
+  if (existing) return existing;
 
   // Create a matching legacy role row so user_type stays an id.
   const label = role
@@ -157,12 +164,25 @@ const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 /** Kept short so `pwreset_` + hex fits in email_verification_token VARCHAR(64). */
 const PASSWORD_RESET_PREFIX = "pr_";
 
+/** Only the SHA-256 of a verification token is stored (64 hex chars fits VARCHAR(64)). */
+function hashVerificationToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+/** "pr_" + base64url SHA-256 = 46 chars, fits VARCHAR(64). */
+function hashResetToken(token: string): string {
+  return `${PASSWORD_RESET_PREFIX}${createHash("sha256").update(token, "utf8").digest("base64url")}`;
+}
+
 export function createEmailVerificationToken(): {
   token: string;
+  storedToken: string;
   expiresAt: Date;
 } {
+  const token = randomBytes(32).toString("hex");
   return {
-    token: randomBytes(32).toString("hex"),
+    token,
+    storedToken: hashVerificationToken(token),
     expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
   };
 }
@@ -172,11 +192,10 @@ export function createPasswordResetToken(): {
   storedToken: string;
   expiresAt: Date;
 } {
-  // 16 bytes → 32 hex; with "pr_" prefix = 35 chars (fits VARCHAR(64))
-  const token = randomBytes(16).toString("hex");
+  const token = randomBytes(32).toString("hex");
   return {
     token,
-    storedToken: `${PASSWORD_RESET_PREFIX}${token}`,
+    storedToken: hashResetToken(token),
     expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
   };
 }
@@ -275,9 +294,13 @@ export async function listAdminUsers(
   }
 
   if (params.role && params.role !== "all") {
-    const roleTypeId = await resolveRoleTypeId(params.role);
-    conditions.push("u.user_type = ?");
-    values.push(roleTypeId);
+    const roleTypeId = await findRoleTypeId(params.role);
+    if (roleTypeId) {
+      conditions.push("u.user_type = ?");
+      values.push(roleTypeId);
+    } else {
+      conditions.push("1 = 0");
+    }
   }
 
   if (params.status === "active") {
@@ -358,8 +381,10 @@ export async function updateAdminUser(
   const sets: string[] = [];
   const values: QueryParam[] = [];
 
-  if (input.fullName !== undefined) {
-    const parts = input.fullName.trim().split(/\s+/);
+  const nextName = input.fullName?.trim().replace(/\s+/g, " ");
+  const currentName = nextName ? (await findAdminUserById(id))?.fullName.replace(/\s+/g, " ") : undefined;
+  if (nextName && nextName !== currentName) {
+    const parts = nextName.split(" ");
     const firstName = parts[0] ?? "";
     const lastName = parts.slice(1).join(" ");
     sets.push("first_name = ?", "last_name = ?");
@@ -407,7 +432,7 @@ export async function createAdminUserByAdmin(
   const passwordHash = await hashPassword(input.password);
   const role = input.role ?? "admin";
   const activate = Boolean(input.activateImmediately);
-  const { token, expiresAt } = createEmailVerificationToken();
+  const { token, storedToken, expiresAt } = createEmailVerificationToken();
   const userType = await resolveRoleTypeId(role);
   const fullName = input.fullName.trim();
   const parts = fullName.split(/\s+/);
@@ -416,7 +441,7 @@ export async function createAdminUserByAdmin(
 
   const status = activate ? 1 : 0;
   const emailVerified = activate ? 1 : 0;
-  const verificationToken = activate ? null : token;
+  const verificationToken = activate ? null : storedToken;
   const verificationExpires = activate ? null : expiresAt;
 
   const existing = await findAdminByEmail(email);
@@ -558,7 +583,7 @@ export async function refreshEmailVerificationToken(
     return null;
   }
 
-  const { token, expiresAt } = createEmailVerificationToken();
+  const { token, storedToken, expiresAt } = createEmailVerificationToken();
   await query(
     `UPDATE ${USERS_TABLE}
      SET email_verification_token = ?,
@@ -567,7 +592,7 @@ export async function refreshEmailVerificationToken(
          email_verified = 0,
          edit_date = NOW()
      WHERE id = ?`,
-    [token, expiresAt, row.id]
+    [storedToken, expiresAt, row.id]
   );
 
   return {
@@ -595,7 +620,7 @@ export async function verifyAdminEmailByToken(token: string): Promise<AdminUser 
      WHERE u.email_verification_token = ?
        AND ${adminUserTypeFilter("u")}
      LIMIT 1`,
-    [normalized]
+    [hashVerificationToken(normalized)]
   );
   const row = rows[0];
   if (!row) return null;
@@ -662,9 +687,7 @@ export async function resetAdminPasswordByToken(
   const normalized = token.trim();
   if (!normalized) return null;
 
-  const storedToken = normalized.startsWith(PASSWORD_RESET_PREFIX)
-    ? normalized
-    : `${PASSWORD_RESET_PREFIX}${normalized}`;
+  const storedToken = hashResetToken(normalized);
 
   const rows = await query<TblUserRow[]>(
     `${USER_SELECT}
@@ -700,12 +723,28 @@ export async function resetAdminPasswordByToken(
   return findAdminById(mapped.id);
 }
 
+function isBcryptHash(stored: string): boolean {
+  return stored.startsWith("$2a$") || stored.startsWith("$2b$") || stored.startsWith("$2y$");
+}
+
 async function passwordMatches(stored: string, password: string): Promise<boolean> {
   if (!stored) return false;
-  if (stored.startsWith("$2a$") || stored.startsWith("$2b$") || stored.startsWith("$2y$")) {
+  if (isBcryptHash(stored)) {
     return bcrypt.compare(password, stored);
   }
-  return stored.toLowerCase() === md5(password);
+  const expected = Buffer.from(stored.toLowerCase(), "utf8");
+  const actual = Buffer.from(md5(password), "utf8");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+/** Re-hashes a legacy MD5 password with bcrypt after a successful login. */
+export async function upgradeLegacyPasswordHash(
+  row: AdminUserRow,
+  password: string
+): Promise<void> {
+  if (!row.password_hash || isBcryptHash(row.password_hash)) return;
+  const passwordHash = await hashPassword(password);
+  await query(`UPDATE ${USERS_TABLE} SET password = ? WHERE id = ?`, [passwordHash, row.id]);
 }
 
 export async function verifyAdminPassword(
@@ -729,16 +768,31 @@ export async function createAdminUser(input: SignupInput): Promise<AdminUser> {
   return createBootstrapAdminUser(input);
 }
 
+/**
+ * Short digest of the stored password hash, embedded in session tokens. Any password
+ * change (reset, admin edit, MD5→bcrypt upgrade) changes it and invalidates old sessions.
+ */
+export async function getAdminSessionFingerprint(id: number): Promise<string | null> {
+  const rows = await query<RowDataPacket[]>(
+    `SELECT password FROM ${USERS_TABLE} WHERE id = ? LIMIT 1`,
+    [id]
+  );
+  const stored = rows[0]?.password;
+  if (typeof stored !== "string" || !stored) return null;
+  return createHash("sha256").update(stored, "utf8").digest("base64url").slice(0, 22);
+}
+
 export async function touchAdminLastLogin(id: number): Promise<void> {
   await query(`UPDATE ${USERS_TABLE} SET login_date = NOW() WHERE id = ?`, [id]);
 }
 
-export function toAuthTokenPayload(user: AdminUser): AuthTokenPayload {
+export async function toAuthTokenPayload(user: AdminUser): Promise<AuthTokenPayload> {
   return {
     sub: user.id,
     email: user.email,
     name: user.fullName,
     role: user.role,
+    pwv: (await getAdminSessionFingerprint(user.id)) ?? "",
   };
 }
 

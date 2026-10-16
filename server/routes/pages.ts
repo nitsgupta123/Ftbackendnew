@@ -6,11 +6,12 @@ import {
   getPageById,
   getPageStats,
   listPages,
+  listPageTypes,
   updatePage,
 } from "../../src/lib/page-repository";
 import type { ListPagesParams, PageStatus } from "../../src/lib/page-types";
 import { createPageSchema, updatePageSchema } from "../../src/lib/validation";
-import { getRequestAudit, requireSuperAdmin } from "../lib/audit";
+import { getRequestAudit, requireModuleAccess, requireSuperAdmin } from "../lib/audit";
 
 const VALID_STATUSES: PageStatus[] = ["draft", "published", "archived"];
 
@@ -21,6 +22,7 @@ function parseStatus(value?: string): PageStatus | "all" | undefined {
 
 export const registerPageRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("pages"));
 
   app.get("/stats", async (_request, reply) => {
     try {
@@ -30,6 +32,18 @@ export const registerPageRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error: getSafeErrorMessage(error, "Failed to load page stats"),
+      });
+    }
+  });
+
+  app.get("/types", async (_request, reply) => {
+    try {
+      const types = await listPageTypes();
+      return reply.send({ types });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to load page types"),
       });
     }
   });

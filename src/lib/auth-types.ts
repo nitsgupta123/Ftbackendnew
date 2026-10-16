@@ -31,6 +31,8 @@ export interface AuthTokenPayload {
   email: string;
   name: string;
   role: AdminRole;
+  /** Password fingerprint; sessions are rejected once it no longer matches. */
+  pwv: string;
 }
 
 export interface SignupInput {
@@ -44,8 +46,8 @@ export interface LoginInput {
   password: string;
 }
 
+/** The session token itself is set as an httpOnly cookie, never exposed to JS. */
 export interface AuthResponse {
-  token: string;
   user: AdminUser;
 }
 
@@ -53,7 +55,6 @@ export interface SignupPendingResponse {
   status: "pending_verification";
   email: string;
   message: string;
-  previewUrl?: string;
 }
 
 export interface SignupAuthenticatedResponse extends AuthResponse {

@@ -144,9 +144,9 @@ export default function RoleManagementSection({
                   </td>
                   <td className="px-2 py-2 text-[#1F2A44]">{usersByRole.get(role) ?? 0}</td>
                   <td className="px-2 py-2 text-gray-600">{meta?.description ?? "—"}</td>
-                  <td className="px-2 py-2 text-gray-600">{meta?.department ?? "General"}</td>
+                  <td className="px-2 py-2 text-gray-600">{meta?.department || "General"}</td>
                   <td className="px-2 py-2 text-gray-600">
-                    {meta?.designation ?? "Team Member"}
+                    {meta?.designation || "Team Member"}
                   </td>
                   <td className="px-2 py-2 text-gray-600">{meta?.createdBy ?? "System"}</td>
                   <td className="px-2 py-2 text-gray-600">{createdDate}</td>

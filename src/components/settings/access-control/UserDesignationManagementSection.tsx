@@ -132,13 +132,14 @@ export default function UserDesignationManagementSection({
                     </td>
                     <td className="px-3 py-2.5">
                       <NativeSelect
-                        value={profile?.accessLevel ?? "Standard"}
+                        value={profile?.accessLevel ?? ""}
                         className="h-8 border-[#E5E7EB]"
                         disabled={!canManage}
                         onChange={(e) =>
                           onProfileChange(userRow.id, { accessLevel: e.target.value })
                         }
                       >
+                        <option value="">—</option>
                         <option value="Standard">Standard</option>
                         <option value="Advanced">Advanced</option>
                         <option value="Restricted">Restricted</option>

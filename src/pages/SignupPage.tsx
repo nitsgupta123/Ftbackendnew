@@ -18,7 +18,6 @@ export default function SignupPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const {
@@ -38,7 +37,6 @@ export default function SignupPage() {
     setSubmitError(null);
     setPendingEmail(null);
     setPendingMessage(null);
-    setPreviewUrl(null);
     try {
       const result = await signup({
         fullName: values.fullName,
@@ -48,7 +46,6 @@ export default function SignupPage() {
       if (result.status === "pending_verification") {
         setPendingEmail(result.email);
         setPendingMessage(result.message);
-        setPreviewUrl(result.previewUrl ?? null);
         return;
       }
       navigate("/", { replace: true });
@@ -79,19 +76,6 @@ export default function SignupPage() {
           <p>
             Sent to <span className="font-medium text-[#1F2A44]">{pendingEmail}</span>
           </p>
-          {previewUrl && (
-            <p className="text-xs text-gray-500 break-all">
-              Dev preview:{" "}
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#1F2A44] underline"
-              >
-                {previewUrl}
-              </a>
-            </p>
-          )}
         </div>
       </AuthLayout>
     );

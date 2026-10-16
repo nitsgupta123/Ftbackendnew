@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getSettings, updateSettings } from "@/lib/settings-api";
 import type { UpdateAdminSettingsInput } from "@/lib/settings-types";
 import { formatPackageDateTime } from "@/lib/format-date";
+import { usePermissions } from "@/components/auth/PermissionsProvider";
 
 const fieldClass =
   "h-10 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#A68231]/25 focus:border-[#A68231] transition-colors";
@@ -26,6 +27,8 @@ const initialForm: UpdateAdminSettingsInput = {
 };
 
 export default function SettingsGeneralPanel() {
+  const { can } = usePermissions();
+  const canEdit = can("settings", "edit");
   const [form, setForm] = useState<UpdateAdminSettingsInput>(initialForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -74,7 +77,7 @@ export default function SettingsGeneralPanel() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const disabled = loading || saving;
+  const disabled = loading || saving || !canEdit;
 
   const saveSettings = async () => {
     setSaving(true);
@@ -134,6 +137,7 @@ export default function SettingsGeneralPanel() {
               Configure brand identity, contact details, homepage metadata, and system mode.
             </p>
           </div>
+          {canEdit && (
           <Button
             type="button"
             onClick={saveSettings}
@@ -152,6 +156,7 @@ export default function SettingsGeneralPanel() {
               </>
             )}
           </Button>
+          )}
         </div>
       </div>
 
@@ -175,6 +180,7 @@ export default function SettingsGeneralPanel() {
           <label className="text-sm font-medium text-gray-700">Site Name</label>
           <Input
             value={form.site_name}
+            maxLength={255}
             onChange={(e) => updateField("site_name", e.target.value)}
             className={fieldClass}
             disabled={disabled}
@@ -185,6 +191,7 @@ export default function SettingsGeneralPanel() {
           <label className="text-sm font-medium text-gray-700">Company Name</label>
           <Input
             value={form.company_name}
+            maxLength={255}
             onChange={(e) => updateField("company_name", e.target.value)}
             className={fieldClass}
             disabled={disabled}
@@ -196,6 +203,7 @@ export default function SettingsGeneralPanel() {
           <Input
             type="email"
             value={form.support_email}
+            maxLength={255}
             onChange={(e) => updateField("support_email", e.target.value)}
             className={fieldClass}
             disabled={disabled}
@@ -206,6 +214,7 @@ export default function SettingsGeneralPanel() {
           <label className="text-sm font-medium text-gray-700">Support Phone</label>
           <Input
             value={form.support_phone}
+            maxLength={255}
             onChange={(e) => updateField("support_phone", e.target.value)}
             className={fieldClass}
             disabled={disabled}
@@ -226,6 +235,7 @@ export default function SettingsGeneralPanel() {
           <label className="text-sm font-medium text-gray-700">Homepage Title</label>
           <Input
             value={form.homepage_title}
+            maxLength={255}
             onChange={(e) => updateField("homepage_title", e.target.value)}
             className={fieldClass}
             disabled={disabled}
@@ -247,6 +257,7 @@ export default function SettingsGeneralPanel() {
           <label className="text-sm font-medium text-gray-700">Homepage Description</label>
           <Textarea
             value={form.homepage_description}
+            maxLength={255}
             onChange={(e) => updateField("homepage_description", e.target.value)}
             className="min-h-[110px] rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 shadow-sm focus-visible:ring-[#A68231]/25 focus-visible:border-[#A68231]"
             disabled={disabled}
@@ -258,7 +269,7 @@ export default function SettingsGeneralPanel() {
           <div>
             <p className="text-sm font-medium text-[#1F2A44]">Maintenance Mode</p>
             <p className="text-xs text-gray-500 mt-1">
-              Turn on to temporarily signal frontend maintenance windows.
+              Saved for the admin panel only. The public website does not read this flag.
             </p>
           </div>
           <Switch

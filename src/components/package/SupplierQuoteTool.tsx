@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "../ui/icons";
-import type { SupplierQuoteToolData } from "@/lib/package-types";
+import type { PackageRecord, SupplierQuoteToolData } from "@/lib/package-types";
 import type { SupplierPackageFile } from "@/lib/validation";
 import {
   saveButtonLabel,
@@ -43,6 +43,7 @@ interface SupplierQuoteToolProps extends StepFormBaseProps {
   packageId?: number | null;
   packageTitle?: string;
   destination?: string;
+  onSent?: (pkg: PackageRecord) => void;
 }
 
 type QuoteFormState = Required<
@@ -169,6 +170,7 @@ export default function SupplierQuoteTool({
   packageId,
   packageTitle = "",
   destination = "",
+  onSent,
 }: SupplierQuoteToolProps) {
   const { user } = useAuth();
   const loginSignature = useMemo(
@@ -197,6 +199,7 @@ export default function SupplierQuoteTool({
   const [sending, setSending] = useState(false);
   const [lastSentAt, setLastSentAt] = useState(initialData?.lastSentAt ?? "");
   const [lastSentBy, setLastSentBy] = useState(initialData?.lastSentBy ?? "");
+  const [lastSentTo, setLastSentTo] = useState(initialData?.lastSentTo);
 
   const sourceFiles = useMemo(
     () => supplierSource?.quotationFiles ?? [],
@@ -227,6 +230,7 @@ export default function SupplierQuoteTool({
     setSignatureEdited(Boolean(initialData?.emailSignature?.trim()));
     setLastSentAt(initialData?.lastSentAt ?? "");
     setLastSentBy(initialData?.lastSentBy ?? "");
+    setLastSentTo(initialData?.lastSentTo);
     // loginSignature is applied separately so a late user load does not reset the form.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [initialData, supplierSource, destination]);
@@ -361,7 +365,7 @@ export default function SupplierQuoteTool({
     emailSignature: formData.emailSignature,
     lastSentAt: lastSentAt || undefined,
     lastSentBy: lastSentBy || null,
-    lastSentTo: initialData?.lastSentTo,
+    lastSentTo,
   });
 
   const handleSubmit = () => {
@@ -404,7 +408,9 @@ export default function SupplierQuoteTool({
         setSignatureEdited(Boolean(sent.emailSignature?.trim()));
         setLastSentAt(sent.lastSentAt ?? "");
         setLastSentBy(sent.lastSentBy ?? "");
+        setLastSentTo(sent.lastSentTo);
       }
+      if (result.package) onSent?.(result.package);
 
       const ccNote =
         result.recipients.cc.length > 0

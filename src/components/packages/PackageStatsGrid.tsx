@@ -6,6 +6,7 @@ import {
   type PackageStats,
   type PackageStatusFilter,
 } from "@/lib/package-types";
+import { isRateExpiringSoon } from "@/lib/package-rate-validity";
 
 interface PackageStatsGridProps {
   stats: PackageStats | null;
@@ -66,7 +67,7 @@ const STAT_ITEMS: StatItem[] = [
   },
   {
     key: "expiring_rates",
-    label: "Expired Packages",
+    label: "Expiring Rates",
     href: "/packages/expiring-rates",
     icon: "Calendar",
     iconClass: "text-[#EF4444]",
@@ -94,13 +95,7 @@ function matchesStat(item: StatItem, pkg: PackageRecord): boolean {
     return item.filter === "all" ? pkg.status !== "deleted" : pkg.status === item.filter;
   }
 
-  const validityTo = (pkg.supplier_source as { validityTo?: string } | null)?.validityTo;
-  if (!validityTo) return false;
-  const expiry = new Date(validityTo);
-  const now = new Date();
-  const in30Days = new Date(now);
-  in30Days.setDate(now.getDate() + 30);
-  return !Number.isNaN(expiry.getTime()) && expiry >= now && expiry <= in30Days;
+  return pkg.status !== "deleted" && isRateExpiringSoon(pkg.rate_valid_to);
 }
 
 function getTrend(item: StatItem, packages: PackageRecord[]) {

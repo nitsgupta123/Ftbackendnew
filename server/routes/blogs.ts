@@ -11,7 +11,7 @@ import {
 } from "../../src/lib/blog-repository";
 import type { BlogPostStatus, ListBlogPostsParams } from "../../src/lib/blog-types";
 import { createBlogPostSchema, updateBlogPostSchema } from "../../src/lib/validation";
-import { getRequestAudit, requireSuperAdmin } from "../lib/audit";
+import { getRequestAudit, requireModuleAccess, requireSuperAdmin } from "../lib/audit";
 
 const VALID_STATUSES: BlogPostStatus[] = [
   "draft",
@@ -28,6 +28,7 @@ function parseStatus(value?: string): BlogPostStatus | "all" | undefined {
 
 export const registerBlogRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("blogs"));
 
   app.get("/stats", async (_request, reply) => {
     try {

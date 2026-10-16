@@ -4,10 +4,11 @@ import type {
   ListPagesParams,
   ListPagesResult,
   PageStats,
+  PageTypeOption,
   UpdatePageInput,
 } from "./page-types";
 import { AUDIT_USER_HEADER } from "./audit-context";
-import { getStoredToken, getStoredUser } from "./auth-storage";
+import { getStoredUser } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -18,10 +19,6 @@ function apiUrl(path: string) {
 
 function requestHeaders(includeJson = false): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const user = getStoredUser();
   if (user?.fullName) {
     headers[AUDIT_USER_HEADER] = user.fullName;
@@ -59,6 +56,15 @@ export async function getPageStats(): Promise<PageStats> {
     headers: requestHeaders(),
   });
   return parseApiResponse<PageStats>(response);
+}
+
+export async function listPageTypes(): Promise<PageTypeOption[]> {
+  const response = await fetch(apiUrl("/api/pages/types"), {
+    cache: "no-store",
+    headers: requestHeaders(),
+  });
+  const result = await parseApiResponse<{ types: PageTypeOption[] }>(response);
+  return result.types;
 }
 
 export async function getPage(id: number) {

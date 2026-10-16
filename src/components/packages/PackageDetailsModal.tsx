@@ -9,7 +9,9 @@ import {
   PACKAGE_DETAIL_SECTIONS } from
 "@/lib/package-detail-sections";
 import type { PackageRecord } from "@/lib/package-types";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 import { formatPackageDateTime } from "@/lib/format-date";import { Button } from "@/components/ui/button";
+import { resolveMediaSrc } from "@/lib/package-images";
 
 interface PackageDetailsModalProps {
   pkg: PackageRecord | null;
@@ -59,7 +61,7 @@ function DetailField({ label, value }: {label: string;value: unknown;}) {
         <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</dt>
         <dd className="mt-2">
           <img
-            src={value}
+            src={resolveMediaSrc(value)}
             alt={label}
             width={320}
             height={128}
@@ -78,7 +80,7 @@ function DetailField({ label, value }: {label: string;value: unknown;}) {
           <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</dt>
           <dd
             className="blog-editor-content blog-content-preview mt-1 text-sm text-gray-900 break-words"
-            dangerouslySetInnerHTML={{ __html: value }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
           />
         </div>
       );
@@ -257,8 +259,6 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
       setDetails(pkg);
       setError(null);
     });
-
-    if (!isWizardPackage(pkg)) return;
 
     queueMicrotask(() => {
       setLoading(true);

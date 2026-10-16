@@ -277,11 +277,9 @@ export default function PackageListTable({
                         <Link to={editHref} className="hover:text-[#111827]" title="Open">
                           <Icon name="EyeIcon" size={14} />
                         </Link>
-                        {isWizardPackage(pkg) &&
-                          <Link to={editHref} className="hover:text-[#111827]" title="Edit">
-                            <Icon name="FileText" size={14} />
-                          </Link>
-                          }
+                        <Link to={editHref} className="hover:text-[#111827]" title="Edit">
+                          <Icon name="FileText" size={14} />
+                        </Link>
                       </div>
                     </TableCell>
                   </TableRow>);
@@ -351,7 +349,7 @@ export default function PackageListTable({
                   <TableCell className="px-3 py-3 text-gray-600">{pkg.current_step}/14</TableCell>
                   {showValidity &&
                     <TableCell className="px-3 py-3 whitespace-normal text-gray-600">
-                      {(pkg.supplier_source as { validityTo?: string } | null)?.validityTo || "—"}
+                      {pkg.rate_valid_to ? formatPackageDate(pkg.rate_valid_to) : "—"}
                     </TableCell>
                     }
                   <TableCell className="px-3 py-3 whitespace-normal text-gray-600">
@@ -367,9 +365,7 @@ export default function PackageListTable({
                     </span>
                   </TableCell>
                   <TableCell className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                    {readOnly && !wizard ?
-                      <span className="text-gray-400">Legacy</span> :
-                      fullActions ?
+                    {fullActions ?
                       <PackageRowActions
                         pkg={pkg}
                         editHref={editHref}
@@ -378,7 +374,7 @@ export default function PackageListTable({
 
 
                       <Link to={editHref} className={actionLinkClass}>
-                        {wizard ? "Edit" : "View"}
+                        Edit
                       </Link>
                       }
                   </TableCell>

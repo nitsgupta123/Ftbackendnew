@@ -119,22 +119,16 @@ export default forwardRef<PricingRulesPanelHandle>(function PricingRulesPanel(_p
         supplier_currency: data.supplier_currency || null,
         display_currency: data.display_currency || null,
         default_markup_value: data.default_markup_value || null,
-        default_exchange_rate: Number.isNaN(data.default_exchange_rate)
-          ? null
-          : data.default_exchange_rate,
-        rate_lock_days: Number.isNaN(data.rate_lock_days) ? null : data.rate_lock_days,
-        minimum_margin_percent: Number.isNaN(data.minimum_margin_percent)
-          ? null
-          : data.minimum_margin_percent,
-        finance_approval_threshold: Number.isNaN(data.finance_approval_threshold)
-          ? null
-          : data.finance_approval_threshold,
+        default_exchange_rate: data.default_exchange_rate ?? null,
+        rate_lock_days: data.rate_lock_days ?? null,
+        minimum_margin_percent: data.minimum_margin_percent ?? null,
+        finance_approval_threshold: data.finance_approval_threshold ?? null,
         display_order: data.display_order ?? 0,
       };
 
       if (formMode === "edit" && editingRule) {
-        const { rule } = await updatePricingRule(editingRule.id, payload);
-        setRules((prev) => prev.map((r) => (r.id === rule.id ? rule : r)));
+        await updatePricingRule(editingRule.id, payload);
+        await loadRules();
       } else {
         await createPricingRule(payload);
         await loadRules();

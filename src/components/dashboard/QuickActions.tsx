@@ -1,19 +1,35 @@
 import { Link } from "react-router-dom";
 
+import { usePermissions } from "@/components/auth/PermissionsProvider";
 import { Icon } from "@/components/ui/icons";
 import type { QuickActionItem } from "@/lib/dashboard-data";
+import { navHrefModules } from "@/lib/permission-types";
 
 interface QuickActionsProps {
   actions: QuickActionItem[];
 }
 
 export default function QuickActions({ actions }: QuickActionsProps) {
+  const { can, loading } = usePermissions();
+  const visibleActions = loading
+    ? []
+    : actions.filter((action) =>
+        navHrefModules(action.href).every(
+          (moduleKey) =>
+            can(moduleKey, "view") && (!action.requiresEdit || can(moduleKey, "edit"))
+        )
+      );
+
   return (
     <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 shadow-sm h-full">
       <h3 className="text-base font-semibold text-gray-900 mb-4">Quick Actions</h3>
 
+      {!loading && visibleActions.length === 0 ? (
+        <p className="text-sm text-gray-500">No quick actions available for your role.</p>
+      ) : null}
+
       <ul className="space-y-1">
-        {actions.map((action) => (
+        {visibleActions.map((action) => (
           <li key={action.label}>
             <Link
               to={action.href}

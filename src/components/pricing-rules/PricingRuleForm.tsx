@@ -19,6 +19,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
+const optionalNumber = {
+  setValueAs: (value: unknown) => {
+    if (value === "" || value == null) return null;
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  },
+};
+
 const inputClass =
   "w-full h-11 px-3 rounded-lg border border-[#E5E7EB] bg-white text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/30 focus:border-[#B48A2C]";
 const textareaClass =
@@ -218,7 +226,7 @@ export default function PricingRuleForm({
                 step="any"
                 min="0"
                 className={inputClass}
-                {...register("default_exchange_rate", { valueAsNumber: true })}
+                {...register("default_exchange_rate", optionalNumber)}
                 placeholder="0.0725"
               />
             </div>
@@ -232,7 +240,7 @@ export default function PricingRuleForm({
               type="number"
               min="0"
               className={inputClass}
-              {...register("rate_lock_days", { valueAsNumber: true })}
+              {...register("rate_lock_days", optionalNumber)}
               placeholder="30"
             />
           </div>
@@ -278,7 +286,7 @@ export default function PricingRuleForm({
               min="0"
               max="100"
               className={inputClass}
-              {...register("minimum_margin_percent", { valueAsNumber: true })}
+              {...register("minimum_margin_percent", optionalNumber)}
               placeholder="12"
             />
           </div>
@@ -320,7 +328,7 @@ export default function PricingRuleForm({
                 min="0"
                 max="100"
                 className={inputClass}
-                {...register("finance_approval_threshold", { valueAsNumber: true })}
+                {...register("finance_approval_threshold", optionalNumber)}
                 placeholder="10"
               />
             </div>

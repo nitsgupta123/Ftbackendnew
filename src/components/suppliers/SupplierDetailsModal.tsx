@@ -141,9 +141,7 @@ export default function SupplierDetailsModal({
               <DetailItem
                 label="Date Added / Updated"
                 value={
-                  supplier.date_added_updated
-                    ? formatPackageDate(supplier.date_added_updated)
-                    : "—"
+                  formatPackageDate(supplier.date_added_updated || supplier.created_at)
                 }
               />
             </dl>

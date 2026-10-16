@@ -466,6 +466,7 @@ export default function AddPackagePage() {
                 .filter(Boolean)
                 .join(" · ") || ""
             }
+            onSent={setPackageData}
             onNext={(data) => saveStepAndContinue(10, data)}
             onPrevious={handlePrevious}
             isSaving={isSaving}
@@ -579,8 +580,14 @@ export default function AddPackagePage() {
               </div>
             </aside>
 
-            <div className="flex-1 min-w-0">
-              {renderStepForm()}
+            <div className="flex-1 min-w-0" key={packageData?.id ?? "new"}>
+              {searchParams.get("id") && !packageData ? (
+                <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-6 text-sm text-gray-500">
+                  {isLoading ? "Loading package…" : "Package could not be loaded."}
+                </div>
+              ) : (
+                renderStepForm()
+              )}
             </div>
           </div>
     </AdminShell>

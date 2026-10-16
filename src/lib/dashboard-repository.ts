@@ -76,7 +76,7 @@ async function getPackagesMetric(): Promise<MetricCount> {
     const monthRows = await query<RowDataPacket[]>(`
       SELECT ${monthlySql("insert_date")}
       FROM tbl_packages
-      WHERE IFNULL(status, 0) != 2
+      WHERE IFNULL(status, 0) != 0
     `);
 
     return {
@@ -243,16 +243,18 @@ async function getEnquiryChart(days: number): Promise<ChartDataPoint[]> {
 function mapPackageStatus(status: string): DashboardActivity["status"] {
   if (status === "published") return "Published";
   if (status === "pending_review") return "Pending";
+  if (status === "archived") return "Archived";
   return "Draft";
 }
 
 function mapBlogStatus(status: string): DashboardActivity["status"] {
   if (status === "published") return "Published";
-  if (status === "pending_review" || status === "scheduled" || status === "archived") {
-    return "Pending";
-  }
+  if (status === "pending_review" || status === "scheduled") return "Pending";
+  if (status === "archived") return "Archived";
   return "Draft";
 }
+
+const USER_NAME_SQL = `NULLIF(TRIM(COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.user_email)), '')`;
 
 function asAuditName(value: unknown): string | null {
   if (value == null) return null;
@@ -275,40 +277,44 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
     safeQuery(
       `
         SELECT
-          id,
+          p.id,
           CASE
-            WHEN is_publish = 1 THEN 'published'
-            WHEN is_archive = 1 THEN 'archived'
-            ELSE 'draft'
+            WHEN p.is_archive = 1 THEN 'archived'
+            WHEN p.is_publish = 2 THEN 'draft'
+            WHEN p.status = 2 THEN 'pending_review'
+            ELSE 'published'
           END AS status,
-          COALESCE(edit_date, insert_date) AS occurred_at,
-          NULL AS created_by,
+          COALESCE(p.edit_date, p.insert_date) AS occurred_at,
+          ${USER_NAME_SQL} AS created_by,
           NULL AS updated_by,
-          p_name AS title
-        FROM tbl_packages
-        WHERE IFNULL(status, 0) != 2
-        ORDER BY COALESCE(edit_date, insert_date) DESC
+          p.p_name AS title
+        FROM tbl_packages p
+        LEFT JOIN tbl_user u ON u.id = p.user_id
+        WHERE IFNULL(p.status, 0) != 0
+        ORDER BY COALESCE(p.edit_date, p.insert_date) DESC
         LIMIT ${safe}
       `
     ),
     safeQuery(
       `
         SELECT
-          id,
-          post_title AS title,
+          p.id,
+          p.post_title AS title,
           CASE
-            WHEN is_auto_scheduled = 1 AND IFNULL(is_auto_scheduled_posted,0) = 0 THEN 'scheduled'
-            WHEN is_draft = 1 THEN 'draft'
-            WHEN post_status = 2 THEN 'archived'
-            WHEN post_status = 1 THEN 'published'
+            WHEN p.is_auto_scheduled = 1 AND IFNULL(p.is_auto_scheduled_posted,0) = 0 THEN 'scheduled'
+            WHEN p.is_draft = 1 AND p.post_status = 11 THEN 'pending_review'
+            WHEN p.is_draft = 1 THEN 'draft'
+            WHEN p.post_status = 2 THEN 'archived'
+            WHEN p.post_status = 1 THEN 'published'
             ELSE 'draft'
           END AS status,
-          COALESCE(post_date, edit_date, insert_date) AS occurred_at,
-          NULL AS created_by,
+          COALESCE(p.edit_date, p.insert_date) AS occurred_at,
+          ${USER_NAME_SQL} AS created_by,
           NULL AS updated_by
-        FROM tbl_post
-        WHERE post_type = 'article'
-        ORDER BY COALESCE(edit_date, insert_date) DESC
+        FROM tbl_post p
+        LEFT JOIN tbl_user u ON u.id = p.user_id
+        WHERE p.post_type = 'article'
+        ORDER BY COALESCE(p.edit_date, p.insert_date) DESC
         LIMIT ${safe}
       `
     ),
@@ -357,7 +363,7 @@ async function getRecentActivities(limit = 5): Promise<DashboardActivity[]> {
           : String(row.occurred_at ?? "")
       ) ?? String(row.occurred_at ?? ""),
       createdBy: asAuditName(row.created_by),
-      updatedBy: asAuditName(row.updated_by),
+      updatedBy: asAuditName(row.updated_by) ?? asAuditName(row.created_by),
       icon: "FileText",
       iconBg: "bg-blue-50",
       iconColor: "text-blue-500",

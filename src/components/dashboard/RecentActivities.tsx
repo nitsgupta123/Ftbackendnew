@@ -7,6 +7,7 @@ const STATUS_STYLES = {
   Published: "bg-emerald-50 text-emerald-600",
   Draft: "bg-gray-100 text-gray-600",
   Pending: "bg-amber-50 text-amber-600",
+  Archived: "bg-slate-100 text-slate-500",
 };
 
 const PREVIEW_COUNT = 5;

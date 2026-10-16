@@ -5,12 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { slugify } from "@/lib/slug";
+import { addCustomSupplierService, listCustomSupplierServices } from "@/lib/supplier-api";
 import {
   buildSupplierServiceOptions,
   getSupplierServiceClassName,
-  loadCustomSupplierServices,
   parseSupplierServices,
-  saveCustomSupplierService,
   serializeSupplierServices,
   type CustomSupplierService,
   type SupplierServiceOption,
@@ -39,6 +38,7 @@ export default function ServiceOfferedSelect({
   const [serviceSlug, setServiceSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [savingService, setSavingService] = useState(false);
   const [customServices, setCustomServices] = useState<CustomSupplierService[]>(
     []
   );
@@ -46,7 +46,19 @@ export default function ServiceOfferedSelect({
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setCustomServices(loadCustomSupplierServices());
+    let cancelled = false;
+    listCustomSupplierServices()
+      .then(({ services }) => {
+        if (!cancelled) setCustomServices(services);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setFormError(err instanceof Error ? err.message : "Failed to load custom services.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -125,7 +137,8 @@ export default function ServiceOfferedSelect({
     setFormError(null);
   }
 
-  function submitCustomService() {
+  async function submitCustomService() {
+    if (savingService) return;
     const name = serviceName.trim();
     const slug = slugify(serviceSlug || serviceName);
     if (!name) {
@@ -142,8 +155,16 @@ export default function ServiceOfferedSelect({
     );
     const toAdd = existing?.value ?? name;
 
-    const savedCustoms = saveCustomSupplierService({ name: toAdd, slug });
-    setCustomServices(savedCustoms);
+    setSavingService(true);
+    try {
+      const { services } = await addCustomSupplierService({ name: toAdd, slug });
+      setCustomServices(services);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to save service.");
+      return;
+    } finally {
+      setSavingService(false);
+    }
 
     if (
       !normalizedSelected.some((item) => item.toLowerCase() === toAdd.toLowerCase())
@@ -357,10 +378,13 @@ export default function ServiceOfferedSelect({
               </Button>
               <Button
                 type="button"
-                onClick={submitCustomService}
-                className="h-10 px-4 rounded-lg bg-[#A68231] text-sm font-semibold text-white hover:opacity-90"
+                onClick={() => {
+                  void submitCustomService();
+                }}
+                disabled={savingService}
+                className="h-10 px-4 rounded-lg bg-[#A68231] text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
               >
-                Add Service
+                {savingService ? "Saving…" : "Add Service"}
               </Button>
             </div>
           </div>

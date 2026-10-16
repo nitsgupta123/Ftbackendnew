@@ -137,6 +137,10 @@ export default function EnquiryDetailsModal({
               value={displayValue(enquiry.returnDate)}
             />
             <DetailItem
+              label="Flexible Dates"
+              value={enquiry.flexible === 1 ? "Yes" : enquiry.flexible === 2 ? "No" : "—"}
+            />
+            <DetailItem
               label="Budget"
               value={
                 enquiry.budget.trim()

@@ -13,7 +13,7 @@ import {
 import { createUserSchema, updateUserSchema } from "../../src/lib/auth-validation";
 import { isEmailConfigured } from "../../src/lib/email";
 import { sendAdminVerificationEmail } from "../../src/lib/verification-email";
-import { requireSuperAdmin } from "../lib/audit";
+import { requireModuleAccess, requireSuperAdmin } from "../lib/audit";
 
 function parseRole(value?: string): string | "all" | undefined {
   if (!value || value === "all") return value === "all" ? "all" : undefined;
@@ -30,6 +30,7 @@ function parseStatus(value?: string): "active" | "inactive" | "all" | undefined 
 
 export const registerUserRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess(["users", "roles"]));
 
   app.get("/stats", async (_request, reply) => {
     try {

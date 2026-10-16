@@ -1,4 +1,4 @@
-import { getStoredToken, getStoredUser } from "./auth-storage";
+import { getStoredUser } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
 import { AUDIT_USER_HEADER } from "./audit-context";
 import type { AdminRole } from "./auth-types";
@@ -17,10 +17,6 @@ function apiUrl(path: string) {
 
 function requestHeaders(includeJson = false): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const user = getStoredUser();
   if (user?.fullName) {
     headers[AUDIT_USER_HEADER] = user.fullName;
@@ -130,6 +126,84 @@ export async function deleteRole(
     headers: requestHeaders(),
   });
   return parseApiResponse<{ success: boolean; reassignedRole: AdminRole }>(response);
+}
+
+export type AccessRoleMeta = {
+  key: string;
+  description: string;
+  department: string;
+  designation: string;
+  createdBy: string;
+  createdByName?: string;
+  createdDate: string;
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedAt?: string;
+};
+
+export type AccessEmployeeProfile = {
+  designation: string;
+  department: string;
+  accessLevel: string;
+};
+
+export type AccessActivityItem = {
+  id: string;
+  actor: string;
+  employee: string;
+  permission: string;
+  previousAccess: string;
+  newAccess: string;
+  createdAt: string;
+};
+
+export interface AccessMetaPayload {
+  roleMeta: Record<string, AccessRoleMeta>;
+  employeeProfiles: Record<string, AccessEmployeeProfile>;
+  activity: AccessActivityItem[];
+}
+
+export async function getAccessMeta(): Promise<AccessMetaPayload> {
+  const response = await fetch(apiUrl("/api/permissions/access-meta"), {
+    cache: "no-store",
+    headers: requestHeaders(),
+  });
+  return parseApiResponse<AccessMetaPayload>(response);
+}
+
+export async function saveRoleMeta(
+  role: string,
+  input: { description: string; department: string; designation: string }
+): Promise<{ meta: AccessRoleMeta }> {
+  const response = await fetch(apiUrl(`/api/permissions/access-meta/roles/${role}`), {
+    method: "PUT",
+    headers: requestHeaders(true),
+    body: JSON.stringify(input),
+  });
+  return parseApiResponse<{ meta: AccessRoleMeta }>(response);
+}
+
+export async function saveEmployeeProfile(
+  userId: number,
+  profile: AccessEmployeeProfile
+): Promise<{ profile: AccessEmployeeProfile }> {
+  const response = await fetch(apiUrl(`/api/permissions/access-meta/employees/${userId}`), {
+    method: "PUT",
+    headers: requestHeaders(true),
+    body: JSON.stringify(profile),
+  });
+  return parseApiResponse<{ profile: AccessEmployeeProfile }>(response);
+}
+
+export async function recordAccessActivity(
+  entries: Array<Omit<AccessActivityItem, "id" | "createdAt">>
+): Promise<{ entries: AccessActivityItem[] }> {
+  const response = await fetch(apiUrl("/api/permissions/access-meta/activity"), {
+    method: "POST",
+    headers: requestHeaders(true),
+    body: JSON.stringify({ entries }),
+  });
+  return parseApiResponse<{ entries: AccessActivityItem[] }>(response);
 }
 
 export type { ModulePermission, PermissionsPayload, RolePermissionMatrix };

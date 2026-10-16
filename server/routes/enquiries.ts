@@ -12,6 +12,7 @@ import type {
   EnquiryStatusFilter,
   EnquiryTypeFilter,
 } from "../../src/lib/enquiry-types";
+import { requireModuleAccess } from "../lib/audit";
 
 const VALID_TYPES: EnquiryTypeFilter[] = [
   "all",
@@ -47,6 +48,7 @@ function parseSort(value?: string): EnquirySortField {
 
 export const registerEnquiryRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("enquiries"));
 
   app.get("/stats", async (_request, reply) => {
     try {

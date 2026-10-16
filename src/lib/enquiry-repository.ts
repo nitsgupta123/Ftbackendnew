@@ -17,6 +17,22 @@ const SORT_COLUMNS: Record<EnquirySortField, string> = {
   email: "m.email",
 };
 
+/** origin/destination hold one or more comma-separated tbl_destinations ids (e.g. "146,150"). */
+function destinationNamesSql(column: string): string {
+  return `(SELECT GROUP_CONCAT(d.d_name ORDER BY FIND_IN_SET(d.id, REPLACE(${column}, ' ', '')) SEPARATOR ', ')
+     FROM tbl_destinations d
+     WHERE REPLACE(${column}, ' ', '') REGEXP '^[0-9]+(,[0-9]+)*$'
+       AND FIND_IN_SET(d.id, REPLACE(${column}, ' ', '')) > 0)`;
+}
+
+const ENQUIRY_SELECT = `
+  SELECT
+    m.*,
+    ${destinationNamesSql("m.origin")} AS origin_name,
+    ${destinationNamesSql("m.destination")} AS destination_name
+  FROM tbl_message m
+`;
+
 function asString(value: unknown): string {
   if (value == null) return "";
   return String(value);
@@ -153,17 +169,7 @@ export async function listEnquiries(
     ),
     query<RowDataPacket[]>(
       `
-        SELECT
-          m.*,
-          od.d_name AS origin_name,
-          dd.d_name AS destination_name
-        FROM tbl_message m
-        LEFT JOIN tbl_destinations od
-          ON od.id = CAST(NULLIF(TRIM(m.origin), '') AS UNSIGNED)
-          AND TRIM(m.origin) REGEXP '^[0-9]+$'
-        LEFT JOIN tbl_destinations dd
-          ON dd.id = CAST(NULLIF(TRIM(m.destination), '') AS UNSIGNED)
-          AND TRIM(m.destination) REGEXP '^[0-9]+$'
+        ${ENQUIRY_SELECT}
         ${where}
         ORDER BY ${SORT_COLUMNS[sort]} ${order}, m.id DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -185,17 +191,7 @@ export async function listEnquiries(
 export async function findEnquiryById(id: number): Promise<EnquiryRecord | null> {
   const rows = await query<RowDataPacket[]>(
     `
-      SELECT
-        m.*,
-        od.d_name AS origin_name,
-        dd.d_name AS destination_name
-      FROM tbl_message m
-      LEFT JOIN tbl_destinations od
-        ON od.id = CAST(NULLIF(TRIM(m.origin), '') AS UNSIGNED)
-        AND TRIM(m.origin) REGEXP '^[0-9]+$'
-      LEFT JOIN tbl_destinations dd
-        ON dd.id = CAST(NULLIF(TRIM(m.destination), '') AS UNSIGNED)
-        AND TRIM(m.destination) REGEXP '^[0-9]+$'
+      ${ENQUIRY_SELECT}
       WHERE m.id = ?
       LIMIT 1
     `,

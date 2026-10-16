@@ -123,6 +123,7 @@ export interface SuppliersStats {
   total: number;
   active: number;
   inactive: number;
+  do_not_use: number;
   with_issues: number;
   countries: number;
 }
@@ -250,8 +251,6 @@ export const SUPPLIER_SERVICE_OPTIONS: readonly SupplierServiceOption[] = [
 
 export type SupplierServiceValue = (typeof SUPPLIER_SERVICE_OPTIONS)[number]["value"];
 
-const CUSTOM_SERVICES_STORAGE_KEY = "ftadmin.supplier.customServices";
-
 export type CustomSupplierService = {
   name: string;
   slug: string;
@@ -282,66 +281,6 @@ export function isPresetSupplierService(value: string): boolean {
   return SUPPLIER_SERVICE_OPTIONS.some(
     (option) => option.value.toLowerCase() === value.toLowerCase()
   );
-}
-
-function normalizeCustomService(item: unknown): CustomSupplierService | null {
-  if (typeof item === "string") {
-    const name = item.trim();
-    if (!name) return null;
-    return { name, slug: name.toLowerCase().replace(/\s+/g, "-") };
-  }
-  if (!item || typeof item !== "object") return null;
-  const record = item as { name?: unknown; slug?: unknown };
-  const name = typeof record.name === "string" ? record.name.trim() : "";
-  if (!name) return null;
-  const slug =
-    typeof record.slug === "string" && record.slug.trim()
-      ? record.slug.trim()
-      : name.toLowerCase().replace(/\s+/g, "-");
-  return { name, slug };
-}
-
-export function loadCustomSupplierServices(): CustomSupplierService[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(CUSTOM_SERVICES_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-
-    const byName = new Map<string, CustomSupplierService>();
-    for (const item of parsed) {
-      const normalized = normalizeCustomService(item);
-      if (!normalized || isPresetSupplierService(normalized.name)) continue;
-      const key = normalized.name.toLowerCase();
-      if (!byName.has(key)) byName.set(key, normalized);
-    }
-    return [...byName.values()];
-  } catch {
-    return [];
-  }
-}
-
-export function saveCustomSupplierService(input: {
-  name: string;
-  slug: string;
-}): CustomSupplierService[] {
-  const name = input.name.trim();
-  const slug = input.slug.trim();
-  if (!name || isPresetSupplierService(name)) {
-    return loadCustomSupplierServices();
-  }
-
-  const existing = loadCustomSupplierServices();
-  if (existing.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
-    return existing;
-  }
-
-  const next = [...existing, { name, slug: slug || name.toLowerCase().replace(/\s+/g, "-") }];
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(CUSTOM_SERVICES_STORAGE_KEY, JSON.stringify(next));
-  }
-  return next;
 }
 
 export function buildSupplierServiceOptions(

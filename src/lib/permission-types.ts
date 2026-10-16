@@ -279,8 +279,10 @@ export const ACCESS_MODULE_BY_KEY: Record<string, AccessModuleDefinition> =
   Object.fromEntries(ACCESS_MODULES.map((m) => [m.key, m]));
 
 /** Map primary nav hrefs to permission module keys. */
-export const NAV_HREF_MODULE: Record<string, string> = {
+/** Module(s) a nav link needs view access to; arrays require every listed module. */
+export const NAV_HREF_MODULE: Record<string, string | string[]> = {
   "/": "dashboard",
+  "/settings/general": "settings",
   "/settings/user-management": "users",
   "/settings/role-management": "roles",
   "/settings/roles": "roles",
@@ -301,13 +303,29 @@ export const NAV_HREF_MODULE: Record<string, string> = {
   "/packages/drafts": "packages",
   "/packages/pending-review": "packages",
   "/packages/expiring-rates": "packages",
-  "/packages/supplier-quotes": "supplier_quote_tool",
+  "/packages/supplier-quotes": ["packages", "supplier_quote_tool"],
   "/packages/categories": "package_categories",
   "/suppliers": "suppliers",
   "/packages/pricing-rules": "pricing_rules",
   "/add-package": "packages",
   "/enquiry": "enquiries",
+  "/promotions": "packages",
 };
+
+export function navHrefModules(href: string): string[] {
+  const modules = NAV_HREF_MODULE[href];
+  if (!modules) return [];
+  return Array.isArray(modules) ? modules : [modules];
+}
+
+/** Modules a panel route needs view access to, including detail routes not in the sidebar. */
+export function routeModules(pathname: string): string[] {
+  const exact = navHrefModules(pathname);
+  if (exact.length > 0) return exact;
+  if (pathname === "/blogs" || pathname.startsWith("/blogs/edit/")) return ["blogs"];
+  if (pathname === "/pages" || pathname.startsWith("/pages/edit/")) return ["pages"];
+  return [];
+}
 
 /** Map add-package step numbers to permission keys. */
 export const PACKAGE_STEP_PERMISSION_KEYS: Record<number, string> = {

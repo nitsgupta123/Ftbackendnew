@@ -22,17 +22,19 @@ interface CancellationRow {
 export default function BookingPolicyForm({
   onNext,
   onPrevious,
+  initialData,
   isSaving = false
 }: BookingPolicyFormProps) {
-  const [paymentMode, setPaymentMode] = useState("full");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [balanceDue, setBalanceDue] = useState("");
-  const [confirmationRule, setConfirmationRule] = useState("Booking is only confirmed after payment is received, verified by accounts, and supplier availability is reconfirmed.");
-  const [amendmentPolicy, setAmendmentPolicy] = useState("");
-  const [exceptionApproval, setExceptionApproval] = useState("Who can approve exceptions, refunds, changes, goodwill offers.");
-  const [refundableComponents, setRefundableComponents] = useState("");
-  const [nonRefundableComponents, setNonRefundableComponents] = useState("");
-  const [cancellationRows, setCancellationRows] = useState<CancellationRow[]>([{
+  const saved = initialData ?? null;
+  const [paymentMode, setPaymentMode] = useState(saved?.paymentMode || "full");
+  const [depositAmount, setDepositAmount] = useState(saved?.depositAmount ?? "");
+  const [balanceDue, setBalanceDue] = useState(saved?.balanceDue ?? "");
+  const [confirmationRule, setConfirmationRule] = useState(saved ? saved.confirmationRule ?? "" : "Booking is only confirmed after payment is received, verified by accounts, and supplier availability is reconfirmed.");
+  const [amendmentPolicy, setAmendmentPolicy] = useState(saved?.amendmentPolicy ?? "");
+  const [exceptionApproval, setExceptionApproval] = useState(saved?.exceptionApproval ?? "");
+  const [refundableComponents, setRefundableComponents] = useState(saved?.refundableComponents ?? "");
+  const [nonRefundableComponents, setNonRefundableComponents] = useState(saved?.nonRefundableComponents ?? "");
+  const [cancellationRows, setCancellationRows] = useState<CancellationRow[]>(saved ? saved.cancellationRows ?? [] : [{
     id: "1",
     from: "90 days before",
     to: "61 days before",

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { getSafeErrorMessage } from "../lib/errors";
 import { getDashboardOverview } from "../../src/lib/dashboard-repository";
+import { requireModuleAccess } from "../lib/audit";
 
 const VALID_CHART_DAYS = new Set([7, 30, 90]);
 
@@ -11,6 +12,7 @@ function parseChartDays(value?: string): number {
 
 export const registerDashboardRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("dashboard"));
 
   app.get("/", async (request, reply) => {
     try {

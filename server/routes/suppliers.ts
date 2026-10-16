@@ -19,7 +19,22 @@ import {
   createSupplierSchema,
   updateSupplierSchema,
 } from "../../src/lib/validation";
-import { getRequestAudit, requireSuperAdmin } from "../lib/audit";
+import { getRequestAudit, requireModuleAccess, requireSuperAdmin } from "../lib/audit";
+import { z } from "zod";
+import {
+  addCustomSupplierService,
+  listCustomSupplierServices,
+} from "../../src/lib/supplier-services-repository";
+
+const customServiceSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+});
 
 const VALID_STATUSES: SupplierStatus[] = ["active", "inactive", "do_not_use"];
 const VALID_RELATIONSHIPS: SupplierRelationshipStatus[] = [
@@ -53,6 +68,7 @@ function parseRelationship(
 
 export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("suppliers"));
 
   app.get("/stats", async (_request, reply) => {
     try {
@@ -62,6 +78,33 @@ export const registerSupplierRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error: getSafeErrorMessage(error, "Failed to load supplier stats"),
+      });
+    }
+  });
+
+  app.get("/custom-services", async (_request, reply) => {
+    try {
+      return reply.send({ services: await listCustomSupplierServices() });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to load custom services"),
+      });
+    }
+  });
+
+  app.post("/custom-services", async (request, reply) => {
+    const parsed = customServiceSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: "Validation failed", details: parsed.error.flatten() });
+    }
+    try {
+      const services = await addCustomSupplierService(parsed.data);
+      return reply.status(201).send({ services });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to save custom service"),
       });
     }
   });

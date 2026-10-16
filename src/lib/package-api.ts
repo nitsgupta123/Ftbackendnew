@@ -5,8 +5,9 @@ import type {
   UpdatePackageInput,
 } from "./package-types";
 import { AUDIT_USER_HEADER } from "./audit-context";
-import { getStoredToken, getStoredUser } from "./auth-storage";
+import { getStoredUser } from "./auth-storage";
 import { parseApiResponse } from "./parse-api-response";
+import { isRateExpiringSoon } from "./package-rate-validity";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -16,10 +17,6 @@ function apiUrl(path: string) {
 
 function requestHeaders(includeJson = false): HeadersInit {
   const headers: Record<string, string> = {};
-  const token = getStoredToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const user = getStoredUser();
   if (user?.fullName) {
     headers[AUDIT_USER_HEADER] = user.fullName;
@@ -125,17 +122,13 @@ export function computePackageStats(packages: PackageRecord[]): PackageStats {
     pending_review: counts.pending_review ?? 0,
     published: counts.published ?? 0,
     archived: counts.archived ?? 0,
-    expiring_rates: packages.filter((pkg) => {
-      const validityTo = (pkg.supplier_source as { validityTo?: string } | null)?.validityTo;
-      if (!validityTo) return false;
-      const expiry = new Date(validityTo);
-      const now = new Date();
-      const in30Days = new Date();
-      in30Days.setDate(now.getDate() + 30);
-      return expiry >= now && expiry <= in30Days;
-    }).length,
+    expiring_rates: packages.filter(
+      (pkg) => pkg.status !== "deleted" && isRateExpiringSoon(pkg.rate_valid_to)
+    ).length,
     supplier_quotes: packages.filter(
-      (pkg) => pkg.supplier_quote_tool && Object.keys(pkg.supplier_quote_tool).length > 0
+      (pkg) =>
+        Boolean(pkg.supplier_quote_tool?.lastSentAt) ||
+        Boolean(pkg.supplier_quote_tool?.toEmails?.some(Boolean))
     ).length,
     wizard_total: wizardTotal,
     legacy_total: legacyTotal,
@@ -181,11 +174,7 @@ export async function archivePackage(id: number) {
 }
 
 export async function duplicatePackage(source: PackageRecord) {
-  const loaded =
-    source.source === "legacy"
-      ? source
-      : (await getPackage(source.id)).package;
-  const full = loaded ?? source;
+  const full = (await getPackage(source.id || source.package_id)).package ?? source;
 
   const baseTitle = full.package_title?.trim() || "Draft Package";
   const title = baseTitle.toLowerCase().startsWith("copy of ")

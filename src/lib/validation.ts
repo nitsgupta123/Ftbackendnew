@@ -254,18 +254,30 @@ export const updatePackageTemplateSchema = createPackageTemplateSchema.partial()
 export type CreatePackageTemplateFormValues = z.infer<typeof createPackageTemplateSchema>;
 export type UpdatePackageTemplateFormValues = z.infer<typeof updatePackageTemplateSchema>;
 
+/**
+ * Legacy rows contain slugs that are not strictly kebab-case; repositories keep an unchanged
+ * slug as-is and slugify any new one, so only the column length is enforced here.
+ */
 const slugFieldSchema = z
   .string()
+  .max(255, "Slug must be 255 characters or fewer")
   .optional()
   .nullable()
   .transform((s) => {
     if (s == null) return undefined;
     const trimmed = s.trim();
     return trimmed === "" ? undefined : trimmed;
-  })
+  });
+
+const MAX_TEXT_COLUMN_BYTES = 65535;
+
+const postContentSchema = z
+  .string()
+  .optional()
+  .nullable()
   .refine(
-    (s) => s === undefined || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s),
-    "Slug must be lowercase with hyphens only"
+    (s) => !s || new TextEncoder().encode(s).length <= MAX_TEXT_COLUMN_BYTES,
+    "Content is too long (maximum 64 KB)"
   );
 
 export const blogPostStatusSchema = z.enum([
@@ -277,10 +289,10 @@ export const blogPostStatusSchema = z.enum([
 ]);
 
 const blogPostFieldsSchema = z.object({
-  title: z.string().min(1, "Blog title is required"),
+  title: z.string().trim().min(1, "Blog title is required").max(255, "Title must be 255 characters or fewer"),
   slug: slugFieldSchema,
   excerpt: z.string().optional().nullable(),
-  content: z.string().optional().nullable(),
+  content: postContentSchema,
   featured_image_path: z.string().optional().nullable(),
   category_id: z.preprocess(
     (value) => {
@@ -345,12 +357,12 @@ export type UpdateBlogCategoryFormValues = z.infer<typeof updateBlogCategorySche
 export const pageStatusSchema = z.enum(["draft", "published", "archived"]);
 
 export const createPageSchema = z.object({
-  title: z.string().min(1, "Page title is required"),
+  title: z.string().trim().min(1, "Page title is required").max(255, "Title must be 255 characters or fewer"),
   slug: slugFieldSchema,
   excerpt: z.string().optional().nullable(),
-  content: z.string().optional().nullable(),
+  content: postContentSchema,
   featured_image_path: z.string().optional().nullable(),
-  page_type: z.string().optional().nullable(),
+  page_type: z.string().max(155, "Page type must be 155 characters or fewer").optional().nullable(),
   status: pageStatusSchema.optional(),
   show_in_nav: z.boolean().optional(),
   display_order: z.number().int().min(0).optional(),

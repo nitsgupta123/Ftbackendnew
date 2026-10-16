@@ -17,6 +17,47 @@ import {
 import { ACCESS_MODULE_KEYS } from "../../src/lib/permission-types";
 import type { AdminRole } from "../../src/lib/auth-types";
 import { findAdminUserById } from "../../src/lib/auth-repository";
+import { getRequestAudit, requireModuleAccess } from "../lib/audit";
+import {
+  appendAccessActivity,
+  deleteEmployeeProfile,
+  deleteRoleMeta,
+  getEmployeeProfiles,
+  getRoleMetaMap,
+  listAccessActivity,
+  renameRoleMeta,
+  upsertEmployeeProfile,
+  upsertRoleMeta,
+} from "../../src/lib/access-meta-repository";
+
+const shortText = (max: number) => z.string().trim().max(max).default("");
+
+const roleMetaSchema = z.object({
+  description: shortText(300),
+  department: shortText(120),
+  designation: shortText(120),
+});
+
+const employeeProfileSchema = z.object({
+  designation: shortText(120),
+  department: shortText(120),
+  accessLevel: shortText(60),
+});
+
+const activitySchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        actor: shortText(120),
+        employee: shortText(120),
+        permission: shortText(160),
+        previousAccess: shortText(80),
+        newAccess: shortText(80),
+      })
+    )
+    .min(1)
+    .max(50),
+});
 
 const roleSchema = z
   .string()
@@ -65,7 +106,7 @@ async function requireAccessManager(
 export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
 
-  app.get("/", async (_request, reply) => {
+  app.get("/", { preHandler: requireModuleAccess(["users", "roles"]) }, async (_request, reply) => {
     try {
       const payload = await getPermissionsPayload();
       return reply.send(payload);
@@ -73,6 +114,108 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error: getSafeErrorMessage(error, "Failed to load permissions"),
+      });
+    }
+  });
+
+  app.get(
+    "/access-meta",
+    { preHandler: requireModuleAccess(["users", "roles"]) },
+    async (_request, reply) => {
+      try {
+        const [roleMeta, employeeProfiles, activity] = await Promise.all([
+          getRoleMetaMap(),
+          getEmployeeProfiles(),
+          listAccessActivity(),
+        ]);
+        return reply.send({ roleMeta, employeeProfiles, activity });
+      } catch (error) {
+        app.log.error(error);
+        return reply.status(500).send({
+          error: getSafeErrorMessage(error, "Failed to load access metadata"),
+        });
+      }
+    }
+  );
+
+  app.put("/access-meta/roles/:role", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+    const roleParsed = roleSchema.safeParse((request.params as { role?: string }).role);
+    const bodyParsed = roleMetaSchema.safeParse(request.body);
+    if (!roleParsed.success || !bodyParsed.success) {
+      return reply.status(400).send({ error: "Validation failed" });
+    }
+    try {
+      const actorName = getRequestAudit(request).user || request.user.email || "Unknown";
+      const actorLabel = request.user.role === "owner" ? "Owner" : "Super Admin";
+      const meta = await upsertRoleMeta(roleParsed.data, bodyParsed.data, {
+        label: actorLabel,
+        name: actorName,
+      });
+      return reply.send({ meta });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to save role details"),
+      });
+    }
+  });
+
+  app.put("/access-meta/employees/:userId", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+    const userId = Number((request.params as { userId?: string }).userId);
+    const bodyParsed = employeeProfileSchema.safeParse(request.body);
+    if (!Number.isInteger(userId) || userId <= 0 || !bodyParsed.success) {
+      return reply.status(400).send({ error: "Validation failed" });
+    }
+    try {
+      if (!(await findAdminUserById(userId))) {
+        return reply.status(404).send({ error: "User not found" });
+      }
+      const profile = await upsertEmployeeProfile(userId, bodyParsed.data);
+      return reply.send({ profile });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to save employee profile"),
+      });
+    }
+  });
+
+  app.delete("/access-meta/employees/:userId", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+    const userId = Number((request.params as { userId?: string }).userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return reply.status(400).send({ error: "Invalid user id" });
+    }
+    try {
+      await deleteEmployeeProfile(userId);
+      return reply.send({ ok: true });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to delete employee profile"),
+      });
+    }
+  });
+
+  app.post("/access-meta/activity", async (request, reply) => {
+    const denied = await requireAccessManager(request, reply);
+    if (denied) return;
+    const bodyParsed = activitySchema.safeParse(request.body);
+    if (!bodyParsed.success) {
+      return reply.status(400).send({ error: "Validation failed" });
+    }
+    try {
+      const entries = await appendAccessActivity(bodyParsed.data.entries);
+      return reply.status(201).send({ entries });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to record access activity"),
       });
     }
   });
@@ -286,6 +429,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       }
       if (currentRole !== nextRole) {
         await renameRole(currentRole, nextRole);
+        await renameRoleMeta(currentRole, nextRole);
       }
 
       const matrix = await getRolePermissionMatrix(nextRole);
@@ -315,6 +459,7 @@ export const registerPermissionRoutes: FastifyPluginAsync = async (app) => {
       }
 
       await deleteRole(roleParsed.data);
+      await deleteRoleMeta(roleParsed.data);
       return reply.send({ success: true, reassignedRole: "admin" });
     } catch (error) {
       app.log.error(error);

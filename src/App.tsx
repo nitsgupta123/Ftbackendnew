@@ -5,7 +5,7 @@ import SignupPage from "@/pages/SignupPage";
 import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
-import { HIDDEN_PASSWORD_RECOVERY_PATH } from "@/lib/auth-paths";
+import { FORGOT_PASSWORD_PATH, LEGACY_PASSWORD_RECOVERY_PATH } from "@/lib/auth-paths";
 import PackageDashboardPage from "@/pages/packages/PackageDashboardPage";
 import PackageModulePage from "@/pages/packages/PackageModulePage";
 import AddPackagePage from "@/pages/AddPackagePage";
@@ -22,6 +22,7 @@ import SuppliersPage from "@/pages/SuppliersPage";
 import PromotionsPage from "@/pages/PromotionsPage";
 import HelpDeskPage from "@/pages/HelpDeskPage";
 import SettingsUserManagementPage from "@/pages/settings/SettingsUserManagementPage";
+import SettingsGeneralPage from "@/pages/settings/SettingsGeneralPage";
 import SettingsRolesPage from "@/pages/settings/SettingsRolesPage";
 import SettingsRoleManagementPage from "@/pages/settings/SettingsRoleManagementPage";
 
@@ -31,10 +32,10 @@ export default function App() {
       <Route path="/" element={<DashboardPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
-      <Route path={HIDDEN_PASSWORD_RECOVERY_PATH} element={<ForgotPasswordPage />} />
+      <Route path={FORGOT_PASSWORD_PATH} element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
-      <Route path="/forgot-password" element={<Navigate to={HIDDEN_PASSWORD_RECOVERY_PATH} replace />} />
+      <Route path={LEGACY_PASSWORD_RECOVERY_PATH} element={<Navigate to={FORGOT_PASSWORD_PATH} replace />} />
 
       <Route path="/packages" element={<PackageDashboardPage />} />
       <Route path="/packages/:module" element={<PackageModulePage />} />
@@ -58,7 +59,7 @@ export default function App() {
       <Route path="/settings/roles" element={<SettingsRolesPage />} />
       <Route path="/settings/role-management" element={<SettingsRoleManagementPage />} />
       <Route path="/user-management" element={<Navigate to="/settings/user-management" replace />} />
-      <Route path="/settings/general" element={<Navigate to="/settings/user-management" replace />} />
+      <Route path="/settings/general" element={<SettingsGeneralPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

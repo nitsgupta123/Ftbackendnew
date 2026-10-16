@@ -378,7 +378,7 @@ export default function SupplierListTable({
                 >
                   <TableCell className={bodyCellClass}>
                     {formatPackageDate(
-                      supplier.date_added_updated || supplier.updated_at
+                      supplier.date_added_updated || supplier.created_at
                     )}
                   </TableCell>
                   <TableCell

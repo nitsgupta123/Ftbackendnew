@@ -26,14 +26,32 @@ export async function parseApiResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const err = data as { error?: string; details?: unknown };
-    throw new Error(
+    const detail = firstValidationMessage(err?.details);
+    const base =
       typeof err?.error === "string"
         ? err.error
         : err?.details
           ? "Validation failed"
-          : `Request failed (${response.status})`
-    );
+          : `Request failed (${response.status})`;
+    throw new Error(detail && base === "Validation failed" ? `${base}: ${detail}` : base);
   }
 
   return data as T;
+}
+
+/** First message from a zod `flatten()` payload (or its bare `fieldErrors` map). */
+function firstValidationMessage(details: unknown): string | null {
+  if (!details || typeof details !== "object") return null;
+  const shape = details as { formErrors?: unknown; fieldErrors?: unknown };
+  if (Array.isArray(shape.formErrors) && typeof shape.formErrors[0] === "string") {
+    return shape.formErrors[0];
+  }
+  const fieldErrors =
+    shape.fieldErrors && typeof shape.fieldErrors === "object" ? shape.fieldErrors : details;
+  for (const [field, messages] of Object.entries(fieldErrors as Record<string, unknown>)) {
+    if (Array.isArray(messages) && typeof messages[0] === "string") {
+      return `${field.replace(/_/g, " ")}: ${messages[0]}`;
+    }
+  }
+  return null;
 }

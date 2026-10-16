@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import AdminShell from "@/components/layout/AdminShell";
 import StatCard from "@/components/dashboard/StatCard";
@@ -96,9 +97,9 @@ export default function DashboardPage() {
                 <>
                   {" "}
                   — please{" "}
-                  <a href="/login" className="underline font-medium">
+                  <Link to="/login" className="underline font-medium">
                     sign in again
-                  </a>
+                  </Link>
                   .
                 </>
               ) : null}

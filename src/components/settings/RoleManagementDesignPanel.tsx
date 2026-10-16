@@ -6,8 +6,10 @@ import { NativeSelect } from "@/components/ui/native-select";
 import RoleFormModal from "@/components/settings/access-control/RoleFormModal";
 import {
   deleteRole as deleteRoleRequest,
+  getAccessMeta,
   getPermissions,
   renameRole as renameRoleRequest,
+  saveRoleMeta,
   updateRolePermissions,
 } from "@/lib/permission-api";
 import { buildDefaultMatrix } from "@/lib/permission-types";
@@ -21,31 +23,13 @@ import {
   rememberKnownRole,
   rememberKnownRoles,
 } from "@/lib/role-catalog";
-import { getUserStats, listUsers, updateUser } from "@/lib/user-api";
+import { getUserStats, listAllUsers, updateUser } from "@/lib/user-api";
 import { formatRoleLabel } from "@/lib/user-types";
-import { formatPackageDateTime, nowIsoSgt } from "@/lib/format-date";
+import { formatPackageDateTime } from "@/lib/format-date";
 import type { ManageableUser, RoleMeta } from "@/components/settings/access-control/types";
-import { useAuth } from "@/components/auth/AuthProvider";
 
 const GOLD = "#A68231";
 const PROTECTED_ROLES = new Set(["admin", "owner", "super_admin"]);
-const LOCAL_STORAGE_ROLE_META = "ftadmin-role-meta-v1";
-const ACTOR_ROLE_LABEL = "Super Admin";
-
-function nowIso(): string {
-  return nowIsoSgt();
-}
-
-function readLocalStorageJson<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function formatSingaporeDateTime(value?: string): string {
   return formatPackageDateTime(value);
@@ -59,8 +43,6 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
   _props,
   ref
 ) {
-  const { user } = useAuth();
-  const actorName = user?.fullName?.trim() || "Super Admin";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
@@ -73,9 +55,7 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
     activeUsers: 0,
     superAdmins: 0,
   });
-  const [roleMeta, setRoleMeta] = useState<Record<string, RoleMeta>>(() =>
-    readLocalStorageJson<Record<string, RoleMeta>>(LOCAL_STORAGE_ROLE_META, {})
-  );
+  const [roleMeta, setRoleMeta] = useState<Record<string, RoleMeta>>({});
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -94,11 +74,13 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
     queueMicrotask(async () => {
       setLoading(true);
       try {
-        const [permissionsResult, usersResult, statsResult] = await Promise.all([
+        const [permissionsResult, usersResult, statsResult, accessMeta] = await Promise.all([
           getPermissions(),
-          listUsers({ role: "all", status: "all", page: 1, limit: 200 }),
+          listAllUsers({ role: "all", status: "all" }),
           getUserStats().catch(() => null),
+          getAccessMeta(),
         ]);
+        setRoleMeta(accessMeta.roleMeta);
         setRoles(Array.from(new Set(permissionsResult.matrices.map((m) => m.role))));
         setRolePermissionMap(
           Object.fromEntries(
@@ -116,15 +98,13 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
             superAdmins: statsResult.stats.superAdmins,
           });
         }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load roles");
       } finally {
         setLoading(false);
       }
     });
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_ROLE_META, JSON.stringify(roleMeta));
-  }, [roleMeta]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -135,14 +115,12 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
         return {
           key: role,
           name: formatRoleLabel(role),
-          description: meta?.description ?? `${formatRoleLabel(role)} role access definition`,
+          description: meta?.description || "—",
           createdBy: meta?.createdBy ?? "system",
-          createdByName: meta?.createdByName ?? (meta?.createdBy?.toLowerCase() === "super admin" ? "Neetu" : ""),
+          createdByName: meta?.createdByName ?? "",
           createdTime: formatSingaporeDateTime(meta?.createdDate),
           updatedBy: meta?.updatedBy ?? meta?.createdBy ?? "system",
-          updatedByName:
-            meta?.updatedByName ??
-            (meta?.updatedBy?.toLowerCase() === "super admin" ? "Neetu" : meta?.createdByName ?? ""),
+          updatedByName: meta?.updatedByName ?? meta?.createdByName ?? "",
           updatedTime: formatSingaporeDateTime(meta?.updatedAt ?? meta?.createdDate),
           usersCount: assignedUsers.length,
           protected: PROTECTED_ROLES.has(role),
@@ -212,42 +190,33 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
   ) => {
     const assignSet = new Set(assignUserIds);
     const nextUsers = [...sourceUsers];
+    const failed: string[] = [];
 
     for (const userRow of sourceUsers) {
       const shouldHaveRole = assignSet.has(userRow.id);
       const currentlyHasRole = userRow.role === roleKey;
-      if (shouldHaveRole && !currentlyHasRole) {
-        try {
-          const { user: updated } = await updateUser(userRow.id, {
-            fullName: userRow.fullName,
-            role: roleKey,
-            isActive: userRow.isActive,
-          });
-          const idx = nextUsers.findIndex((row) => row.id === userRow.id);
-          if (idx >= 0) nextUsers[idx] = updated as ManageableUser;
-        } catch {
-          // Keep going so other assignments still apply.
-        }
-      } else if (
-        editingRoleKey &&
-        currentlyHasRole &&
-        !shouldHaveRole
-      ) {
-        try {
-          const { user: updated } = await updateUser(userRow.id, {
-            fullName: userRow.fullName,
-            role: "admin",
-            isActive: userRow.isActive,
-          });
-          const idx = nextUsers.findIndex((row) => row.id === userRow.id);
-          if (idx >= 0) nextUsers[idx] = updated as ManageableUser;
-        } catch {
-          // Keep going.
-        }
+      let targetRole: string | null = null;
+      if (shouldHaveRole && !currentlyHasRole) targetRole = roleKey;
+      else if (editingRoleKey && currentlyHasRole && !shouldHaveRole) targetRole = "admin";
+      if (!targetRole) continue;
+      try {
+        const { user: updated } = await updateUser(userRow.id, {
+          fullName: userRow.fullName,
+          role: targetRole,
+          isActive: userRow.isActive,
+        });
+        const idx = nextUsers.findIndex((row) => row.id === userRow.id);
+        if (idx >= 0) nextUsers[idx] = updated as ManageableUser;
+      } catch {
+        // Keep going so other assignments still apply; failures are reported below.
+        failed.push(userRow.fullName);
       }
     }
 
     setUsers(nextUsers);
+    if (failed.length > 0) {
+      throw new Error(`Role saved, but these users could not be reassigned: ${failed.join(", ")}`);
+    }
   };
 
   const submitRoleModal = async () => {
@@ -291,7 +260,11 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
         await persistRolePermissions(key);
       }
 
-      await assignUsersToRole(key, roleForm.assignUsers, usersForAssignment);
+      const { meta } = await saveRoleMeta(key, {
+        description: roleForm.description,
+        department: roleForm.department,
+        designation: roleForm.designation,
+      });
 
       setRoles((prev) => {
         if (isRenaming && editingRoleKey) {
@@ -299,30 +272,14 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
         }
         return prev.includes(key) ? prev : [...prev, key];
       });
-      setRoleMeta((prev) => ({
-        ...Object.fromEntries(
-          Object.entries(prev).filter(([role]) => role !== editingRoleKey || role === key)
-        ),
-        [key]: {
-          ...(prev[editingRoleKey ?? key] ?? prev[key] ?? {}),
-          key,
-          description: roleForm.description || `${formatRoleLabel(key)} role access definition`,
-          department: roleForm.department || "General",
-          designation: roleForm.designation || "Team Member",
-          createdBy: editingRoleKey
-            ? prev[editingRoleKey]?.createdBy ?? ACTOR_ROLE_LABEL
-            : ACTOR_ROLE_LABEL,
-          createdByName: editingRoleKey
-            ? prev[editingRoleKey]?.createdByName ?? actorName
-            : actorName,
-          createdDate: editingRoleKey
-            ? prev[editingRoleKey]?.createdDate ?? nowIso()
-            : nowIso(),
-          updatedBy: ACTOR_ROLE_LABEL,
-          updatedByName: actorName,
-          updatedAt: nowIso(),
-        },
-      }));
+      setRoleMeta((prev) => {
+        const next = { ...prev };
+        if (editingRoleKey) delete next[editingRoleKey];
+        next[key] = meta;
+        return next;
+      });
+
+      await assignUsersToRole(key, roleForm.assignUsers, usersForAssignment);
       setSuccess(
         editingRoleKey
           ? `Role "${formatRoleLabel(key)}" updated successfully.`
@@ -345,7 +302,9 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
   };
 
   const duplicateRole = async (roleKey: string) => {
-    const duplicatedKey = `${roleKey}_copy_${Math.floor(Math.random() * 1000)}`;
+    let copyIndex = 1;
+    while (roles.includes(`${roleKey}_copy_${copyIndex}`)) copyIndex += 1;
+    const duplicatedKey = `${roleKey}_copy_${copyIndex}`;
     const sourceMeta = roleMeta[roleKey];
     const sourcePermissions = rolePermissionMap[roleKey];
 
@@ -353,23 +312,14 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
     setError(null);
     try {
       await persistRolePermissions(duplicatedKey, sourcePermissions);
+      const { meta } = await saveRoleMeta(duplicatedKey, {
+        description: sourceMeta?.description ?? `Duplicate of ${formatRoleLabel(roleKey)}`,
+        department: sourceMeta?.department ?? "",
+        designation: sourceMeta?.designation ?? "",
+      });
       rememberKnownRole(duplicatedKey);
       setRoles((prev) => [...prev, duplicatedKey]);
-      setRoleMeta((prev) => ({
-        ...prev,
-        [duplicatedKey]: {
-          key: duplicatedKey,
-          description: sourceMeta?.description ?? `Duplicate of ${formatRoleLabel(roleKey)}`,
-          department: sourceMeta?.department ?? "General",
-          designation: sourceMeta?.designation ?? "Team Member",
-          createdBy: ACTOR_ROLE_LABEL,
-          createdByName: actorName,
-          createdDate: nowIso(),
-          updatedBy: ACTOR_ROLE_LABEL,
-          updatedByName: actorName,
-          updatedAt: nowIso(),
-        },
-      }));
+      setRoleMeta((prev) => ({ ...prev, [duplicatedKey]: meta }));
       setSuccess(`Role "${formatRoleLabel(roleKey)}" duplicated successfully.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to duplicate role");
@@ -380,6 +330,11 @@ export default forwardRef<RoleManagementDesignPanelHandle>(function RoleManageme
 
   const deleteRole = async (roleKey: string) => {
     if (PROTECTED_ROLES.has(roleKey)) return;
+    const assigned = users.filter((userRow) => userRow.role === roleKey).length;
+    const message = assigned
+      ? `Delete role "${formatRoleLabel(roleKey)}"? ${assigned} user(s) will be moved to Admin.`
+      : `Delete role "${formatRoleLabel(roleKey)}"?`;
+    if (!window.confirm(message)) return;
     setSaving(true);
     setError(null);
     try {

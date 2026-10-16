@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getAdminSettings, updateAdminSettings } from "../../src/lib/settings-repository";
 import type { UpdateAdminSettingsInput } from "../../src/lib/settings-types";
 import { validateEmailList } from "../../src/lib/email-list";
+import { requireModuleAccess } from "../lib/audit";
 
 const emailListField = (label: string) =>
   z
@@ -31,7 +32,7 @@ const updateAdminSettingsSchema = z.object({
     .optional()
     .transform(() => "Asia/Singapore"),
   homepage_title: z.string().trim().min(1, "Homepage title is required").max(190),
-  homepage_description: z.string().trim().max(600).default(""),
+  homepage_description: z.string().trim().max(255).default(""),
   maintenance_mode: z.boolean().default(false),
   quote_cc_emails: emailListField("Quote CC emails"),
   quote_bcc_emails: emailListField("Quote BCC emails"),
@@ -39,8 +40,11 @@ const updateAdminSettingsSchema = z.object({
 
 export const registerSettingsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("settings"));
 
-  app.get("/", async (_request, reply) => {
+  const settingsReadRoute = { config: { permissionModule: ["settings", "supplier_quote_tool"] } };
+
+  app.get("/", settingsReadRoute, async (_request, reply) => {
     try {
       const settings = await getAdminSettings();
       return reply.send({ settings });

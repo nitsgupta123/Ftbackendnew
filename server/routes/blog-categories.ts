@@ -9,7 +9,7 @@ import {
 } from "../../src/lib/blog-category-repository";
 import type { BlogCategoryStatus, ListBlogCategoriesParams } from "../../src/lib/blog-category-types";
 import { createBlogCategorySchema, updateBlogCategorySchema } from "../../src/lib/validation";
-import { getRequestAudit, requireSuperAdmin } from "../lib/audit";
+import { getRequestAudit, requireModuleAccess, requireSuperAdmin } from "../lib/audit";
 
 const VALID_STATUSES: BlogCategoryStatus[] = ["active", "inactive"];
 
@@ -22,8 +22,11 @@ function parseStatus(value?: string): BlogCategoryStatus | "all" | undefined {
 
 export const registerBlogCategoryRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("blog_categories"));
 
-  app.get("/", async (request, reply) => {
+  const categoryPickerRoute = { config: { permissionModule: ["blog_categories", "blogs"] } };
+
+  app.get("/", categoryPickerRoute, async (request, reply) => {
     try {
       const query = request.query as Record<string, string | undefined>;
       const params: ListBlogCategoriesParams = {

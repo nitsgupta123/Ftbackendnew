@@ -18,18 +18,19 @@ const SEO_STATUS_OPTIONS = ["Not started", "Draft", "Pending review", "Approved"
 export default function SeoForm({
   onNext,
   onPrevious,
+  initialData,
   isSaving = false
 }: SeoFormProps) {
-  const [metaTitle, setMetaTitle] = useState("");
-  const [metaDescription, setMetaDescription] = useState("");
-  const [focusKeyword, setFocusKeyword] = useState("");
-  const [secondaryKeywords, setSecondaryKeywords] = useState("");
-  const [relatedPackages, setRelatedPackages] = useState(RELATED_PACKAGES_OPTIONS[0]);
-  const [manualRelatedPackages, setManualRelatedPackages] = useState("");
-  const [internalLinks, setInternalLinks] = useState("");
-  const [indexStatus, setIndexStatus] = useState(INDEX_STATUS_OPTIONS[0]);
-  const [seoReviewer] = useState("Auto-assigned from logged-in SEO user");
-  const [seoStatus, setSeoStatus] = useState(SEO_STATUS_OPTIONS[0]);
+  const [metaTitle, setMetaTitle] = useState(initialData?.metaTitle ?? "");
+  const [metaDescription, setMetaDescription] = useState(initialData?.metaDescription ?? "");
+  const [focusKeyword, setFocusKeyword] = useState(initialData?.focusKeyword ?? "");
+  const [secondaryKeywords, setSecondaryKeywords] = useState(initialData?.secondaryKeywords ?? "");
+  const [relatedPackages, setRelatedPackages] = useState(initialData?.relatedPackages || RELATED_PACKAGES_OPTIONS[0]);
+  const [manualRelatedPackages, setManualRelatedPackages] = useState(initialData?.manualRelatedPackages ?? "");
+  const [internalLinks, setInternalLinks] = useState(initialData?.internalLinks ?? "");
+  const [indexStatus, setIndexStatus] = useState(initialData?.indexStatus || INDEX_STATUS_OPTIONS[0]);
+  const seoReviewer = initialData?.seoReviewer ?? "";
+  const [seoStatus, setSeoStatus] = useState(initialData?.seoStatus || SEO_STATUS_OPTIONS[0]);
   const labelClass = "block text-sm font-bold text-[#1F2A44] mb-2";
   const inputClass = "w-full h-[48px] px-4 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-colors";
   const selectClass = `${inputClass} cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27=%27none%27 stroke=%27%239CA3AF%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E')] bg-[length:12px] bg-[right_16px_center] bg-no-repeat pr-10`;
@@ -128,7 +129,7 @@ export default function SeoForm({
             <Label htmlFor="seo-reviewer" className={labelClass}>
               SEO reviewer
             </Label>
-            <Input id="seo-reviewer" type="text" value={seoReviewer} readOnly className={`${inputClass} bg-gray-50 text-gray-500 cursor-not-allowed`} />
+            <Input id="seo-reviewer" type="text" value={seoReviewer} placeholder="Not reviewed yet" readOnly className={`${inputClass} bg-gray-50 text-gray-500 cursor-not-allowed`} />
             
             <p className="text-xs text-gray-400 mt-2 leading-relaxed">
               This should be automatically linked to the logged-in user with SEO
@@ -177,7 +178,7 @@ export default function SeoForm({
         manualRelatedPackages,
         internalLinks,
         indexStatus,
-        seoReviewer,
+        ...(seoReviewer ? { seoReviewer } : {}),
         seoStatus
       })} disabled={isSaving} data-package-step-save="" className={stepSaveButtonClass}>
           

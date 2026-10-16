@@ -101,16 +101,10 @@ export default function EmployeeAccessDrawer({
                     View
                   </th>
                   <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
-                    Create
-                  </th>
-                  <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
-                    Edit
+                    Create / Edit
                   </th>
                   <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
                     Delete
-                  </th>
-                  <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
-                    Approve
                   </th>
                   <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 font-semibold">
                     Source
@@ -121,7 +115,7 @@ export default function EmployeeAccessDrawer({
                 {modulesByGroup.flatMap((group) => [
                   <tr key={`${group.group}-title`}>
                     <td
-                      colSpan={7}
+                      colSpan={5}
                       className="border-b border-[#E8ECF0] bg-[#F3F5F7] px-3 py-2 text-sm font-semibold text-[#1F2A44]"
                     >
                       {group.title}
@@ -142,7 +136,7 @@ export default function EmployeeAccessDrawer({
                           {mod.label}
                         </td>
                         {(
-                          ["canView", "canCreate", "canEdit", "canDelete", "canApprove"] as const
+                          ["canView", "canEdit", "canDelete"] as const
                         ).map((field) => (
                           <td
                             key={field}

@@ -408,6 +408,8 @@ export interface PackageRecord {
   seo: SeoData | null;
   review_publish: ReviewPublishData | null;
   image_url?: string | null;
+  /** Latest booking-range / departure date from the pricing step (YYYY-MM-DD). */
+  rate_valid_to?: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

@@ -18,7 +18,7 @@ import {
   createPackageTemplateSchema,
   updatePackageTemplateSchema,
 } from "../../src/lib/validation";
-import { getRequestAudit, requireSuperAdmin } from "../lib/audit";
+import { getRequestAudit, requireModuleAccess, requireSuperAdmin } from "../lib/audit";
 
 const VALID_STATUSES: TemplateStatus[] = ["active", "inactive"];
 const VALID_TYPES: TemplateType[] = ["full", "partial"];
@@ -37,6 +37,7 @@ function parseTemplateType(value?: string): TemplateType | "all" | undefined {
 
 export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", requireModuleAccess("package_templates"));
 
   app.get("/stats", async (_request, reply) => {
     try {
@@ -50,7 +51,9 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
     }
   });
 
-  app.get("/", async (request, reply) => {
+  const templatePickerRoute = { config: { permissionModule: ["package_templates", "packages"] } };
+
+  app.get("/", templatePickerRoute, async (request, reply) => {
     try {
       const query = request.query as Record<string, string | undefined>;
       const params: ListPackageTemplatesParams = {
@@ -79,7 +82,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
     }
   });
 
-  app.get("/:id", async (request, reply) => {
+  app.get("/:id", templatePickerRoute, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const templateId = Number(id);
@@ -153,7 +156,7 @@ export const registerPackageTemplateRoutes: FastifyPluginAsync = async (app) => 
     }
   });
 
-  app.post("/:id/apply", async (request, reply) => {
+  app.post("/:id/apply", { config: { permissionModule: "packages" } }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const templateId = Number(id);
