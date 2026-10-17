@@ -239,6 +239,116 @@ function SearchableMultiSelect({
   );
 }
 
+function SearchableSelect({
+  id,
+  options,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  searchPlaceholder = "Search…",
+  emptyMessage = "No matches.",
+}: {
+  id?: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholder: string;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((option) => option.label.toLowerCase().includes(q));
+  }, [options, search]);
+
+  const selectedLabel =
+    options.find((option) => option.value === value)?.label ?? value;
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (disabled) return;
+        setOpen(next);
+        if (!next) setSearch("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          className="w-full h-[42px] px-4 text-sm border border-[#D1D5DB] rounded-[6px] bg-white text-left font-normal hover:bg-[#F9FAFB] justify-between shadow-none"
+        >
+          <span className={`truncate ${value ? "text-gray-900" : "text-gray-500"}`}>
+            {value ? selectedLabel : placeholder}
+          </span>
+          <Icon name="ChevronDown" size={16} className="text-gray-400 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-2 bg-white"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          searchRef.current?.focus();
+        }}
+      >
+        <div className="relative mb-2">
+          <Icon
+            name="Search"
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          />
+          <Input
+            ref={searchRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="h-9 pl-8 pr-3 text-sm border-[#D1D5DB] rounded-[6px]"
+          />
+        </div>
+        <div className="max-h-64 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-gray-400">{emptyMessage}</p>
+          ) : (
+            filtered.map((option) => {
+              const isSelected = value === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`w-full px-2.5 py-2 text-sm text-left rounded-[6px] transition-colors ${
+                    isSelected
+                      ? "bg-[#F1F5F9] text-[#1F2A44] font-medium"
+                      : "text-[#334155] hover:bg-[#F8FAFC]"
+                  }`}
+                >
+                  <span className="truncate">{option.label}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function PackageBasicsForm({
   onNext,
   onPrevious,
@@ -591,40 +701,27 @@ export default function PackageBasicsForm({
               <Label htmlFor="citiesOrRegions" className={labelClass}>
                 Cities or regions
               </Label>
-              <div className="relative">
-                <NativeSelect
-                  id="citiesOrRegions"
-                  className={selectClass}
-                  value={selectedCity}
-                  disabled={!selectedCountry}
-                  onChange={(e) =>
-                    setValue("citiesOrRegions", e.target.value, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                >
-                  <option value="">
-                    {selectedCountry
-                      ? "Select city or region"
-                      : "Select a country first"}
-                  </option>
-                  {cityOptions.map((city) => (
-                    <option key={city.value} value={city.value}>
-                      {city.label}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <Icon
-                  name="ChevronDown"
-                  size={16}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                />
-              </div>
+              <SearchableSelect
+                id="citiesOrRegions"
+                options={cityOptions}
+                value={selectedCity}
+                disabled={!selectedCountry}
+                placeholder={
+                  selectedCountry ? "Select city or region" : "Select a country first"
+                }
+                searchPlaceholder="Search cities or regions…"
+                emptyMessage="No matching city or region."
+                onChange={(city) =>
+                  setValue("citiesOrRegions", city, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
               <p className="text-xs text-gray-400 mt-2">
                 {selectedCountry
-                  ? `Showing cities and regions for ${selectedCountry}.`
-                  : "Pick a country above — this lists automatically."}
+                  ? `Search or scroll the full list for ${selectedCountry}.`
+                  : "Pick a country above — this list fills automatically."}
               </p>
             </div>
           </div>
