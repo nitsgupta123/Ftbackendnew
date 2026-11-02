@@ -4,8 +4,12 @@ export type PromotionStatus = "active" | "inactive";
 export interface PromotionRecord {
   id: number;
   title: string;
-  valid_from: string | null;
-  valid_to: string | null;
+  /** Dates the customer must book for this offer to apply. */
+  booking_from: string | null;
+  booking_to: string | null;
+  /** Travel dates this offer applies to. Same kind of range as a Pricing season. */
+  travel_from: string | null;
+  travel_to: string | null;
   discount_type: PromotionDiscountType;
   value: number;
   package_keys: string[];

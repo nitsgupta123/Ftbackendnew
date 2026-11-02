@@ -7,6 +7,9 @@ import PackageListTable from "@/components/packages/PackageListTable";
 import PackageCategoriesPanel, {
   type PackageCategoriesPanelHandle,
 } from "@/components/categories/PackageCategoriesPanel";
+import PackageCatalogPanel, {
+  type PackageCatalogPanelHandle,
+} from "@/components/package-catalog/PackageCatalogPanel";
 import PricingRulesPanel, {
   type PricingRulesPanelHandle,
 } from "@/components/pricing-rules/PricingRulesPanel";
@@ -25,6 +28,8 @@ const PAGE_SIZE = 10;
 
 function packageModuleIcon(slug: string, endpoint?: string): string {
   if (endpoint === "categories") return "Tags";
+  if (endpoint === "types") return "Tags";
+  if (endpoint === "themes") return "Star";
   if (endpoint === "pricing-rules") return "Calculator";
   if (endpoint === "templates") return "FileStack";
   if (endpoint === "guide") return "HelpCircle";
@@ -58,6 +63,8 @@ export default function PackageModulePage() {
   const { module: moduleParam } = useParams<{ module: string }>();
   const [searchParams] = useSearchParams();
   const categoriesRef = useRef<PackageCategoriesPanelHandle>(null);
+  const typesRef = useRef<PackageCatalogPanelHandle>(null);
+  const themesRef = useRef<PackageCatalogPanelHandle>(null);
   const pricingRulesRef = useRef<PricingRulesPanelHandle>(null);
   const [moduleSlug, setModuleSlug] = useState<string | null>(null);
   const [packages, setPackages] = useState<PackageRecord[]>([]);
@@ -172,6 +179,16 @@ export default function PackageModulePage() {
             label: "Add Category",
             onClick: () => categoriesRef.current?.openCreate(),
           }
+        : config.endpoint === "types"
+          ? {
+              label: "Add Package Type",
+              onClick: () => typesRef.current?.openCreate(),
+            }
+          : config.endpoint === "themes"
+            ? {
+                label: "Add Package Theme",
+                onClick: () => themesRef.current?.openCreate(),
+              }
         : config.endpoint === "pricing-rules"
           ? {
               label: "Add Pricing Rule",
@@ -234,6 +251,10 @@ export default function PackageModulePage() {
       {(config.slug === "templates") && <PackageTemplatesPanel />}
 
       {config.endpoint === "categories" && <PackageCategoriesPanel ref={categoriesRef} />}
+
+      {config.endpoint === "types" && <PackageCatalogPanel ref={typesRef} kind="type" />}
+
+      {config.endpoint === "themes" && <PackageCatalogPanel ref={themesRef} kind="theme" />}
 
       {config.endpoint === "pricing-rules" && <PricingRulesPanel ref={pricingRulesRef} />}
 

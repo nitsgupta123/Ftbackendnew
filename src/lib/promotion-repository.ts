@@ -9,9 +9,20 @@ import { SETTINGS_BLOB } from "./legacy-tables";
 import { nowIsoSgt } from "./format-date";
 import type { PromotionInput, PromotionRecord, PromotionStatus } from "./promotion-types";
 
-function strip(blob: PromotionRecord & { _rowId?: number }): PromotionRecord {
-  const { _rowId: _ignored, ...record } = blob;
-  return record;
+function strip(blob: PromotionRecord & {
+  _rowId?: number;
+  valid_from?: string | null;
+  valid_to?: string | null;
+}): PromotionRecord {
+  const { _rowId: _ignored, valid_from, valid_to, ...rest } = blob;
+  return {
+    ...rest,
+    // Older blobs only had a single validity window — treat it as the booking window.
+    booking_from: rest.booking_from ?? valid_from ?? null,
+    booking_to: rest.booking_to ?? valid_to ?? null,
+    travel_from: rest.travel_from ?? null,
+    travel_to: rest.travel_to ?? null,
+  };
 }
 
 export async function listPromotions(): Promise<PromotionRecord[]> {

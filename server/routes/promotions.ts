@@ -23,8 +23,10 @@ const dateString = z
 const promotionSchema = z
   .object({
     title: z.string().trim().min(1, "Title is required").max(200),
-    valid_from: dateString,
-    valid_to: dateString,
+    booking_from: dateString,
+    booking_to: dateString,
+    travel_from: dateString,
+    travel_to: dateString,
     discount_type: z.enum(["percentage", "fixed_amount"]),
     value: z.coerce.number().positive("Value must be greater than 0").max(1_000_000),
     package_keys: z
@@ -37,8 +39,19 @@ const promotionSchema = z
     if (data.discount_type === "percentage" && data.value > 100) {
       ctx.addIssue({ code: "custom", path: ["value"], message: "Percentage cannot exceed 100" });
     }
-    if (data.valid_from && data.valid_to && data.valid_to < data.valid_from) {
-      ctx.addIssue({ code: "custom", path: ["valid_to"], message: "End date is before start date" });
+    if (data.booking_from && data.booking_to && data.booking_to < data.booking_from) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["booking_to"],
+        message: "Booking end date is before start date",
+      });
+    }
+    if (data.travel_from && data.travel_to && data.travel_to < data.travel_from) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["travel_to"],
+        message: "Travel end date is before start date",
+      });
     }
   });
 
