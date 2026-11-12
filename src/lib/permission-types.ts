@@ -170,7 +170,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "supplier_source",
     label: "Supplier Source",
-    description: "Package supplier and source details",
+    description: "Supplier details, brochure, and internal notes. Consultants can view this and cannot edit it.",
     icon: "Truck",
     group: "package_builder",
     sortOrder: 110,
@@ -178,7 +178,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "package_basics",
     label: "Package Basics",
-    description: "Title, destination, duration, and core info",
+    description: "Title, destination, duration, and core info. Consultants can view this and cannot edit it.",
     icon: "FileStack",
     group: "package_builder",
     sortOrder: 120,
@@ -186,7 +186,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "media_frontend",
     label: "Media & Front-End",
-    description: "Package images and front-end media",
+    description: "Package images and front-end media. Consultants can view this and cannot edit it.",
     icon: "Image",
     group: "package_builder",
     sortOrder: 130,
@@ -194,7 +194,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "pricing",
     label: "Pricing",
-    description: "Package rates, margins, and seasons",
+    description: "Package rates, margins, and seasons. Consultants can view this and cannot edit it.",
     icon: "DollarSign",
     group: "package_builder",
     sortOrder: 140,
@@ -202,7 +202,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "itinerary",
     label: "Itinerary",
-    description: "Day-by-day itinerary content",
+    description: "Day-by-day itinerary content. Consultants can view this and cannot edit it.",
     icon: "Map",
     group: "package_builder",
     sortOrder: 150,
@@ -210,7 +210,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "hotels",
     label: "Hotels",
-    description: "Hotel allocations and stay details",
+    description: "Hotel allocations and stay details. Consultants can view this and cannot edit it.",
     icon: "Building",
     group: "package_builder",
     sortOrder: 160,
@@ -218,7 +218,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "inclusions",
     label: "Inclusions",
-    description: "What is included in the package",
+    description: "What is included in the package. Consultants can view this and cannot edit it.",
     icon: "CheckCircle",
     group: "package_builder",
     sortOrder: 170,
@@ -226,7 +226,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "exclusions",
     label: "Exclusions",
-    description: "What is excluded from the package",
+    description: "What is excluded from the package. Consultants can view this and cannot edit it.",
     icon: "XCircle",
     group: "package_builder",
     sortOrder: 175,
@@ -234,7 +234,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   {
     key: "booking_policy",
     label: "Booking Policy",
-    description: "Cancellation, payment, and booking rules",
+    description: "Cancellation, payment, and booking rules. Consultants can view this and cannot edit it.",
     icon: "Shield",
     group: "package_builder",
     sortOrder: 180,

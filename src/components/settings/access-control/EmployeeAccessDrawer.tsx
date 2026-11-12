@@ -1,6 +1,7 @@
-import { Button } from "@/components/ui/button";
+﻿import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/switch";
+import { CONSULTANT_READONLY_MODULES, isConsultantRole } from "@/lib/package-content";
 import type {
   EmployeeProfile,
   ExtendedPermission,
@@ -68,8 +69,8 @@ export default function EmployeeAccessDrawer({
               <h3 className="text-lg font-semibold text-[#1F2A44]">Manage Access</h3>
               <p className="text-sm text-gray-500 mt-1 break-words">
                 Employee Name: {employee.fullName} | Designation:{" "}
-                {employeeProfiles[employee.id]?.designation ?? "—"} | Department:{" "}
-                {employeeProfiles[employee.id]?.department ?? "—"} | Assigned Role:{" "}
+                {employeeProfiles[employee.id]?.designation ?? "â€”"} | Department:{" "}
+                {employeeProfiles[employee.id]?.department ?? "â€”"} | Assigned Role:{" "}
                 {formatRoleLabel(employee.role)}
               </p>
             </div>
@@ -77,6 +78,12 @@ export default function EmployeeAccessDrawer({
               <Icon name="X" size={14} />
             </Button>
           </div>
+          {isConsultantRole(employee.role) && (
+            <div className="mt-2 rounded-md border border-[#FCD34D] bg-[#FFFBEB] px-3 py-2 text-xs text-[#92400E]">
+              Consultants have read-only access to supplier documents and package details.
+              View stays on. Edit, create, delete, and approve stay off.
+            </div>
+          )}
           {selectedEmployeeHasOverrides && (
             <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Warning: Individual permissions differ from assigned role defaults.
@@ -101,10 +108,16 @@ export default function EmployeeAccessDrawer({
                     View
                   </th>
                   <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
-                    Create / Edit
+                    Create
+                  </th>
+                  <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
+                    Edit
                   </th>
                   <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
                     Delete
+                  </th>
+                  <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 text-center font-semibold">
+                    Approve
                   </th>
                   <th className="border-b border-[#E8ECF0] bg-[#FAFBFC] px-3 py-2.5 font-semibold">
                     Source
@@ -115,7 +128,7 @@ export default function EmployeeAccessDrawer({
                 {modulesByGroup.flatMap((group) => [
                   <tr key={`${group.group}-title`}>
                     <td
-                      colSpan={5}
+                      colSpan={7}
                       className="border-b border-[#E8ECF0] bg-[#F3F5F7] px-3 py-2 text-sm font-semibold text-[#1F2A44]"
                     >
                       {group.title}
@@ -130,13 +143,17 @@ export default function EmployeeAccessDrawer({
                     const effective = custom ?? roleDefault;
                     if (!effective || !roleDefault) return null;
                     const isCustom = Boolean(custom) && !extendedEqual(custom, roleDefault);
+                    const consultantLocked =
+                      isConsultantRole(employee.role) && CONSULTANT_READONLY_MODULES.has(mod.key);
+                    const consultantCrmViewLocked =
+                      isConsultantRole(employee.role) && mod.key === "consultant_view";
                     return (
                       <tr key={`${employee.id}-${mod.key}`} className="bg-white">
                         <td className="border-b border-[#EEF1F4] px-3 py-2 font-medium text-[#1F2A44]">
                           {mod.label}
                         </td>
                         {(
-                          ["canView", "canEdit", "canDelete"] as const
+                          ["canView", "canCreate", "canEdit", "canDelete", "canApprove"] as const
                         ).map((field) => (
                           <td
                             key={field}
@@ -144,12 +161,29 @@ export default function EmployeeAccessDrawer({
                           >
                             <div className="inline-flex">
                               <Switch
-                                checked={Boolean(effective[field])}
-                                disabled={controlsDisabled}
+                                checked={
+                                  consultantLocked
+                                    ? field === "canView"
+                                    : consultantCrmViewLocked && field === "canView"
+                                      ? true
+                                      : Boolean(effective[field])
+                                }
+                                disabled={
+                                  controlsDisabled ||
+                                  consultantLocked ||
+                                  (consultantCrmViewLocked && field === "canView")
+                                }
                                 onCheckedChange={(checked) =>
                                   onTogglePermission(mod.key, field, checked)
                                 }
                                 className="data-checked:bg-[#A68231]"
+                                aria-label={
+                                  consultantLocked
+                                    ? `${mod.label} is view only for consultants`
+                                    : consultantCrmViewLocked && field === "canView"
+                                      ? "Consultant View stays open so consultants can read the CRM"
+                                      : `${mod.label} ${field}`
+                                }
                               />
                             </div>
                           </td>
@@ -196,3 +230,4 @@ export default function EmployeeAccessDrawer({
     </div>
   );
 }
+

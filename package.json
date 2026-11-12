@@ -37,6 +37,7 @@
     "db:migrate:blog-related-approval": "node scripts/run-migrate-blog-related-packages-and-approval.mjs",
     "db:migrate:pages": "node scripts/run-migrate-pages.mjs",
     "db:migrate:suppliers": "node scripts/run-migrate-suppliers.mjs",
+    "db:migrate:promotions": "node scripts/run-migrate-promotions.mjs",
     "db:seed:suppliers": "node scripts/seed-suppliers-from-sheet.mjs",
     "admin:seed": "node scripts/seed-admin.mjs",
     "admin:cleanup-test-users": "node scripts/cleanup-test-admin-users.mjs",

@@ -5,6 +5,7 @@ import {
   saveEmployeeProfile,
   updateUserPermissions,
 } from "@/lib/permission-api";
+import { CONSULTANT_READONLY_MODULES, isConsultantRole } from "@/lib/package-content";
 import { updateUser } from "@/lib/user-api";
 import { formatRoleLabel } from "@/lib/user-types";
 import type {
@@ -203,6 +204,19 @@ export function useEmployeeOverrides({
     if (!canManage || !selectedEmployee) return;
     const roleDefaults = selectedRoleDefaults.find((item) => item.moduleKey === moduleKey);
     if (!roleDefaults) return;
+
+    if (isConsultantRole(selectedEmployee.role) && CONSULTANT_READONLY_MODULES.has(moduleKey)) {
+      if (field !== "canView") return;
+      value = true;
+    }
+    if (
+      isConsultantRole(selectedEmployee.role) &&
+      moduleKey === "consultant_view" &&
+      field === "canView" &&
+      !value
+    ) {
+      return;
+    }
 
     const current =
       employeeOverrides[selectedEmployee.id]?.[moduleKey] ?? { ...roleDefaults };

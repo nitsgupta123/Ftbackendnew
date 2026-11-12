@@ -1,4 +1,4 @@
-export type PromotionDiscountType = "percentage" | "fixed_amount";
+﻿export type PromotionDiscountType = "percentage" | "fixed_amount";
 export type PromotionStatus = "active" | "inactive";
 
 export interface PromotionRecord {
@@ -32,4 +32,20 @@ export const DISCOUNT_TYPE_OPTIONS: { value: PromotionDiscountType; label: strin
   { value: "fixed_amount", label: "Fixed Amount" },
 ];
 
-export type PromotionInput = Omit<PromotionRecord, "id" | "created_at" | "updated_at">;
+export interface CreatePromotionInput {
+  title: string;
+  booking_from?: string | null;
+  booking_to?: string | null;
+  travel_from?: string | null;
+  travel_to?: string | null;
+  discount_type: PromotionDiscountType;
+  value: number;
+  /** Empty means the offer applies to every package. */
+  package_keys?: string[];
+  status?: PromotionStatus;
+}
+
+export type UpdatePromotionInput = Partial<CreatePromotionInput>;
+
+/** Full create/update payload used by the promotions UI forms. */
+export type PromotionInput = CreatePromotionInput;

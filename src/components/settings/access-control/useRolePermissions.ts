@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { resetRolePermissions, updateRolePermissions } from "@/lib/permission-api";
+import { CONSULTANT_READONLY_MODULES, isConsultantRole } from "@/lib/package-content";
 import type { AdminRole } from "@/lib/auth-types";
 import type { AccessModuleDefinition, ModulePermission } from "@/lib/permission-types";
 import type { ActivityItem, ExtendedPermission, PermissionKey } from "./types";
@@ -125,6 +126,18 @@ export function useRolePermissions({
   );
 
   const setPermission = (moduleKey: string, field: PermissionKey, value: boolean) => {
+    if (isConsultantRole(selectedRole) && CONSULTANT_READONLY_MODULES.has(moduleKey)) {
+      if (field !== "canView") return;
+      value = true;
+    }
+    if (
+      isConsultantRole(selectedRole) &&
+      moduleKey === "consultant_view" &&
+      field === "canView" &&
+      !value
+    ) {
+      return;
+    }
     setDraft((prev) =>
       prev.map((row) => (row.moduleKey === moduleKey ? applyToggle(row, field, value) : row))
     );
@@ -138,7 +151,22 @@ export function useRolePermissions({
   ) => {
     const keys = new Set(groupModules.map((m) => m.key));
     setDraft((prev) =>
-      prev.map((row) => (keys.has(row.moduleKey) ? applyToggle(row, field, value) : row))
+      prev.map((row) => {
+        if (!keys.has(row.moduleKey)) return row;
+        if (isConsultantRole(selectedRole) && CONSULTANT_READONLY_MODULES.has(row.moduleKey)) {
+          if (field !== "canView") return row;
+          return applyToggle(row, field, true);
+        }
+        if (
+          isConsultantRole(selectedRole) &&
+          row.moduleKey === "consultant_view" &&
+          field === "canView" &&
+          !value
+        ) {
+          return row;
+        }
+        return applyToggle(row, field, value);
+      })
     );
     setSuccess(null);
   };
