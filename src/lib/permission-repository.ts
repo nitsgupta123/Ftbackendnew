@@ -11,6 +11,8 @@ import {
 import { normalizeRoleKey } from "./role-catalog";
 import {
   ACCESS_MODULES,
+  applyConsultantReadOnly,
+  applyConsultantReadOnlyMatrix,
   buildDefaultMatrix,
   defaultPermissionForRole,
   PACKAGE_STEP_PERMISSION_KEYS,
@@ -182,8 +184,11 @@ function mergeMatrix(role: AdminRole, permissions: ModulePermission[]): RolePerm
   const byKey = new Map(permissions.map((p) => [p.moduleKey, p]));
   return {
     role,
-    permissions: ACCESS_MODULES.map(
-      (mod) => byKey.get(mod.key) ?? defaultPermissionForRole(role, mod.key)
+    permissions: applyConsultantReadOnlyMatrix(
+      role,
+      ACCESS_MODULES.map(
+        (mod) => byKey.get(mod.key) ?? defaultPermissionForRole(role, mod.key)
+      )
     ),
   };
 }
@@ -265,7 +270,12 @@ export async function getEffectivePermissionMatrix(
   const overrideMap = new Map(overrides.map((row) => [row.moduleKey, row]));
   return {
     role,
-    permissions: roleMatrix.permissions.map((row) => overrideMap.get(row.moduleKey) ?? row),
+    permissions: applyConsultantReadOnlyMatrix(
+      role,
+      roleMatrix.permissions.map((row) =>
+        applyConsultantReadOnly(role, overrideMap.get(row.moduleKey) ?? row)
+      )
+    ),
   };
 }
 
@@ -295,10 +305,13 @@ export async function updateRolePermissions(
     incoming.set(perm.moduleKey, normalizeStoredPermission(perm));
   }
 
-  const next = ACCESS_MODULES.map((mod) => {
-    const value = incoming.get(mod.key) ?? defaultPermissionForRole(role, mod.key);
-    return normalizeStoredPermission(value);
-  });
+  const next = applyConsultantReadOnlyMatrix(
+    role,
+    ACCESS_MODULES.map((mod) => {
+      const value = incoming.get(mod.key) ?? defaultPermissionForRole(role, mod.key);
+      return normalizeStoredPermission(value);
+    })
+  );
 
   // tbl_roles.roles keeps the legacy admin's CSV tokens; the panel matrix lives in tbl_settings.
   const roleTypeId = Number(await resolveRoleTypeId(role));

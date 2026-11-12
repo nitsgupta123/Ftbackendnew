@@ -1,4 +1,5 @@
 import type { AdminRole } from "./auth-types";
+import { CONSULTANT_READONLY_MODULES, isConsultantRole } from "./package-content";
 
 export type PermissionAction = "view" | "edit" | "delete";
 
@@ -363,6 +364,38 @@ export const PACKAGE_STEP_PERMISSION_KEYS: Record<number, string> = {
   14: "review_publish",
 };
 
+export function consultantViewOnlyPermission(moduleKey: string): ModulePermission {
+  return {
+    moduleKey,
+    canView: true,
+    canEdit: false,
+    canDelete: false,
+  };
+}
+
+/** Consultants can open supplier documents and package details, and cannot change them. */
+export function applyConsultantReadOnly(
+  role: AdminRole | null | undefined,
+  permission: ModulePermission
+): ModulePermission {
+  if (!isConsultantRole(role)) return permission;
+  if (CONSULTANT_READONLY_MODULES.has(permission.moduleKey)) {
+    return consultantViewOnlyPermission(permission.moduleKey);
+  }
+  // CRM lives on Consultant View, so that step stays open even if view was turned off.
+  if (permission.moduleKey === "consultant_view") {
+    return { ...permission, canView: true };
+  }
+  return permission;
+}
+
+export function applyConsultantReadOnlyMatrix(
+  role: AdminRole | null | undefined,
+  permissions: ModulePermission[]
+): ModulePermission[] {
+  return permissions.map((permission) => applyConsultantReadOnly(role, permission));
+}
+
 export function defaultPermissionForRole(
   role: AdminRole,
   moduleKey: string
@@ -384,6 +417,10 @@ export function defaultPermissionForRole(
       canEdit: false,
       canDelete: false,
     };
+  }
+
+  if (isConsultantRole(role) && CONSULTANT_READONLY_MODULES.has(moduleKey)) {
+    return consultantViewOnlyPermission(moduleKey);
   }
 
   return {
