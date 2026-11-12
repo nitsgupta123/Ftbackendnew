@@ -28,6 +28,15 @@ import { isEmailConfigured, sendMail } from "../../src/lib/email";
 import { isValidEmail, parseEmailList } from "../../src/lib/email-list";
 import { buildQuoteEmailAttachments } from "../../src/lib/package-quote-attachment";
 import {
+  buildQuoteRecipients,
+  CONSULTANT_READONLY_SECTIONS,
+  isConsultantRole,
+} from "../../src/lib/package-content";
+import { getEffectivePermissionMatrix } from "../../src/lib/permission-repository";
+import { PACKAGE_STEP_PERMISSION_KEYS } from "../../src/lib/permission-types";
+import { PACKAGE_STEP_FIELDS } from "../../src/lib/package-types";
+import { listSuppliersWithEmails } from "../../src/lib/supplier-repository";
+import {
   applyReferenceCodeToSubject,
   withQuoteEmailSignature,
 } from "../../src/lib/supplier-quote-email";
@@ -54,6 +63,37 @@ function getRequestAudit(request: FastifyRequest) {
     return { user: request.user.name, userId: Number.isInteger(userId) && userId > 0 ? userId : undefined };
   }
   return auditContextFromHeader(request.headers[AUDIT_USER_HEADER]);
+}
+
+const SECTION_MODULE: Record<string, string> = Object.fromEntries(
+  Object.entries(PACKAGE_STEP_FIELDS).map(([step, section]) => [
+    section,
+    PACKAGE_STEP_PERMISSION_KEYS[Number(step)] ?? section,
+  ])
+);
+
+async function blockedPackageSections(
+  request: FastifyRequest,
+  body: UpdatePackageInput
+): Promise<string[]> {
+  const role = request.user?.role ?? "admin";
+  if (role === "super_admin") return [];
+
+  const matrix = request.user?.sub
+    ? await getEffectivePermissionMatrix(request.user.sub, role)
+    : null;
+  const blocked: string[] = [];
+
+  for (const section of Object.keys(body)) {
+    if (section === "status" || section === "current_step") continue;
+    const moduleKey = SECTION_MODULE[section] ?? section;
+    const forcedReadOnly =
+      isConsultantRole(role) && CONSULTANT_READONLY_SECTIONS.has(section);
+    const row = matrix?.permissions.find((permission) => permission.moduleKey === moduleKey);
+    if (forcedReadOnly || (row && !row.canEdit)) blocked.push(section);
+  }
+
+  return blocked;
 }
 
 const sendSupplierQuoteSchema = z.object({
@@ -104,6 +144,27 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
       app.log.error(error);
       return reply.status(500).send({
         error: getSafeErrorMessage(error, "Failed to fetch supplier quotes"),
+      });
+    }
+  });
+
+  app.get("/quote-recipients", async (_request, reply) => {
+    try {
+      const moduleSuppliers = await listSuppliersWithEmails();
+      const recipients = buildQuoteRecipients({ moduleSuppliers });
+      return reply.send({
+        recipients: recipients.map((recipient) => ({
+          email: recipient.email,
+          supplierName: recipient.supplierName,
+          supplierStatus: recipient.supplierStatus,
+          relationshipStatus: recipient.relationshipStatus,
+          sources: ["supplier_module"] as const,
+        })),
+      });
+    } catch (error) {
+      app.log.error(error);
+      return reply.status(500).send({
+        error: getSafeErrorMessage(error, "Failed to fetch quote recipients"),
       });
     }
   });
@@ -168,6 +229,15 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", async (request, reply) => {
     try {
       const body = request.body as CreatePackageInput & UpdatePackageInput;
+      const denied = await blockedPackageSections(request, body);
+      if (denied.length > 0) {
+        return reply.status(403).send({
+          error: isConsultantRole(request.user?.role)
+            ? "Consultants have read-only access to supplier documents and package details."
+            : "You do not have permission to edit this module.",
+          sections: denied,
+        });
+      }
       const audit = getRequestAudit(request);
       const pkg = await createPackage(body, audit);
       return reply.status(201).send({ package: pkg });
@@ -213,6 +283,15 @@ export const registerPackageRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const body = request.body as UpdatePackageInput;
+      const denied = await blockedPackageSections(request, body);
+      if (denied.length > 0) {
+        return reply.status(403).send({
+          error: isConsultantRole(request.user?.role)
+            ? "Consultants have read-only access to supplier documents and package details."
+            : "You do not have permission to edit this module.",
+          sections: denied,
+        });
+      }
       const audit = getRequestAudit(request);
 
       if (source === "legacy") {

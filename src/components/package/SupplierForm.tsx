@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,7 +39,8 @@ const FIELD_HELP: Record<string, string> = {
   supplierEmails: "Add one or more emails for sales, operations, or general enquiries.",
   supplierWhatsapp: "WhatsApp number for quick supplier communication (include country code).",
   quotationUpload: "Upload the supplier quotation, brochure, or rate sheet. This file is attached automatically when sending a supplier quote email.",
-  internalSupplierNotes: "Internal notes only — not shown on the client-facing website.",
+  internalSupplierNotes:
+    "This field is for important supplier details such as private/SIC options, responsiveness, and booking arrangements. It is visible to consultants internally, but not on the client-facing website.",
 };
 
 function FieldHelp({ text }: { text: string }) {
@@ -186,7 +189,7 @@ export default function SupplierForm({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in">
         <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm">
           <form className="p-6">
             <div className="mb-5">

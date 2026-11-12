@@ -1,7 +1,15 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Icon } from "../ui/icons";
-import type { MediaFrontendData, PackageMediaAsset } from "@/lib/package-types";
+import {
+  highlightValidationError,
+  normalizePackageHighlights,
+  PACKAGE_HIGHLIGHT_LIMIT,
+} from "@/lib/package-content";
+import type { MediaFrontendData, PackageHighlight, PackageMediaAsset } from "@/lib/package-types";
+import { toast } from "sonner";
 import { uploadMediaFile } from "@/lib/media-api";
 import {
   saveButtonLabel,
@@ -14,7 +22,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import PackageRichTextEditor from "./PackageRichTextEditor";
-import { resolveMediaSrc } from "@/lib/package-images";
 
 interface MediaFrontendFormProps extends StepFormBaseProps {
   onNext: (data: MediaFrontendData) => void;
@@ -24,11 +31,7 @@ interface MediaFrontendFormProps extends StepFormBaseProps {
 
 type HeroSlotKey = "desktopHeroImage" | "mobileHeroImage" | "packageCardImage";
 
-type HighlightSlotKey =
-  | "highlightImages"
-  | "marketingBanners"
-  | "promotionalAssets"
-  | "highlightGraphics";
+type HighlightSlotKey = "marketingBanners" | "promotionalAssets";
 
 const HIGHLIGHT_SLOTS: {
   key: HighlightSlotKey;
@@ -36,24 +39,14 @@ const HIGHLIGHT_SLOTS: {
   subtitle: string;
 }[] = [
   {
-    key: "highlightImages",
-    title: "Images",
-    subtitle: "Package highlight photos",
-  },
-  {
     key: "marketingBanners",
     title: "Marketing banners",
-    subtitle: "Hero / campaign banners",
+    subtitle: "Wide campaign and page banners. These are not the four Tour highlight cards.",
   },
   {
     key: "promotionalAssets",
     title: "Promotional assets",
-    subtitle: "Promo creatives & overlays",
-  },
-  {
-    key: "highlightGraphics",
-    title: "Highlight graphics",
-    subtitle: "Icons & highlight artwork",
+    subtitle: "Offer creatives and overlays. These are not the four Tour highlight cards.",
   },
 ];
 
@@ -103,7 +96,7 @@ function SingleUploadCard({
         <>
           <div className="mb-3 w-full overflow-hidden rounded-[8px] border border-[#F4C8D0] bg-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={resolveMediaSrc(value)} alt={title} className="h-28 w-full object-cover" />
+            <img src={value} alt={title} className="h-28 w-full object-cover" />
           </div>
           <h4 className="text-sm font-semibold text-[#1F2A44] mb-1">{title}</h4>
           {subtitle && <p className="text-xs text-[#D47786] mb-3">{subtitle}</p>}
@@ -262,6 +255,194 @@ function MultiAssetUploadCard({
   );
 }
 
+function PackageHighlightCard({
+  index,
+  highlight,
+  uploading,
+  onUpload,
+  onChange,
+  onClear,
+}: {
+  index: number;
+  highlight: PackageHighlight;
+  uploading: boolean;
+  onUpload: (file: File) => void;
+  onChange: (patch: Partial<PackageHighlight>) => void;
+  onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="rounded-[12px] border border-[#E5E7EB] bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-[#1F2A44]">Highlight {index + 1}</h4>
+        {highlight.url ? (
+          <Button
+            type="button"
+            onClick={onClear}
+            className="h-7 px-2 text-[11px] font-semibold text-[#B91C1C] bg-white border border-[#FECACA] rounded-[6px] hover:bg-[#FEF2F2]"
+          >
+            Remove
+          </Button>
+        ) : null}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) onUpload(file);
+        }}
+      />
+      {highlight.url ? (
+        <div className="mb-3 overflow-hidden rounded-[8px] border border-[#E5E7EB] bg-[#F8F9FB]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={highlight.url}
+            alt={highlight.altText || `Highlight ${index + 1}`}
+            className="h-32 w-full object-cover"
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          className="mb-3 flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#F4C8D0] bg-[#FFF0F3] px-4 py-6 text-center"
+        >
+          <Icon name="Upload" size={18} className="text-[#C8485E]" />
+          <span className="text-xs font-medium text-[#C8485E]">
+            {uploading ? "Uploading…" : "Upload highlight image"}
+          </span>
+        </button>
+      )}
+      {highlight.url ? (
+        <Button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          className="mb-3 px-3 py-1.5 text-xs font-semibold text-[#C8485E] bg-[#FFF0F3] border border-[#F4C8D0] rounded-[8px]"
+        >
+          {uploading ? "Uploading…" : "Replace image"}
+        </Button>
+      ) : null}
+      <div className="space-y-3">
+        <div>
+          <Label htmlFor={`highlight-alt-${highlight.id}`} className="mb-1 block text-xs font-medium text-gray-700">
+            Alt text
+          </Label>
+          <Input
+            id={`highlight-alt-${highlight.id}`}
+            type="text"
+            value={highlight.altText ?? ""}
+            onChange={(event) => onChange({ altText: event.target.value })}
+            placeholder="Describe the photo for screen readers"
+            className="h-9 w-full rounded-[8px] border border-[#E5E7EB] bg-white px-3 text-xs"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">Hidden on the page. Used for accessibility.</p>
+        </div>
+        <div>
+          <Label
+            htmlFor={`highlight-description-${highlight.id}`}
+            className="mb-1 block text-xs font-medium text-gray-700"
+          >
+            Short description
+          </Label>
+          <Input
+            id={`highlight-description-${highlight.id}`}
+            type="text"
+            value={highlight.description ?? ""}
+            onChange={(event) => onChange({ description: event.target.value })}
+            placeholder="The line visitors read under this photo"
+            maxLength={180}
+            className="h-9 w-full rounded-[8px] border border-[#E5E7EB] bg-white px-3 text-xs"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">Shown under the photo. Separate from the alt text.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HighlightsWebsitePreview({ highlights }: { highlights: PackageHighlight[] }) {
+  const visible = highlights.filter((item) => item.url?.trim() || item.description?.trim());
+  return (
+    <div className="mt-4 overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white">
+      <div className="bg-[#F8F4EC] px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#8A6A22]">
+        Client-facing website preview
+      </div>
+      <p className="border-b border-[#E5E7EB] px-4 py-2 text-xs text-gray-500">
+        Tour highlights on the package page. Visitors see the photo and the short description. Alt text stays hidden.
+      </p>
+      <div className="px-5 py-5">
+        <h3 className="text-2xl font-semibold leading-tight text-[#1A2433]">Tour highlights</h3>
+        {visible.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-400">
+            Add an image or short description to see the cards here.
+          </p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {visible.map((item, index) => (
+              <article
+                key={item.id}
+                className="flex h-full flex-col overflow-hidden rounded-[10px] border border-[#E8EBF0] bg-white shadow-[0_2px_8px_rgba(16,24,40,0.06)]"
+              >
+                <div className="aspect-[3/2] bg-[#F7F8FA]">
+                  {item.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.url}
+                      alt={item.altText || `Highlight ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-3 text-center text-[11px] text-gray-400">
+                      Image not uploaded yet
+                    </div>
+                  )}
+                </div>
+                <p className="px-3 py-3 text-sm leading-snug text-[#1A2433]">
+                  {item.description?.trim() || "Short description appears here"}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WhyChooseWebsitePreview({ html }: { html: string }) {
+  const empty = !html.replace(/<[^>]*>/g, "").replace(/&nbsp;/gi, " ").trim();
+  return (
+    <div className="mt-4 overflow-hidden rounded-[16px] border border-[#E5E7EB] bg-white">
+      <div className="bg-[#F8F4EC] px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#8A6A22]">
+        Client-facing website preview
+      </div>
+      <p className="border-b border-[#E5E7EB] px-4 py-2 text-xs text-gray-500">
+        This is the Why choose this package block on the public package page. Main, divider, and detail lists keep the same marks.
+      </p>
+      <div className="border-b border-[#E8EBF0] px-6 py-6">
+        <h3 className="text-[1.65rem] font-semibold leading-tight text-[#1A2433]">Why choose this package</h3>
+        {empty ? (
+          <p className="mt-4 text-base leading-7 text-[#667085]">
+            Write the reasons above. They appear in this block, under the heading, on the package page.
+          </p>
+        ) : (
+          <div
+            className="pkg-editor-content pkg-site-prose mt-4"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MediaFrontendForm({
   onNext,
   onPrevious,
@@ -276,7 +457,7 @@ export default function MediaFrontendForm({
         primaryCta: "Book Now",
         secondaryCta: "Speak to a Travel Consultant",
         whatsappNumber: "6594314389",
-        whatsappLink: "https://wa.me/6594314389",
+        whatsappLink: "https://wa.me/6594314389?tex...",
         desktopHeroImage: null,
         mobileHeroImage: null,
         packageCardImage: null,
@@ -291,6 +472,10 @@ export default function MediaFrontendForm({
   const [whyChooseThisPackage, setWhyChooseThisPackage] = useState(
     initialData?.whyChooseThisPackage ?? ""
   );
+  const [packageHighlights, setPackageHighlights] = useState<PackageHighlight[]>(() =>
+    normalizePackageHighlights(initialData)
+  );
+  const [highlightCardUploading, setHighlightCardUploading] = useState<number | null>(null);
 
   useEffect(() => {
     if (!initialData) return;
@@ -303,6 +488,7 @@ export default function MediaFrontendForm({
       whyChooseThisPackage: initialData.whyChooseThisPackage ?? "",
     });
     setWhyChooseThisPackage(initialData.whyChooseThisPackage ?? "");
+    setPackageHighlights(normalizePackageHighlights(initialData));
   }, [initialData, reset]);
   const [heroUploading, setHeroUploading] = useState<Partial<Record<HeroSlotKey, boolean>>>({});
   const [heroErrors, setHeroErrors] = useState<Partial<Record<HeroSlotKey, string | null>>>({});
@@ -317,16 +503,12 @@ export default function MediaFrontendForm({
   const desktopHeroImage = useWatch({ control, name: "desktopHeroImage" });
   const mobileHeroImage = useWatch({ control, name: "mobileHeroImage" });
   const packageCardImage = useWatch({ control, name: "packageCardImage" });
-  const highlightImages = useWatch({ control, name: "highlightImages" }) ?? [];
   const marketingBanners = useWatch({ control, name: "marketingBanners" }) ?? [];
   const promotionalAssets = useWatch({ control, name: "promotionalAssets" }) ?? [];
-  const highlightGraphics = useWatch({ control, name: "highlightGraphics" }) ?? [];
 
   const highlightAssetsByKey: Record<HighlightSlotKey, PackageMediaAsset[]> = {
-    highlightImages,
     marketingBanners,
     promotionalAssets,
-    highlightGraphics,
   };
 
   async function handleHeroUpload(slot: HeroSlotKey, file: File) {
@@ -389,14 +571,41 @@ export default function MediaFrontendForm({
     );
   }
 
+  async function uploadPackageHighlight(index: number, file: File) {
+    setHighlightCardUploading(index);
+    try {
+      const result = await uploadMediaFile(file);
+      setPackageHighlights((current) =>
+        current.map((item, itemIndex) =>
+          itemIndex === index
+            ? {
+                ...item,
+                url: result.url,
+                filename: result.filename || file.name,
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setHighlightCardUploading(null);
+    }
+  }
+
   const onSubmit = (data: MediaFrontendData) => {
+    const highlightError = highlightValidationError(packageHighlights);
+    if (highlightError) {
+      toast.error(highlightError);
+      return;
+    }
     onNext({
       ...data,
       whatsappLink: data.whatsappNumber
         ? `https://wa.me/${data.whatsappNumber.replace(/\D/g, "")}`
         : data.whatsappLink,
       whyChooseThisPackage,
-      // Ensure deprecated fields are not re-sent from this step
+      packageHighlights,
       frontEndSummary: undefined,
       clientFacingNotes: undefined,
     });
@@ -408,7 +617,7 @@ export default function MediaFrontendForm({
   const mediaTags = ["Image source", "Alt text", "Hero image", "Mobile image"];
 
   return (
-    <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm">
+    <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm animate-fade-in">
       <div className="px-6 py-5 border-b border-[#E5E7EB]">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-[#1F2A44]">
@@ -488,15 +697,55 @@ export default function MediaFrontendForm({
           />
         </div>
 
-        {/* Package Highlights Upload Section */}
         <div className="mb-8">
           <div className="mb-4">
             <h3 className="text-sm font-semibold text-[#1F2A44]">
-              Package Highlights Upload
+              Package highlights upload
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              Dedicated upload area for images, marketing banners, promotional
-              assets, and package highlight graphics.
+              Keep about {PACKAGE_HIGHLIGHT_LIMIT} highlights. Each one has its own image,
+              alt text, and a separate short description. The website shows these as Tour highlight cards.
+              Marketing banners and promotional assets are a different upload, below.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {packageHighlights.map((highlight, index) => (
+              <PackageHighlightCard
+                key={highlight.id}
+                index={index}
+                highlight={highlight}
+                uploading={highlightCardUploading === index}
+                onUpload={(file) => void uploadPackageHighlight(index, file)}
+                onChange={(patch) =>
+                  setPackageHighlights((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, ...patch } : item
+                    )
+                  )
+                }
+                onClear={() =>
+                  setPackageHighlights((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, url: "", filename: undefined }
+                        : item
+                    )
+                  )
+                }
+              />
+            ))}
+          </div>
+          <HighlightsWebsitePreview highlights={packageHighlights} />
+        </div>
+
+        <div className="mb-8">
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-[#1F2A44]">
+              Marketing banners and promotional assets
+            </h3>
+            <p className="text-xs text-gray-400 mt-1">
+              Marketing banners are wide campaign and page banners. Promotional assets
+              are offer creatives and overlays. Neither of these is a Tour highlight card.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -611,6 +860,7 @@ export default function MediaFrontendForm({
             value={whyChooseThisPackage}
             onChange={setWhyChooseThisPackage}
           />
+          <WhyChooseWebsitePreview html={whyChooseThisPackage} />
         </div>
 
         <div className="mt-8 pt-5 border-t border-[#E5E7EB] flex items-center justify-between flex-wrap gap-3">

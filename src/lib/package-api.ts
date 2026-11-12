@@ -265,4 +265,17 @@ export async function sendSupplierQuoteEmail(
   }>(response);
 }
 
+export async function listSupplierModuleEmails() {
+  const response = await authenticatedFetch("/api/packages/quote-recipients");
+  return parseApiResponse<{
+    recipients: {
+      email: string;
+      sources: string[];
+      supplierName?: string;
+      supplierStatus?: string;
+      relationshipStatus?: string;
+    }[];
+  }>(response);
+}
+
 export type { PackageListSource, PackageStats };

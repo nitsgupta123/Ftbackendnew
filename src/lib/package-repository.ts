@@ -10,6 +10,7 @@ import {
   saveWizardSections,
 } from "./package-wizard-store";
 import { listJsonSettingsBySuffix, setJsonSetting } from "./legacy-settings-store";
+import { sanitizePackageUpdate } from "./package-content";
 import { isRateExpiringSoon, latestRateDate } from "./package-rate-validity";
 import { loadUserNameMap, userLabel } from "./user-names";
 import type {
@@ -383,12 +384,15 @@ export async function createPackage(
   input: CreatePackageInput & UpdatePackageInput = {},
   audit?: PackageAuditContext
 ): Promise<PackageRecord> {
+  const sanitized = sanitizePackageUpdate(input);
   const title =
-    input.package_title ?? input.package_basics?.packageTitle ?? "Draft Package";
+    sanitized.package_title ??
+    sanitized.package_basics?.packageTitle ??
+    "Draft Package";
   const slug =
-    input.slug ?? input.package_basics?.slug ?? `draft-${Date.now()}`;
+    sanitized.slug ?? sanitized.package_basics?.slug ?? `draft-${Date.now()}`;
   const now = nowMysqlDateTimeSgt();
-  const flags = statusToLegacyFlags(input.status ?? "draft");
+  const flags = statusToLegacyFlags(sanitized.status ?? "draft");
 
   const result = await query<ResultSetHeader>(
     `INSERT INTO ${TBL_PACKAGES} (
@@ -410,9 +414,9 @@ export async function createPackage(
     ]
   );
 
-  const { status: _status, ...columnInput } = input;
+  const { status: _status, ...columnInput } = sanitized;
   await writeLegacyColumns(result.insertId, columnInput);
-  await persistWizardInput(result.insertId, input);
+  await persistWizardInput(result.insertId, sanitized);
   await recordPackageEditor(result.insertId, audit);
   const created = await getPackageById(result.insertId);
   if (!created) throw new Error("Failed to create package");
@@ -427,8 +431,9 @@ export async function updatePackage(
   const existing = await getPackageById(id);
   if (!existing) return null;
 
-  await writeLegacyColumns(id, input);
-  await persistWizardInput(id, input);
+  const sanitized = sanitizePackageUpdate(input);
+  await writeLegacyColumns(id, sanitized);
+  await persistWizardInput(id, sanitized);
   await recordPackageEditor(id, audit);
   return getPackageById(id);
 }

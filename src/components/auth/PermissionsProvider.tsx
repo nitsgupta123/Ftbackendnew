@@ -10,6 +10,10 @@ import {
 import { useAuth } from "@/components/auth/AuthProvider";
 import { getMyPermissions } from "@/lib/permission-api";
 import {
+  CONSULTANT_READONLY_MODULES,
+  isConsultantRole,
+} from "@/lib/package-content";
+import {
   buildDefaultMatrix,
   hasModulePermission,
   type ModulePermission,
@@ -57,6 +61,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const can = useCallback(
     (moduleKey: string, action: PermissionAction = "view") => {
       if (!user) return false;
+      if (isConsultantRole(user.role) && CONSULTANT_READONLY_MODULES.has(moduleKey)) {
+        return action === "view";
+      }
+      if (isConsultantRole(user.role) && moduleKey === "consultant_view" && action === "view") {
+        return true;
+      }
       if (user.role === "super_admin") return true;
       return hasModulePermission(permissions, moduleKey, action);
     },

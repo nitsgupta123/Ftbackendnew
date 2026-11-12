@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../ui/icons";
 import type {
@@ -16,7 +18,9 @@ import type {
   PricingData,
   PricingDetailsBlock,
   PricingPromotion,
+  PricingTravelPeriod,
 } from "@/lib/package-types";
+import { STANDARD_SEASON_NAMES } from "@/lib/package-content";
 import {
   saveButtonLabel,
   stepPreviousButtonClass,
@@ -1203,6 +1207,336 @@ function BookingRangesEditor({
   );
 }
 
+function isStandardSeason(name: string): boolean {
+  return STANDARD_SEASON_NAMES.some((season) => season.toLowerCase() === name.trim().toLowerCase());
+}
+
+function readTravelPeriods(range: BookingRange): PricingTravelPeriod[] {
+  if (range.travelPeriods?.length) {
+    return range.travelPeriods.map((period) => ({
+      id: period.id || uid("period"),
+      fromDate: period.fromDate ?? "",
+      toDate: period.toDate ?? "",
+    }));
+  }
+  return [
+    {
+      id: `${range.id}-period`,
+      fromDate: range.fromDate ?? "",
+      toDate: range.toDate ?? "",
+    },
+  ];
+}
+
+function withTravelPeriods(range: BookingRange, periods: PricingTravelPeriod[]): BookingRange {
+  const first = periods[0];
+  return {
+    ...range,
+    travelPeriods: periods,
+    fromDate: first?.fromDate ?? "",
+    toDate: first?.toDate ?? "",
+  };
+}
+
+function upsertSeasonRange(
+  categories: HotelCategoryPricing[],
+  seasonName: string,
+  categoryKey: HotelCategoryKey | null,
+  updater: (range: BookingRange) => BookingRange
+): HotelCategoryPricing[] {
+  return categories.map((category) => {
+    if (categoryKey && category.category !== categoryKey) return category;
+    const index = category.bookingRanges.findIndex(
+      (range) => range.name.trim().toLowerCase() === seasonName.toLowerCase()
+    );
+    if (index === -1) {
+      return {
+        ...category,
+        bookingRanges: [...category.bookingRanges, updater(createBookingRange(seasonName))],
+      };
+    }
+    return {
+      ...category,
+      bookingRanges: category.bookingRanges.map((range, rangeIndex) =>
+        rangeIndex === index ? updater(range) : range
+      ),
+    };
+  });
+}
+
+function categoryPriceLabel(range: BookingRange): string {
+  const pricing = ensurePricing(range.pricing);
+  const priced = pricing.adultTiers.some(
+    (tier) => (tier.netPrice ?? "").trim() || (tier.retailPrice ?? "").trim()
+  );
+  const blackouts = range.blackouts?.length ?? 0;
+  if (!priced && blackouts === 0) return "Add adult, child, and infant prices";
+  const parts: string[] = [];
+  if (priced) parts.push("Prices added");
+  if (blackouts > 0) parts.push(`${blackouts} blackout${blackouts === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
+function SeasonPricingBoard({
+  categories,
+  onChange,
+}: {
+  categories: HotelCategoryPricing[];
+  onChange: (categories: HotelCategoryPricing[]) => void;
+}) {
+  const [openSeason, setOpenSeason] = useState<string>(STANDARD_SEASON_NAMES[0]);
+  const [openCategory, setOpenCategory] = useState<HotelCategoryKey | "">("3star");
+  const [openExtra, setOpenExtra] = useState(false);
+
+  const seasonRange = (categoryKey: HotelCategoryKey, seasonName: string) => {
+    const category = categories.find((item) => item.category === categoryKey);
+    return (
+      category?.bookingRanges.find(
+        (range) => range.name.trim().toLowerCase() === seasonName.toLowerCase()
+      ) ?? createBookingRange(seasonName)
+    );
+  };
+
+  const sharedPeriods = (seasonName: string) =>
+    readTravelPeriods(seasonRange("3star", seasonName));
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
+        Open a season to set its travel periods. Each hotel category collapses, so you can price 3-star, 4-star, and 5-star without leaving the season.
+      </p>
+      {STANDARD_SEASON_NAMES.map((seasonName) => {
+        const open = openSeason === seasonName;
+        const periods = sharedPeriods(seasonName);
+        const periodLabel = periods
+          .filter((period) => period.fromDate || period.toDate)
+          .map((period) => `${formatDisplayDate(period.fromDate)} – ${formatDisplayDate(period.toDate)}`)
+          .join(" · ");
+        return (
+          <div key={seasonName} className="rounded-[12px] border border-[#E5E7EB] bg-[#F8F9FB]">
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpenSeason(open ? "" : seasonName)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-[#1F2A44]">{seasonName}</span>
+                <span className="mt-0.5 block text-xs text-gray-500">
+                  {periodLabel || "Add one or more travel periods, then price each hotel category."}
+                </span>
+              </span>
+              <Icon name={open ? "ChevronDown" : "ChevronRight"} size={16} className="text-gray-400" />
+            </button>
+            {open ? (
+              <div className="space-y-5 border-t border-[#E5E7EB] px-4 py-4">
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#1F2A44]">Travel periods</h4>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      These dates apply to every hotel category in {seasonName}.
+                    </p>
+                  </div>
+                  {periods.map((period, index) => (
+                    <div
+                      key={period.id}
+                      className="rounded-[10px] border border-[#E5E7EB] bg-white p-3"
+                    >
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Travel period {index + 1}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                        <div>
+                          <Label className={labelClass}>From date</Label>
+                          <DateInput
+                            value={period.fromDate}
+                            onChange={(value) => {
+                              const next = periods.map((item) =>
+                                item.id === period.id ? { ...item, fromDate: value } : item
+                              );
+                              onChange(
+                                upsertSeasonRange(categories, seasonName, null, (range) =>
+                                  withTravelPeriods(range, next)
+                                )
+                              );
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <Label className={labelClass}>To date</Label>
+                          <DateInput
+                            value={period.toDate}
+                            onChange={(value) => {
+                              const next = periods.map((item) =>
+                                item.id === period.id ? { ...item, toDate: value } : item
+                              );
+                              onChange(
+                                upsertSeasonRange(categories, seasonName, null, (range) =>
+                                  withTravelPeriods(range, next)
+                                )
+                              );
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className={`${iconBtnClass} mb-1.5`}
+                          title="Remove travel period"
+                          disabled={periods.length <= 1}
+                          onClick={() => {
+                            const next = periods.filter((item) => item.id !== period.id);
+                            onChange(
+                              upsertSeasonRange(categories, seasonName, null, (range) =>
+                                withTravelPeriods(range, next.length ? next : periods)
+                              )
+                            );
+                          }}
+                        >
+                          <Icon name="Trash2" size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    className={addButtonOutlineClass}
+                    onClick={() => {
+                      const next = [...periods, { id: uid("period"), fromDate: "", toDate: "" }];
+                      onChange(
+                        upsertSeasonRange(categories, seasonName, null, (range) =>
+                          withTravelPeriods(range, next)
+                        )
+                      );
+                    }}
+                  >
+                    <Icon name="Plus" size={14} />
+                    Add travel period
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-[#1F2A44]">Hotel categories</h4>
+                  {HOTEL_CATEGORIES.map((tab) => {
+                    const range = seasonRange(tab.key, seasonName);
+                    const categoryOpen = openCategory === tab.key;
+                    return (
+                      <div
+                        key={tab.key}
+                        className="overflow-hidden rounded-[12px] border border-[#E5E7EB] bg-white"
+                      >
+                        <button
+                          type="button"
+                          aria-expanded={categoryOpen}
+                          onClick={() => setOpenCategory(categoryOpen ? "" : tab.key)}
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                        >
+                          <span>
+                            <span className="block text-sm font-semibold text-[#1F2A44]">
+                              {tab.label}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-gray-500">
+                              {categoryPriceLabel(range)}
+                            </span>
+                          </span>
+                          <Icon
+                            name={categoryOpen ? "ChevronDown" : "ChevronRight"}
+                            size={16}
+                            className="text-gray-400"
+                          />
+                        </button>
+                        {categoryOpen ? (
+                          <div className="space-y-4 border-t border-[#E5E7EB] px-4 py-4">
+                            <PricingDetailsEditor
+                              pricing={ensurePricing(range.pricing)}
+                              onChange={(pricing) =>
+                                onChange(
+                                  upsertSeasonRange(categories, seasonName, tab.key, (current) => ({
+                                    ...withTravelPeriods(current, periods),
+                                    pricing,
+                                  }))
+                                )
+                              }
+                              afterPax={
+                                <div>
+                                  <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">
+                                    Blackout dates
+                                  </h4>
+                                  <BlackoutDatesSection
+                                    rows={range.blackouts ?? []}
+                                    onChange={(blackouts) =>
+                                      onChange(
+                                        upsertSeasonRange(
+                                          categories,
+                                          seasonName,
+                                          tab.key,
+                                          (current) => ({
+                                            ...withTravelPeriods(current, periods),
+                                            blackouts,
+                                          })
+                                        )
+                                      )
+                                    }
+                                  />
+                                </div>
+                              }
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+
+      <div className="rounded-[12px] border border-dashed border-[#E5E7EB]">
+        <button
+          type="button"
+          onClick={() => setOpenExtra((value) => !value)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-[#1F2A44]"
+        >
+          Additional seasons
+          <Icon name={openExtra ? "ChevronDown" : "ChevronRight"} size={16} className="text-gray-400" />
+        </button>
+        {openExtra ? (
+          <div className="space-y-6 border-t border-[#E5E7EB] px-4 py-4">
+            {HOTEL_CATEGORIES.map((tab) => {
+              const category = categories.find((item) => item.category === tab.key);
+              const extras = (category?.bookingRanges ?? []).filter((range) => !isStandardSeason(range.name));
+              return (
+                <div key={tab.key}>
+                  <h4 className="mb-3 text-sm font-semibold text-[#1F2A44]">{tab.label}</h4>
+                  <BookingRangesEditor
+                    ranges={extras}
+                    onChange={(nextExtras) =>
+                      onChange(
+                        categories.map((item) =>
+                          item.category === tab.key
+                            ? {
+                                ...item,
+                                bookingRanges: [
+                                  ...item.bookingRanges.filter((range) => isStandardSeason(range.name)),
+                                  ...nextExtras,
+                                ],
+                              }
+                            : item
+                        )
+                      )
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Main PricingForm                                                          */
 /* -------------------------------------------------------------------------- */
@@ -1259,23 +1593,22 @@ export default function PricingForm({
 
   const handleSave = () => {
     onNext({
-      ...(initialData ?? {}),
       pricingType,
       hotelCategories,
     });
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm px-6 pt-6 pb-5">
         <div className="flex items-center gap-2.5 mb-2">
           <h2 className="text-lg font-semibold text-[#1F2A44]">Pricing</h2>
           <Icon name="Info" size={16} className="text-gray-400" />
         </div>
         <p className="text-sm text-gray-400 leading-relaxed max-w-3xl">
-          Each hotel category has its own seasons. Every season keeps a separate
-          adult, child, and infant price. General Package and Fixed Departure both
-          use these seasons. Fixed Departure also lists the dates customers can book.
+          Low Season, High Season, and Peak Season each collapse. Inside a season,
+          add the travel periods, then open 3-star, 4-star, or 5-star to set that category’s prices.
+          Fixed Departure also lists the dates customers can book.
         </p>
       </div>
 
@@ -1333,51 +1666,38 @@ export default function PricingForm({
 
       <div className={sectionCardClass}>
         <h3 className="text-base font-semibold text-[#1F2A44] mb-4">
-          Hotel category
+          Pricing entries
         </h3>
-        <div className="flex flex-wrap gap-2 mb-6">
-          {HOTEL_CATEGORIES.map((tab) => {
-            const active = activeCategory === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => {
-                  setActiveCategory(tab.key);
-                  setActiveMonthId(null);
-                  setActiveDepartureId(null);
-                }}
-                className={`h-10 px-5 rounded-[10px] text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-[#1F2A44] text-white"
-                    : "bg-white text-[#1F2A44] border border-[#E5E7EB] hover:bg-gray-50"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <p className="text-sm text-gray-500 mb-4">
-          Prices below belong to this hotel category only. Each season has its own adult, child, and infant prices.
-        </p>
-
-        <BookingRangesEditor
-          ranges={category.bookingRanges}
-          onChange={(bookingRanges) =>
-            updateCategory(activeCategory, (current) => ({
-              ...current,
-              bookingRanges,
-            }))
-          }
-        />
+        <SeasonPricingBoard categories={hotelCategories} onChange={setHotelCategories} />
 
         {pricingType === "fixed_departure" ? (
           <div className="space-y-6 mt-6">
             <p className="text-sm text-gray-500">
               Add the scheduled departure dates for this package. The customer can only book one of these dates. Adult, child, and infant prices stay on the seasons above.
             </p>
+            <div className="flex flex-wrap gap-2">
+              {HOTEL_CATEGORIES.map((tab) => {
+                const active = activeCategory === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => {
+                      setActiveCategory(tab.key);
+                      setActiveMonthId(null);
+                      setActiveDepartureId(null);
+                    }}
+                    className={`h-10 px-5 rounded-[10px] text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-[#1F2A44] text-white"
+                        : "bg-white text-[#1F2A44] border border-[#E5E7EB] hover:bg-gray-50"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
             <div>
               <h4 className="text-sm font-semibold text-[#1F2A44] mb-3">
                 Departure months

@@ -18,17 +18,70 @@ export function createEmptyDay(dayNumber: number): ItineraryDay {
     dayNumber,
     title: "",
     description: "",
-    activitiesIncluded: "",
     highlights: "",
     internalNotes: "",
-    mobilityWarning: "",
-    supplierNotes: "",
     dietaryNotes: "",
     breakfast: false,
     lunch: false,
     dinner: false,
     imageUrl: null,
+    imageAlt: "",
   };
+}
+
+function stripTags(value: string): string {
+  return value.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+}
+
+function containsText(haystack: string | undefined, needle: string): boolean {
+  if (!needle) return true;
+  return stripTags(haystack ?? "").toLowerCase().includes(needle.toLowerCase());
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function appendPlain(existing: string | undefined, extra: string | undefined): string {
+  const addition = stripTags(extra ?? "");
+  const current = (existing ?? "").trim();
+  if (!addition || containsText(current, addition)) return current;
+  return current ? `${current}\n${addition}` : addition;
+}
+
+function appendDescription(existing: string | undefined, label: string, note: string | undefined): string {
+  const addition = stripTags(note ?? "");
+  if (!addition || containsText(existing, addition)) return existing ?? "";
+  const block = `${label}: ${addition}`;
+  const current = existing ?? "";
+  if (!current.trim()) return block;
+  if (/<\/?[a-z][\s\S]*>/i.test(current)) {
+    return `${current.trim()}<p>${escapeHtml(block)}</p>`;
+  }
+  return `${current.trim()}\n\n${block}`;
+}
+
+/** Moves retired day fields into Highlights and Description, then drops those fields. */
+export function presentItineraryDay(day: ItineraryDay): ItineraryDay {
+  let description = day.description ?? "";
+  description = appendDescription(description, "Mobility", day.mobilityWarning);
+  description = appendDescription(description, "Supplier notes", day.supplierNotes);
+
+  const next: ItineraryDay = {
+    ...day,
+    title: day.title?.trim() || undefined,
+    description: description.trim() || undefined,
+    highlights: appendPlain(day.highlights, day.activitiesIncluded).trim() || undefined,
+    dietaryNotes: appendPlain(day.dietaryNotes, day.halalFoodNote).trim() || undefined,
+    internalNotes: day.internalNotes?.trim() || undefined,
+    imageAlt: day.imageAlt?.trim() || undefined,
+    imageUrl: day.imageUrl?.trim() || null,
+  };
+  delete next.activitiesIncluded;
+  delete next.mobilityWarning;
+  delete next.supplierNotes;
+  delete next.halalFoodNote;
+  return next;
 }
 
 function toEditorHtml(value: string | undefined): string {
@@ -42,35 +95,61 @@ function toEditorHtml(value: string | undefined): string {
 }
 
 export function normalizeDay(day: ItineraryDay, dayNumber: number): ItineraryDay {
+  const presented = presentItineraryDay({ ...day, dayNumber });
   return {
     ...createEmptyDay(dayNumber),
-    ...day,
+    ...presented,
     dayNumber,
-    description: toEditorHtml(day.description),
-    dietaryNotes: day.dietaryNotes ?? day.halalFoodNote ?? "",
+    title: presented.title ?? "",
+    description: toEditorHtml(presented.description),
+    highlights: presented.highlights ?? "",
+    internalNotes: presented.internalNotes ?? "",
+    dietaryNotes: presented.dietaryNotes ?? "",
+    imageUrl: presented.imageUrl ?? null,
+    imageAlt: presented.imageAlt ?? "",
+    breakfast: presented.breakfast ?? false,
+    lunch: presented.lunch ?? false,
+    dinner: presented.dinner ?? false,
   };
 }
 
 export function dayHasUserContent(day: ItineraryDay): boolean {
+  const shown = presentItineraryDay(day);
   return Boolean(
-    day.title?.trim() ||
-      !isEmptyRichText(day.description ?? "") ||
-      day.activitiesIncluded?.trim() ||
-      day.highlights?.trim() ||
-      day.internalNotes?.trim() ||
-      day.mobilityWarning?.trim() ||
-      day.supplierNotes?.trim() ||
-      day.dietaryNotes?.trim() ||
-      day.halalFoodNote?.trim() ||
-      day.city?.trim() ||
-      day.optionalActivities?.trim() ||
-      day.transport?.trim() ||
-      day.hotelThatNight?.trim() ||
-      day.imageUrl?.trim() ||
-      day.breakfast ||
-      day.lunch ||
-      day.dinner ||
-      day.guideIncluded
+    shown.title?.trim() ||
+      !isEmptyRichText(shown.description ?? "") ||
+      shown.highlights?.trim() ||
+      shown.internalNotes?.trim() ||
+      shown.dietaryNotes?.trim() ||
+      shown.city?.trim() ||
+      shown.optionalActivities?.trim() ||
+      shown.transport?.trim() ||
+      shown.hotelThatNight?.trim() ||
+      shown.imageUrl?.trim() ||
+      shown.imageAlt?.trim() ||
+      shown.breakfast ||
+      shown.lunch ||
+      shown.dinner ||
+      shown.guideIncluded
+  );
+}
+
+/** Supplier and client documents omit consultant-only notes. */
+export function itineraryDayIsClientVisible(day: ItineraryDay): boolean {
+  const shown = presentItineraryDay(day);
+  return Boolean(
+    shown.title?.trim() ||
+      !isEmptyRichText(shown.description ?? "") ||
+      shown.highlights?.trim() ||
+      shown.dietaryNotes?.trim() ||
+      shown.city?.trim() ||
+      shown.optionalActivities?.trim() ||
+      shown.transport?.trim() ||
+      shown.hotelThatNight?.trim() ||
+      shown.imageUrl?.trim() ||
+      shown.breakfast ||
+      shown.lunch ||
+      shown.dinner
   );
 }
 

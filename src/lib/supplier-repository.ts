@@ -175,6 +175,23 @@ export async function listSuppliers(
   };
 }
 
+export async function listSuppliersWithEmails(): Promise<
+  Pick<SupplierRecord, "company_name" | "email_address" | "status" | "relationship_status">[]
+> {
+  const rows = await query<RowDataPacket[]>(
+    `SELECT company_name, email_address, status, relationship_status
+     FROM ${TABLE}
+     WHERE email_address IS NOT NULL AND TRIM(email_address) <> ''
+     ORDER BY company_name ASC, id ASC`
+  );
+  return rows.map((row) => ({
+    company_name: String(row.company_name ?? ""),
+    email_address: row.email_address ?? null,
+    status: row.status,
+    relationship_status: row.relationship_status,
+  }));
+}
+
 export async function getSupplierById(id: number): Promise<SupplierRecord | null> {
   const rows = await query<RowDataPacket[]>(`SELECT * FROM ${TABLE} WHERE id = ? LIMIT 1`, [id]);
   return rows.length ? parseSupplierRow(rows[0]) : null;

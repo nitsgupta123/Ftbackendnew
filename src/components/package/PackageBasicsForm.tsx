@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -496,7 +498,6 @@ export default function PackageBasicsForm({
     onNext({
       ...data,
       importantInfo: initialData?.importantInfo ?? data.importantInfo ?? "",
-      frontendNotes: initialData?.frontendNotes ?? data.frontendNotes ?? "",
     });
   };
 
@@ -509,7 +510,7 @@ export default function PackageBasicsForm({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm">
+      <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm animate-fade-in">
         <form onSubmit={handleSubmit(onSubmit)} className="p-6">
           {/* Header */}
           <div className="mb-6">

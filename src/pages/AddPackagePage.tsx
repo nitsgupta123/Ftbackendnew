@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import AdminShell from "@/components/layout/AdminShell";
 import PageHeader from "@/components/package/PageHeader";
@@ -46,6 +46,68 @@ import { PACKAGE_STEP_PERMISSION_KEYS } from "@/lib/permission-types";
 function addPackageUrl(query = "") {
   const base = process.env.NEXT_PUBLIC_BASE_PATH || "/panel";
   return `${base}/add-package${query ? `?${query}` : ""}`;
+}
+
+function ReadOnlyStepShell({
+  locked,
+  onPrevious,
+  onContinue,
+  canGoBack,
+  canGoForward,
+  children,
+}: {
+  locked: boolean;
+  onPrevious: () => void;
+  onContinue: () => void;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={
+        locked
+          ? "pointer-events-none [&_a]:pointer-events-auto [&_.consultant-crm]:pointer-events-auto [&_.consultant-crm]:select-text [&_input]:bg-[#F9FAFB] [&_textarea]:bg-[#F9FAFB]"
+          : undefined
+      }
+      onBeforeInputCapture={locked ? (event) => event.preventDefault() : undefined}
+      onKeyDownCapture={
+        locked
+          ? (event) => {
+              if (event.key === "Tab" || event.key === "Escape") return;
+              event.preventDefault();
+            }
+          : undefined
+      }
+    >
+      {children}
+      {locked ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#E5E7EB] bg-white px-4 py-3 pointer-events-auto">
+          <p className="text-xs text-gray-500">
+            View only — you can browse this step but cannot change it.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onPrevious}
+              disabled={!canGoBack}
+              className="h-9 rounded-[10px] border border-[#D1D5DB] px-3 text-sm text-gray-700 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={onContinue}
+              disabled={!canGoForward}
+              className="h-9 rounded-[10px] bg-[#1F2A44] px-3 text-sm text-white disabled:opacity-40"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function AddPackagePage() {
@@ -476,6 +538,7 @@ export default function AddPackagePage() {
         return (
           <ConsultantViewForm
             initialData={packageData?.consultant_view ?? undefined}
+            packageRecord={packageData}
             onNext={(data) => saveStepAndContinue(9, data)}
             onPrevious={handlePrevious}
             isSaving={isSaving}
@@ -625,7 +688,22 @@ export default function AddPackagePage() {
                 </div>
               ) : (
                 <div className="transition-all duration-300 ease-in-out">
-                  {renderStepForm()}
+                  <ReadOnlyStepShell
+                    locked={!canEditStep(currentStep)}
+                    canGoBack={currentStep > 1}
+                    canGoForward={currentStep < 14}
+                    onPrevious={handlePrevious}
+                    onContinue={() => {
+                      for (let step = currentStep + 1; step <= 14; step += 1) {
+                        if (canAccessStep(step)) {
+                          goToStep(step);
+                          return;
+                        }
+                      }
+                    }}
+                  >
+                    {renderStepForm()}
+                  </ReadOnlyStepShell>
                 </div>
               )}
             </div>

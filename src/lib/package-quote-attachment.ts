@@ -8,6 +8,13 @@ import type {
   PackageRecord,
 } from "./package-types";
 import type { PackageBasicsValues, SupplierPackageFile } from "./validation";
+import {
+  HOTEL_CATEGORY_OPTIONS,
+  inclusionImportantInfo,
+  inferStarCategory,
+  normalizeHotels,
+} from "./package-content";
+import { itineraryDayIsClientVisible, presentItineraryDay } from "./itinerary-days";
 import { packageAttachmentFilename } from "./supplier-quote-email";
 
 const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
@@ -204,9 +211,9 @@ function renderOverview(
 }
 
 function renderItinerary(days: ItineraryDay[] | undefined): string {
-  const list = (days ?? []).filter(
-    (day) => day && (day.title || htmlToText(day.description) || day.activitiesIncluded)
-  );
+  const list = (days ?? [])
+    .filter((day) => day && itineraryDayIsClientVisible(day))
+    .map((day) => presentItineraryDay(day));
   if (!list.length) return "";
 
   const cards = list
@@ -217,14 +224,12 @@ function renderItinerary(days: ItineraryDay[] | undefined): string {
         day.dinner ? "Dinner" : "",
       ].filter(Boolean);
       const rows: Array<[string, string]> = [];
-      addRow(rows, "Activities", htmlToText(day.activitiesIncluded));
       addRow(rows, "Highlights", htmlToText(day.highlights));
       addRow(rows, "Optional activities", htmlToText(day.optionalActivities));
       addRow(rows, "Transport", day.transport);
       addRow(rows, "Hotel that night", day.hotelThatNight);
       addRow(rows, "Meals", meals.join(", "));
       addRow(rows, "Dietary notes", day.dietaryNotes);
-      addRow(rows, "Halal food note", day.halalFoodNote);
       addRow(rows, "City", day.city);
 
       const heading = `Day ${day.dayNumber}${day.title?.trim() ? ` — ${day.title.trim()}` : ""}`;
@@ -245,58 +250,61 @@ function renderItinerary(days: ItineraryDay[] | undefined): string {
   return `<h2>Day-by-day itinerary</h2>${cards}`;
 }
 
-function renderHotels(hotels: HotelEntry[] | null | undefined): string {
-  const list = (hotels ?? []).filter((hotel) => hotel?.hotelName?.trim());
-  if (!list.length) return "";
+function renderHotelCard(hotel: HotelEntry): string {
+  const rows: Array<[string, string]> = [];
+  addRow(rows, "City", hotel.city);
+  if (!inferStarCategory(hotel)) addRow(rows, "Star rating", hotel.starRating);
+  addRow(rows, "Room type", hotel.roomType);
+  addRow(rows, "Max occupancy", hotel.maxOccupancy);
+  addRow(rows, "Child policy", hotel.childPolicy);
+  addRow(rows, "Address", hotel.address);
+  addRow(
+    rows,
+    "Breakfast",
+    hotel.breakfastIncluded == null
+      ? ""
+      : hotel.breakfastIncluded
+        ? hotel.halalBreakfast
+          ? "Included (halal)"
+          : "Included"
+        : "Not included"
+  );
+  addRow(rows, "Connecting rooms", yesNo(hotel.connectingRooms));
+  addRow(rows, "Extra bed", yesNo(hotel.extraBed));
+  if (hotel.notesVisibility === "client") addRow(rows, "Notes", hotel.internalNotes);
 
-  const cards = list
-    .map((hotel) => {
-      const rows: Array<[string, string]> = [];
-      addRow(rows, "City", hotel.city);
-      addRow(rows, "Star rating", hotel.starRating);
-      addRow(rows, "Room type", hotel.roomType);
-      addRow(rows, "Nights", hotel.nights);
-      addRow(rows, "Max occupancy", hotel.maxOccupancy);
-      addRow(rows, "Child policy", hotel.childPolicy);
-      addRow(rows, "Address", hotel.address);
-      addRow(
-        rows,
-        "Breakfast",
-        hotel.breakfastIncluded == null
-          ? ""
-          : hotel.breakfastIncluded
-            ? hotel.halalBreakfast
-              ? "Included (halal)"
-              : "Included"
-            : "Not included"
-      );
-      addRow(rows, "Connecting rooms", yesNo(hotel.connectingRooms));
-      addRow(rows, "Extra bed", yesNo(hotel.extraBed));
-
-      return `<div class="card"><h3>${escapeHtml(hotel.hotelName!.trim())}</h3>${
-        rows.length ? definitionTable(rows) : ""
-      }</div>`;
-    })
-    .join("\n");
-
-  return `<h2>Hotels</h2>${cards}`;
+  return `<div class="card"><h3>${escapeHtml(hotel.hotelName!.trim())}</h3>${
+    rows.length ? definitionTable(rows) : ""
+  }</div>`;
 }
 
-function storedImportantInfo(
-  data: InclusionsData | null | undefined,
-  legacyImportantInfo?: string
-): string {
-  if (data && Object.prototype.hasOwnProperty.call(data, "importantInfo")) {
-    return data.importantInfo ?? "";
+function renderHotels(hotels: PackageRecord["hotels"]): string {
+  const section = normalizeHotels(hotels);
+  const named = section.entries.filter((hotel) => hotel?.hotelName?.trim());
+  if (!named.length) return "";
+
+  const groups = HOTEL_CATEGORY_OPTIONS.map((group) => {
+    const list = named.filter((hotel) => inferStarCategory(hotel) === group.key);
+    if (!list.length) return "";
+    return `<p><strong>${escapeHtml(group.label)}</strong></p>\n${list.map(renderHotelCard).join("\n")}`;
+  }).filter(Boolean);
+
+  const other = named.filter((hotel) => !inferStarCategory(hotel));
+  if (other.length) {
+    groups.push(`<p><strong>Other hotels</strong></p>\n${other.map(renderHotelCard).join("\n")}`);
   }
-  return legacyImportantInfo ?? "";
+
+  const disclaimer = section.disclaimer?.trim()
+    ? `<p class="muted">${escapeHtml(section.disclaimer.trim())}</p>`
+    : "";
+  return `<h2>Hotels</h2>${groups.join("\n")}${disclaimer}`;
 }
 
 function renderInclusions(
   data: InclusionsData | null | undefined,
   legacyImportantInfo?: string
 ): string {
-  const importantHtml = richHtmlBlock(storedImportantInfo(data, legacyImportantInfo));
+  const importantHtml = richHtmlBlock(inclusionImportantInfo(data, legacyImportantInfo));
   if (!data && !importantHtml) return "";
   const chunks: string[] = [];
   if (importantHtml) {
@@ -318,14 +326,6 @@ function renderInclusions(
   chunks.push(bulletList("Included", data.included));
   chunks.push(bulletList("Excluded", data.excluded));
   chunks.push(bulletList("Optional add-ons", data.optionalAddons));
-  if (data.localFees?.trim()) {
-    chunks.push(`<p><strong>Local fees:</strong> ${escapeHtml(htmlToText(data.localFees))}</p>`);
-  }
-  if (data.nonRefundable?.trim()) {
-    chunks.push(
-      `<p><strong>Non-refundable:</strong> ${escapeHtml(htmlToText(data.nonRefundable))}</p>`
-    );
-  }
   const body = chunks.filter(Boolean).join("\n");
   if (!body) return "";
   return `<h2>Inclusions</h2>${body}`;

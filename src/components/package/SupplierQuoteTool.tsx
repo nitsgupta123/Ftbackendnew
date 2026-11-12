@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Icon } from "../ui/icons";
 import type { PackageRecord, SupplierQuoteToolData } from "@/lib/package-types";
-import type { SupplierPackageFile } from "@/lib/validation";
+import { normalizeSupplierFormValues, type SupplierPackageFile } from "@/lib/validation";
 import {
   saveButtonLabel,
   stepPreviousButtonClass,
@@ -15,7 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { getSettings } from "@/lib/settings-api";
-import { sendSupplierQuoteEmail } from "@/lib/package-api";
+import { listSupplierModuleEmails, sendSupplierQuoteEmail } from "@/lib/package-api";
+import { buildQuoteRecipients, type QuoteRecipientOption } from "@/lib/package-content";
 import { isValidEmail, parseEmailList } from "@/lib/email-list";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -76,6 +79,28 @@ type QuoteFormState = Required<
   emailSignature: string;
 };
 
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="border-b border-[#E5E7EB] pb-3">
+        <h3 className="text-sm font-bold tracking-wide text-[#1F2A44]">{title}</h3>
+        {description ? (
+          <p className="mt-1 text-xs leading-relaxed text-gray-500">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function ToggleCard({
   label,
   active,
@@ -86,33 +111,72 @@ function ToggleCard({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <div
-      className="flex items-center justify-between bg-white border border-[#E5E7EB] rounded-[12px] px-5 py-[18px] transition-all duration-200 ease-in-out cursor-pointer select-none hover:border-gray-300"
+    <button
+      type="button"
       onClick={() => onChange(!active)}
+      className="flex w-full items-center justify-between gap-4 rounded-[12px] border border-[#E5E7EB] bg-white px-4 py-3.5 text-left transition-colors hover:border-gray-300"
     >
-      <span className="text-sm font-bold text-[#1F2A44]">{label}</span>
-      <div className="flex items-center gap-3">
+      <span className="min-w-0 flex-1 text-sm font-semibold leading-snug text-[#1F2A44]">
+        {label}
+      </span>
+      <span className="flex shrink-0 items-center gap-2.5">
         <span
-          className={`text-sm font-semibold ${active ? "text-[#16A34A]" : "text-[#64748B]"}`}
+          className={`w-7 text-right text-xs font-semibold ${active ? "text-[#16A34A]" : "text-[#64748B]"}`}
         >
           {active ? "Yes" : "No"}
         </span>
-        <div
+        <span
           role="switch"
           aria-checked={active}
-          className={`relative inline-flex h-[26px] w-[46px] items-center rounded-full flex-shrink-0 transition-colors duration-300 ease-in-out ${active ? "bg-[#22C55E]" : "bg-[#CBD5E1]"}`}
+          className={`relative inline-flex h-[26px] w-[46px] items-center rounded-full transition-colors duration-300 ease-in-out ${active ? "bg-[#22C55E]" : "bg-[#CBD5E1]"}`}
         >
           <span
             className={`inline-block h-[20px] w-[20px] transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-300 ease-in-out ${active ? "translate-x-[23px]" : "translate-x-[3px]"}`}
           />
-        </div>
-      </div>
-    </div>
+        </span>
+      </span>
+    </button>
   );
 }
 
 function supplierEmailsFromSource(source?: SupplierSourceEmails | null): string[] {
-  return parseEmailList(source?.supplierEmails ?? []).filter(isValidEmail);
+  const normalized = normalizeSupplierFormValues(source);
+  return parseEmailList(normalized.supplierEmails).filter(isValidEmail);
+}
+
+function preferredRecipientEmails(
+  options: QuoteRecipientOption[],
+  supplierName: string
+): string[] {
+  const name = supplierName.trim().toLowerCase();
+  return options
+    .filter((recipient) => {
+      if (recipient.sources.includes("supplier_source")) return true;
+      if (!name || !recipient.supplierName) return false;
+      return recipient.supplierName
+        .split(", ")
+        .some((part) => part.trim().toLowerCase() === name);
+    })
+    .map((recipient) => recipient.email);
+}
+
+function recipientSourceLabel(recipient: QuoteRecipientOption): string {
+  return [
+    recipient.sources.includes("supplier_source") ? "Supplier Source" : "",
+    recipient.sources.includes("supplier_module") ? "Supplier Module" : "",
+    recipient.sources.length === 0 ? "Previously selected" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function recipientCaution(recipient: QuoteRecipientOption): string {
+  return [
+    recipient.supplierStatus === "do_not_use" ? "Do not use" : "",
+    recipient.relationshipStatus === "blacklisted" ? "Blacklisted" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function buildInitialForm(
@@ -202,7 +266,10 @@ export default function SupplierQuoteTool({
   const [sending, setSending] = useState(false);
   const [lastSentAt, setLastSentAt] = useState(initialData?.lastSentAt ?? "");
   const [lastSentBy, setLastSentBy] = useState(initialData?.lastSentBy ?? "");
-  const [lastSentTo, setLastSentTo] = useState(initialData?.lastSentTo);
+  const [moduleRecipients, setModuleRecipients] = useState<QuoteRecipientOption[]>([]);
+  const [moduleEmailsLoaded, setModuleEmailsLoaded] = useState(false);
+  const [recipientQuery, setRecipientQuery] = useState("");
+  const recipientsTouched = useRef(Boolean(initialData?.toEmails?.length));
 
   const sourceFiles = useMemo(
     () => supplierSource?.quotationFiles ?? [],
@@ -223,6 +290,40 @@ export default function SupplierQuoteTool({
     () => supplierEmailsFromSource(supplierSource),
     [supplierSource]
   );
+  const recipientOptions = useMemo(
+    () =>
+      buildQuoteRecipients({
+        sourceEmails: supplierEmails,
+        moduleSuppliers: moduleRecipients.map((recipient) => ({
+          company_name: recipient.supplierName,
+          email_address: recipient.email,
+          status: recipient.supplierStatus,
+          relationship_status: recipient.relationshipStatus,
+        })),
+      }),
+    [supplierEmails, moduleRecipients]
+  );
+  const listedRecipients = useMemo(() => {
+    const known = new Set(recipientOptions.map((recipient) => recipient.email));
+    const savedOnly: QuoteRecipientOption[] = formData.toEmails
+      .map((email) => email.trim().toLowerCase())
+      .filter((email) => isValidEmail(email) && !known.has(email))
+      .map((email) => ({ email, sources: [] }));
+    return [...recipientOptions, ...savedOnly];
+  }, [recipientOptions, formData.toEmails]);
+  const visibleRecipients = useMemo(() => {
+    const query = recipientQuery.trim().toLowerCase();
+    if (!query) return listedRecipients;
+    return listedRecipients.filter((recipient) =>
+      `${recipient.email} ${recipient.supplierName ?? ""}`.toLowerCase().includes(query)
+    );
+  }, [listedRecipients, recipientQuery]);
+  const sourceRecipientCount = recipientOptions.filter((recipient) =>
+    recipient.sources.includes("supplier_source")
+  ).length;
+  const moduleRecipientCount = recipientOptions.filter((recipient) =>
+    recipient.sources.includes("supplier_module")
+  ).length;
 
   useEffect(() => {
     setFormData(
@@ -233,10 +334,52 @@ export default function SupplierQuoteTool({
     setSignatureEdited(Boolean(initialData?.emailSignature?.trim()));
     setLastSentAt(initialData?.lastSentAt ?? "");
     setLastSentBy(initialData?.lastSentBy ?? "");
-    setLastSentTo(initialData?.lastSentTo);
+    recipientsTouched.current = Boolean(initialData?.toEmails?.length);
     // loginSignature is applied separately so a late user load does not reset the form.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [initialData, supplierSource, destination]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listSupplierModuleEmails()
+      .then((result) => {
+        if (cancelled) return;
+        setModuleRecipients(
+          result.recipients.map((recipient) => ({
+            email: recipient.email,
+            sources: ["supplier_module"],
+            supplierName: recipient.supplierName,
+            supplierStatus: recipient.supplierStatus,
+            relationshipStatus: recipient.relationshipStatus,
+          }))
+        );
+        setModuleEmailsLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setModuleRecipients([]);
+        setModuleEmailsLoaded(true);
+        toast.error("Could not load Supplier Module emails");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (recipientsTouched.current) return;
+    const next = preferredRecipientEmails(
+      recipientOptions,
+      supplierSource?.supplierName ?? ""
+    );
+    setFormData((prev) => {
+      const same =
+        prev.toEmails.length === next.length &&
+        prev.toEmails.every((email, index) => email.toLowerCase() === next[index]);
+      if (same) return prev;
+      return { ...prev, toEmails: next };
+    });
+  }, [recipientOptions, supplierSource?.supplierName]);
 
   useEffect(() => {
     if (signatureEdited) return;
@@ -299,12 +442,29 @@ export default function SupplierQuoteTool({
   };
 
   const toggleSupplierEmail = (email: string) => {
+    recipientsTouched.current = true;
     const normalized = email.toLowerCase();
     const selected = formData.toEmails.map((e) => e.toLowerCase());
     const nextTo = selected.includes(normalized)
       ? formData.toEmails.filter((e) => e.toLowerCase() !== normalized)
       : [...formData.toEmails, email];
     setFormData((prev) => ({ ...prev, toEmails: nextTo }));
+  };
+
+  const setShownRecipients = (selected: boolean) => {
+    recipientsTouched.current = true;
+    const shown = new Set(visibleRecipients.map((recipient) => recipient.email));
+    setFormData((prev) => {
+      const kept = prev.toEmails.filter((email) => !shown.has(email.toLowerCase()));
+      if (!selected) return { ...prev, toEmails: kept };
+      const next = [...kept];
+      for (const recipient of visibleRecipients) {
+        if (!next.some((email) => email.toLowerCase() === recipient.email)) {
+          next.push(recipient.email);
+        }
+      }
+      return { ...prev, toEmails: next };
+    });
   };
 
   const addAdditionalEmail = () => {
@@ -369,7 +529,7 @@ export default function SupplierQuoteTool({
     emailSignature: formData.emailSignature,
     lastSentAt: lastSentAt || undefined,
     lastSentBy: lastSentBy || null,
-    lastSentTo,
+    lastSentTo: initialData?.lastSentTo,
   });
 
   const handleSubmit = () => {
@@ -426,7 +586,6 @@ export default function SupplierQuoteTool({
         setSignatureEdited(Boolean(sent.emailSignature?.trim()));
         setLastSentAt(sent.lastSentAt ?? "");
         setLastSentBy(sent.lastSentBy ?? "");
-        setLastSentTo(sent.lastSentTo);
       }
       if (result.package) onSent?.(result.package);
 
@@ -470,13 +629,13 @@ export default function SupplierQuoteTool({
 
   const inputClass =
     "w-full h-[48px] px-4 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-colors";
-  const selectClass = `${inputClass} cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27=%27none%27 stroke=%27%239CA3AF%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E')] bg-[length:12px] bg-[right_16px_center] bg-no-repeat pr-10`;
+  const selectClass = `${inputClass} cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%2712%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239CA3AF%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E')] bg-[length:12px] bg-[right_16px_center] bg-no-repeat pr-10`;
   const labelClass = "block text-sm font-bold text-[#1F2A44] mb-2";
   const textareaClass =
     "w-full min-h-[120px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-colors resize-y";
 
   return (
-    <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm relative">
+    <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm animate-fade-in relative">
       <div className="px-6 py-5 border-b border-[#E5E7EB]">
         <h2 className="text-lg font-bold text-[#1F2A44]">Supplier Quote Tool</h2>
         <p className="text-sm text-gray-400 mt-1">
@@ -485,10 +644,13 @@ export default function SupplierQuoteTool({
         </p>
       </div>
 
-      <div className="p-6 pb-0">
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6">
-          <div className="space-y-5">
-            <div>
+      <div className="space-y-8 p-6 pb-2">
+        <FormSection
+          title="Request"
+          description="Who this quote is for, and when you need a reply."
+        >
+          <div className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
+            <div className="sm:col-span-2">
               <Label htmlFor="referenceCode" className={labelClass}>
                 Your reference code
               </Label>
@@ -505,7 +667,6 @@ export default function SupplierQuoteTool({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5">
               <div>
                 <Label htmlFor="quoteRequestType" className={labelClass}>
                   Quote request type
@@ -570,8 +731,15 @@ export default function SupplierQuoteTool({
                   />
                 </div>
               </div>
+          </div>
+        </FormSection>
 
-              <div>
+        <FormSection
+          title="Trip"
+          description="Travel dates, party size, and stay preferences."
+        >
+          <div className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="sm:col-span-2 lg:col-span-3">
                 <Label htmlFor="clientTravelDates" className={labelClass}>
                   Client travel dates
                 </Label>
@@ -656,9 +824,7 @@ export default function SupplierQuoteTool({
                   onChange={(e) => updateField("rooming", e.target.value)}
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5">
               <div>
                 <Label htmlFor="mealRequirements" className={labelClass}>
                   Meal requirements
@@ -672,7 +838,14 @@ export default function SupplierQuoteTool({
                   onChange={(e) => updateField("mealRequirements", e.target.value)}
                 />
               </div>
+          </div>
+        </FormSection>
 
+        <FormSection
+          title="Notes"
+          description="Changes from the base package, and anything the supplier should know before quoting."
+        >
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <div>
                 <Label htmlFor="requestedChanges" className={labelClass}>
                   Requested changes
@@ -680,29 +853,33 @@ export default function SupplierQuoteTool({
                 <Textarea
                   id="requestedChanges"
                   placeholder="List any changes from the base package..."
-                  rows={3}
+                  rows={4}
                   className={textareaClass}
                   value={formData.requestedChanges}
                   onChange={(e) => updateField("requestedChanges", e.target.value)}
                 />
               </div>
-            </div>
+              <div>
+                <Label htmlFor="negotiationNote" className={labelClass}>
+                  Negotiation note
+                </Label>
+                <Textarea
+                  id="negotiationNote"
+                  placeholder="Example: client is serious but price-sensitive. Ask for best net rate before markup."
+                  rows={4}
+                  className={textareaClass}
+                  value={formData.negotiationNote}
+                  onChange={(e) => updateField("negotiationNote", e.target.value)}
+                />
+              </div>
+          </div>
+        </FormSection>
 
-            <div>
-              <Label htmlFor="negotiationNote" className={labelClass}>
-                Negotiation note
-              </Label>
-              <Textarea
-                id="negotiationNote"
-                placeholder="Example: client is serious but price-sensitive. Ask for best net rate before markup."
-                rows={4}
-                className={textareaClass}
-                value={formData.negotiationNote}
-                onChange={(e) => updateField("negotiationNote", e.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-2">
+        <FormSection
+          title="Include in the email"
+          description="Choose what the supplier receives with this quote."
+        >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <ToggleCard
                 label="Include day-by-day itinerary"
                 active={formData.includeDayByDayItinerary}
@@ -719,44 +896,98 @@ export default function SupplierQuoteTool({
                 onChange={(value) => updateField("attachPackage", value)}
               />
             </div>
-            <p className="text-xs text-gray-500 -mt-2">
-              Attaches the quotation, brochure, or rate sheet uploaded in Supplier
-              Source (Step 1). If no file is saved there, a package summary is
-              attached instead.
+            <p className="text-xs leading-relaxed text-gray-500">
+              The package attachment uses the quotation, brochure, or rate sheet uploaded
+              in Supplier Source. If no file is saved there, a package summary is attached
+              instead.
             </p>
+        </FormSection>
 
-            <div className="rounded-[12px] border border-[#E5E7EB] bg-[#FAFBFC] p-5 space-y-4">
+        <FormSection
+          title="Recipients"
+          description="Every address saved on this package’s Supplier Source, and every address saved in the Supplier Module. Select or deselect each recipient. Management CC and BCC are applied automatically."
+        >
+            <div className="grid grid-cols-1 items-start gap-5 rounded-[12px] border border-[#E5E7EB] bg-[#FAFBFC] p-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,0.75fr)]">
               <div>
-                <h3 className="text-sm font-bold text-[#1F2A44]">Email recipients</h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Supplier emails are pulled from Step 1 (Supplier Source). Add extra
-                  recipients if needed. Management CC/BCC is applied automatically.
-                </p>
-              </div>
-
-              <div>
-                <p className={`${labelClass} mb-2`}>From supplier module</p>
-                {supplierEmails.length === 0 ? (
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className={labelClass}>Saved supplier emails</p>
+                    <p className="text-xs text-gray-500 -mt-1">
+                      {sourceRecipientCount} from Supplier Source · {moduleRecipientCount} from
+                      Supplier Module
+                      {listedRecipients.length > 0
+                        ? ` · ${formData.toEmails.length} selected`
+                        : ""}
+                    </p>
+                  </div>
+                  {listedRecipients.length > 0 && (
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-[#1F2A44] underline underline-offset-2"
+                        onClick={() => setShownRecipients(true)}
+                      >
+                        {recipientQuery.trim() ? "Select shown" : "Select all"}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-[#64748B] underline underline-offset-2"
+                        onClick={() => setShownRecipients(false)}
+                      >
+                        {recipientQuery.trim() ? "Deselect shown" : "Deselect all"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {listedRecipients.length > 4 && (
+                  <Input
+                    type="search"
+                    placeholder="Search by email or supplier"
+                    className={`${inputClass} mb-2`}
+                    value={recipientQuery}
+                    onChange={(e) => setRecipientQuery(e.target.value)}
+                    aria-label="Search saved supplier emails"
+                  />
+                )}
+                {!moduleEmailsLoaded && listedRecipients.length === 0 ? (
+                  <p className="text-sm text-gray-500 bg-white border border-[#E5E7EB] rounded-lg px-3 py-2">
+                    Loading saved supplier emails…
+                  </p>
+                ) : listedRecipients.length === 0 ? (
                   <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                    No supplier emails found. Add them in Supplier Source (Step 1), or
-                    enter recipients manually below.
+                    No saved supplier emails found. Add them in Supplier Source or the
+                    Supplier Module, or enter recipients manually below.
+                  </p>
+                ) : visibleRecipients.length === 0 ? (
+                  <p className="text-sm text-gray-500 bg-white border border-[#E5E7EB] rounded-lg px-3 py-2">
+                    No saved emails match that search.
                   </p>
                 ) : (
-                  <ul className="space-y-2">
-                    {supplierEmails.map((email) => {
+                  <ul className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {visibleRecipients.map((recipient) => {
                       const checked = formData.toEmails.some(
-                        (e) => e.toLowerCase() === email.toLowerCase()
+                        (email) => email.toLowerCase() === recipient.email
                       );
+                      const caution = recipientCaution(recipient);
                       return (
-                        <li key={email}>
+                        <li key={recipient.email}>
                           <label className="flex items-center gap-3 text-sm text-[#1F2A44] bg-white border border-[#E5E7EB] rounded-lg px-3 py-2.5 cursor-pointer hover:border-gray-300">
                             <input
                               type="checkbox"
                               className="h-4 w-4 accent-[#B48A2C]"
                               checked={checked}
-                              onChange={() => toggleSupplierEmail(email)}
+                              onChange={() => toggleSupplierEmail(recipient.email)}
                             />
-                            <span>{email}</span>
+                            <span className="min-w-0">
+                              <span className="block break-all">{recipient.email}</span>
+                              <span className="block text-xs text-gray-500">
+                                {recipientSourceLabel(recipient)}
+                                {recipient.supplierName ? ` · ${recipient.supplierName}` : ""}
+                                {caution ? (
+                                  <span className="text-amber-700"> · {caution}</span>
+                                ) : null}
+                              </span>
+                            </span>
                           </label>
                         </li>
                       );
@@ -765,6 +996,7 @@ export default function SupplierQuoteTool({
                 )}
               </div>
 
+              <div className="space-y-4">
               <div>
                 <Label htmlFor="additionalEmail" className={labelClass}>
                   Additional recipients
@@ -814,7 +1046,7 @@ export default function SupplierQuoteTool({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 gap-3 text-xs">
                 <div className="rounded-lg bg-white border border-[#E5E7EB] px-3 py-2.5">
                   <p className="font-semibold text-[#1F2A44]">Auto CC (management)</p>
                   <p className="text-gray-500 mt-1 break-words">
@@ -830,60 +1062,57 @@ export default function SupplierQuoteTool({
                   </p>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
+        </FormSection>
 
-          <div className="xl:sticky xl:top-20 self-start">
-            <div className="bg-[#EBF4FF] rounded-[12px] p-5 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-[#1F2A44]">
-                    Editable email preview
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Your reference code is included in the subject. Edit the subject, body, and signature before sending.
-                  </p>
+        <FormSection
+          title="Email"
+          description="Your reference code is included in the subject. Edit the subject, body, and signature before sending."
+        >
+            <div className="space-y-4 rounded-[12px] border border-[#D6E6FA] bg-[#F4F8FF] p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <Label htmlFor="emailSubject" className="text-xs font-semibold text-[#1F2A44]">
+                    Subject
+                  </Label>
+                  <Input
+                    id="emailSubject"
+                    className="mt-1 h-10 rounded-lg bg-white border-[#E5E7EB] text-sm"
+                    value={formData.emailSubject}
+                    onChange={(e) => {
+                      setSubjectEdited(true);
+                      updateField("emailSubject", e.target.value);
+                    }}
+                  />
                 </div>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleRegenerateClick}
-                  className="h-8 text-xs rounded-lg border-[#BFDBFE] bg-white"
+                  className="h-10 shrink-0 rounded-lg border-[#BFDBFE] bg-white px-4 text-xs"
                 >
                   Regenerate
                 </Button>
               </div>
 
-              <div>
-                <Label htmlFor="emailSubject" className="text-xs font-semibold text-[#1F2A44]">
-                  Subject
-                </Label>
-                <Input
-                  id="emailSubject"
-                  className="mt-1 h-10 rounded-lg bg-white border-[#E5E7EB] text-sm"
-                  value={formData.emailSubject}
-                  onChange={(e) => {
-                    setSubjectEdited(true);
-                    updateField("emailSubject", e.target.value);
-                  }}
-                />
-              </div>
-
+              <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.7fr)]">
               <div>
                 <Label htmlFor="emailBody" className="text-xs font-semibold text-[#1F2A44]">
                   Body
                 </Label>
                 <Textarea
                   id="emailBody"
-                  rows={16}
-                  className="mt-1 min-h-[280px] rounded-lg bg-white border-[#E5E7EB] text-sm font-mono leading-relaxed"
+                  rows={14}
+                  className="mt-1 min-h-[280px] rounded-lg bg-white border-[#E5E7EB] text-sm leading-relaxed"
                   value={formData.emailBody}
                   onChange={(e) => {
                     setBodyEdited(true);
                     updateField("emailBody", e.target.value);
                   }}
                 />
-                <div className="mt-2 rounded-lg border border-[#BFDBFE] bg-white px-3 py-2.5">
+              </div>
+                <div className="rounded-lg border border-[#D6E6FA] bg-white px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <Label
                       htmlFor="emailSignature"
@@ -907,7 +1136,7 @@ export default function SupplierQuoteTool({
                   <Textarea
                     id="emailSignature"
                     rows={4}
-                    className="mt-1.5 min-h-[88px] rounded-lg bg-white border-[#E5E7EB] text-sm font-mono leading-relaxed"
+                    className="mt-1.5 min-h-[180px] rounded-lg bg-white border-[#E5E7EB] text-sm leading-relaxed"
                     value={formData.emailSignature}
                     onChange={(e) => {
                       setSignatureEdited(true);
@@ -939,24 +1168,23 @@ export default function SupplierQuoteTool({
                 </div>
               )}
 
-              {lastSentAt && (
+              <div className="flex flex-col gap-3 border-t border-[#D6E6FA] pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-gray-500">
-                  Last sent {formatPackageDateTime(lastSentAt)}
-                  {lastSentBy ? ` by ${lastSentBy}` : ""}.
+                  {lastSentAt
+                    ? `Last sent ${formatPackageDateTime(lastSentAt)}${lastSentBy ? ` by ${lastSentBy}` : ""}.`
+                    : "This quote has not been sent yet."}
                 </p>
-              )}
-
-              <Button
-                type="button"
-                onClick={handleSend}
-                disabled={sending || isSaving}
-                className="w-full h-12 text-sm font-bold text-white uppercase tracking-wide bg-[#B48A2C] rounded-[12px] hover:bg-[#B48A2C]/90 transition-colors shadow-sm disabled:opacity-60"
-              >
-                {sending ? "Sending..." : "Send quote email"}
-              </Button>
+                <Button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={sending || isSaving}
+                  className="h-11 px-6 text-sm font-bold text-white uppercase tracking-wide bg-[#B48A2C] rounded-[12px] hover:bg-[#B48A2C]/90 transition-colors shadow-sm disabled:opacity-60 sm:w-auto"
+                >
+                  {sending ? "Sending..." : "Send quote email"}
+                </Button>
+              </div>
             </div>
-          </div>
-        </div>
+        </FormSection>
       </div>
 
       <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] px-6 py-4 flex items-center justify-between flex-wrap gap-3 rounded-b-[12px] z-10 mt-6">

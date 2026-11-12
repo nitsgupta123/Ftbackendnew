@@ -1,14 +1,15 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Icon } from "../ui/icons";
 
+import { inclusionImportantInfo } from "@/lib/package-content";
 import type { InclusionsData } from "@/lib/package-types";
 import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
 
 interface InclusionsFormProps extends StepFormBaseProps {
@@ -23,10 +24,7 @@ function readImportantInfo(
   data: InclusionsData | null | undefined,
   legacyImportantInfo?: string
 ): string {
-  if (data && Object.prototype.hasOwnProperty.call(data, "importantInfo")) {
-    return data.importantInfo ?? "";
-  }
-  return legacyImportantInfo ?? "";
+  return inclusionImportantInfo(data, legacyImportantInfo);
 }
 
 function asStringArray(value: unknown, fallback: string[] = []): string[] {
@@ -48,8 +46,6 @@ function inclusionsSyncKey(
     included: asStringArray(data?.included),
     excluded: asStringArray(data?.excluded),
     optionalAddons: asStringArray(data?.optionalAddons),
-    localFees: data?.localFees ?? "",
-    nonRefundable: data?.nonRefundable ?? "",
     importantInfo: readImportantInfo(data, legacyImportantInfo),
     consultantMustExplain: data?.consultantMustExplain ?? true,
     flightsIncluded: data?.flightsIncluded ?? false,
@@ -432,13 +428,18 @@ export default function InclusionsForm({
   isSaving = false,
 }: InclusionsFormProps) {
   const [included, setIncluded] = useState<string[]>(() => asStringArray(initialData?.included));
-  const [excluded, setExcluded] = useState<string[]>(() => asStringArray(initialData?.excluded));
+  const [excluded, setExcluded] = useState<string[]>(() =>
+    asStringArray(initialData?.excluded, [
+      "International",
+      "Visa fees",
+      "Travel insura",
+      "City tax or to",
+    ])
+  );
   const [optionalAddons, setOptionalAddons] = useState<string[]>(() =>
-    asStringArray(initialData?.optionalAddons)
+    asStringArray(initialData?.optionalAddons, ["Travel insura", "Visa support", "Private guide"])
   );
 
-  const [localFees, setLocalFees] = useState(initialData?.localFees ?? "");
-  const [nonRefundable, setNonRefundable] = useState(initialData?.nonRefundable ?? "");
   const [importantInfo, setImportantInfo] = useState(() =>
     readImportantInfo(initialData, legacyImportantInfo)
   );
@@ -466,8 +467,6 @@ export default function InclusionsForm({
       setIncluded(asStringArray(initialData.included));
       setExcluded(asStringArray(initialData.excluded));
       setOptionalAddons(asStringArray(initialData.optionalAddons));
-      setLocalFees(initialData.localFees ?? "");
-      setNonRefundable(initialData.nonRefundable ?? "");
       setConsultantMustExplain(initialData.consultantMustExplain ?? true);
       setFlightsIncluded(initialData.flightsIncluded ?? false);
       setTrainIncluded(initialData.trainIncluded ?? false);
@@ -476,11 +475,8 @@ export default function InclusionsForm({
     setImportantInfo(readImportantInfo(initialData, legacyImportantInfo));
   }, [syncKey, initialData, legacyImportantInfo]);
 
-  const textareaClass =
-    "w-full min-h-[140px] px-4 py-3 text-sm border border-[#E5E7EB] rounded-[12px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C] transition-all duration-200 hover:border-gray-300 resize-y";
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm px-6 pt-6 pb-5">
         <h2 className="text-lg font-bold text-[#1F2A44]">
           Inclusions, Exclusions & Add-ons
@@ -555,9 +551,9 @@ export default function InclusionsForm({
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
         <h3 className="text-sm font-bold text-[#1F2A44] mb-1">Important Notes</h3>
         <p className="text-xs text-gray-400 mb-3 leading-relaxed">
-          Shown to clients. Use the toolbar for bold, lists, and links. Typical
-          notes: rates subject to availability, visa not included, seasonal
-          surcharge, physical requirements, booking conditions.
+          Shown to clients. Use the formatting toolbar for bold, lists, and links.
+          Put local fees, taxes, and booking conditions here. Non-refundable
+          components stay under Booking Policy.
         </p>
         <BlogRichTextEditor
           value={importantInfo}
@@ -567,32 +563,6 @@ export default function InclusionsForm({
           minHeight={140}
           maxHeight={600}
         />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
-          <Label className="block text-sm font-bold text-[#1F2A44] mb-3">
-            Local fees and taxes
-          </Label>
-          <Textarea
-            placeholder="Describe any local fees, tourist taxes, or surcharges payable on-site..."
-            value={localFees}
-            onChange={(e) => setLocalFees(e.target.value)}
-            className={textareaClass}
-          />
-        </div>
-
-        <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm p-5">
-          <Label className="block text-sm font-bold text-[#1F2A44] mb-3">
-            Non-refundable components
-          </Label>
-          <Textarea
-            placeholder="List any non-refundable deposits, fees, or components..."
-            value={nonRefundable}
-            onChange={(e) => setNonRefundable(e.target.value)}
-            className={textareaClass}
-          />
-        </div>
       </div>
 
       <ConsultantToggleCard
@@ -621,8 +591,6 @@ export default function InclusionsForm({
               included,
               excluded,
               optionalAddons,
-              localFees,
-              nonRefundable,
               importantInfo,
               consultantMustExplain,
               flightsIncluded,

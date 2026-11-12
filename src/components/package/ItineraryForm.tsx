@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../ui/icons";
 import type { ItineraryData, ItineraryDay } from "@/lib/package-types";
@@ -11,7 +13,9 @@ import {
   resolveItineraryDays,
   writeItineraryDraft,
 } from "@/lib/itinerary-days";
+import { itineraryImageAltError } from "@/lib/package-content";
 import { uploadMediaFile } from "@/lib/media-api";
+import { toast } from "sonner";
 import { saveButtonLabel, stepPreviousButtonClass, stepSaveButtonClass, type StepFormBaseProps } from "./step-form-props";
 import { Button } from "@/components/ui/button";
 import BlogRichTextEditor from "@/components/blogs/BlogRichTextEditor";
@@ -19,7 +23,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleSwitch } from "@/components/ui/toggle-switch";
-import { resolveMediaSrc } from "@/lib/package-images";
 
 interface ItineraryFormProps extends StepFormBaseProps {
   onNext: (data: ItineraryData) => void | boolean | Promise<void | boolean>;
@@ -66,10 +69,14 @@ function storeRichText(html: string): string {
 
 function DayImageUpload({
   value,
+  altText,
   onChange,
+  onAltChange,
 }: {
   value: string | null | undefined;
+  altText: string;
   onChange: (url: string | null) => void;
+  onAltChange: (altText: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -111,8 +118,8 @@ function DayImageUpload({
             <div className="overflow-hidden rounded-[10px] border border-[#E5E7EB] bg-white shrink-0 w-full sm:w-40">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={resolveMediaSrc(value)}
-                alt="Day"
+                src={value}
+                alt={altText || "Day"}
                 className="h-28 w-full object-cover"
               />
             </div>
@@ -131,6 +138,7 @@ function DayImageUpload({
                 onClick={() => {
                   setError(null);
                   onChange(null);
+                  onAltChange("");
                 }}
                 className="px-4 py-2 text-xs font-semibold text-[#B91C1C] bg-white border border-[#FECACA] rounded-[8px] hover:bg-[#FEF2F2] transition-colors"
               >
@@ -158,6 +166,21 @@ function DayImageUpload({
         )}
 
         {error ? <p className="mt-2 text-xs text-[#B91C1C]">{error}</p> : null}
+      </div>
+      <div className="mt-3">
+        <Label className="block text-xs font-medium text-gray-600 mb-1.5">
+          Alt text
+        </Label>
+        <Input
+          type="text"
+          placeholder="Describe the image for travellers who cannot see it"
+          className="w-full h-[48px] px-4 text-sm border border-[#E5E7EB] rounded-[10px] bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B48A2C]/20 focus:border-[#B48A2C]"
+          value={altText}
+          onChange={(event) => onAltChange(event.target.value)}
+        />
+        <p className="mt-1.5 text-xs text-gray-400">
+          {value ? "Required for this image." : "Required once a day image is uploaded."}
+        </p>
       </div>
     </div>
   );
@@ -260,11 +283,16 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
               value={day.title ?? ""}
               onChange={(e) => update({ title: e.target.value })}
             />
+            <p className="mt-1.5 text-xs text-gray-400">
+              Day {day.dayNumber} is added automatically. Enter only the title.
+            </p>
           </div>
 
           <DayImageUpload
             value={day.imageUrl}
+            altText={day.imageAlt ?? ""}
             onChange={(imageUrl) => update({ imageUrl })}
+            onAltChange={(imageAlt) => update({ imageAlt })}
           />
 
           <div>
@@ -287,57 +315,13 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
           </div>
 
           <div>
-            <Label className={labelClass}>Activities included</Label>
-            <Textarea
-              placeholder="List included activities..."
-              rows={4}
-              className={textareaClass}
-              value={day.activitiesIncluded ?? ""}
-              onChange={(e) => update({ activitiesIncluded: e.target.value })}
-            />
-          </div>
-
-          <div>
             <Label className={labelClass}>Highlights</Label>
             <Textarea
-              placeholder="Key highlights for this day..."
+              placeholder="Key highlights for this day. Activities belong here."
               rows={3}
               className={textareaClass}
               value={day.highlights ?? ""}
               onChange={(e) => update({ highlights: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <Label className={labelClass}>Internal consultant notes</Label>
-            <Textarea
-              placeholder="Notes visible only to consultants..."
-              rows={4}
-              className={textareaClass}
-              value={day.internalNotes ?? ""}
-              onChange={(e) => update({ internalNotes: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <Label className={labelClass}>Mobility warnings</Label>
-            <Textarea
-              placeholder="e.g., Uneven terrain, stairs..."
-              rows={3}
-              className={textareaClass}
-              value={day.mobilityWarning ?? ""}
-              onChange={(e) => update({ mobilityWarning: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <Label className={labelClass}>Supplier notes</Label>
-            <Textarea
-              placeholder="Supplier-specific information..."
-              rows={3}
-              className={textareaClass}
-              value={day.supplierNotes ?? ""}
-              onChange={(e) => update({ supplierNotes: e.target.value })}
             />
           </div>
 
@@ -349,6 +333,20 @@ function DayCard({ day, isOpen, onToggle, onChange }: DayCardProps) {
               className={textareaClass}
               value={day.dietaryNotes ?? ""}
               onChange={(e) => update({ dietaryNotes: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <Label className={labelClass}>Internal consultant notes</Label>
+            <p className="mb-1.5 text-xs text-gray-400">
+              Visible only to internal consultants. Clients do not see this on the website.
+            </p>
+            <Textarea
+              placeholder="Notes visible only to consultants..."
+              rows={4}
+              className={textareaClass}
+              value={day.internalNotes ?? ""}
+              onChange={(e) => update({ internalNotes: e.target.value })}
             />
           </div>
 
@@ -439,17 +437,17 @@ export default function ItineraryForm({
   };
 
   const itineraryGuideTags = [
-    "Client copy",
-    "Day image",
-    "Activities",
+    "Automatic day numbers",
+    "Day title",
+    "Day image and alt text",
     "Highlights",
-    "Meals",
-    "Mobility warnings",
     "Dietary notes",
+    "Internal consultant notes",
+    "Meals",
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="bg-white rounded-[12px] border border-[#E5E7EB] shadow-sm px-6 pt-6 pb-5">
         <div className="flex items-center gap-2.5 mb-2">
           <h2 className="text-lg font-semibold text-[#1F2A44]">Itinerary</h2>
@@ -462,9 +460,9 @@ export default function ItineraryForm({
           </Button>
         </div>
         <p className="text-sm text-gray-400 leading-relaxed max-w-3xl">
-          Days are generated automatically from the package duration. Open one day
-          at a time to keep long itineraries manageable. Optional experiences belong
-          in Add-ons / Inclusions.
+          Day 1, Day 2 and so on are displayed automatically from the package duration.
+          Enter only the title for each day. Activities belong in Highlights. Mobility
+          and supplier notes belong in the day description.
         </p>
       </div>
 
@@ -535,7 +533,13 @@ export default function ItineraryForm({
         <Button
           type="button"
           onClick={() => {
-            const payload = { days: daysRef.current };
+            const daysToSave = daysRef.current;
+            const altError = itineraryImageAltError(daysToSave);
+            if (altError) {
+              toast.error(altError);
+              return;
+            }
+            const payload = { days: daysToSave };
             void Promise.resolve(onNext(payload)).then((saved) => {
               if (saved) clearItineraryDraft(packageId);
             });

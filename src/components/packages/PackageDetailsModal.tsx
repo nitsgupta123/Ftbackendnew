@@ -1,17 +1,21 @@
 import { Link } from "react-router-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-
-
 import { Icon } from "@/components/ui/icons";
 import { getPackageEditHref, getPackage, isWizardPackage } from "@/lib/package-api";
 import {
   getFieldLabel,
   PACKAGE_DETAIL_SECTIONS } from
 "@/lib/package-detail-sections";
-import type { PackageRecord } from "@/lib/package-types";
+import { mergeObjectionText, normalizeHotels } from "@/lib/package-content";
+import { presentItineraryDay } from "@/lib/itinerary-days";
+import type { ItineraryDay, PackageRecord } from "@/lib/package-types";
 import { sanitizeHtml } from "@/lib/sanitize-html";
-import { formatPackageDateTime } from "@/lib/format-date";import { Button } from "@/components/ui/button";
+import { formatPackageDateTime } from "@/lib/format-date";
+import { Button } from "@/components/ui/button";
 import { resolveMediaSrc, toEditorHtml } from "@/lib/package-images";
+import PackageConsultantBrief, {
+  consultantBriefHeadline,
+} from "@/components/packages/PackageConsultantBrief";
 
 interface PackageDetailsModalProps {
   pkg: PackageRecord | null;
@@ -65,8 +69,8 @@ function DetailField({ label, value }: {label: string;value: unknown;}) {
             alt={label}
             width={320}
             height={128}
-            className="max-h-32 rounded-lg border border-[#E5E7EB] object-cover" />
-          
+            className="max-h-32 rounded-lg border border-[#E5E7EB] object-cover"
+          />
           <p className="mt-1 text-xs text-gray-400 break-all">{value}</p>
         </dd>
       </div>);
@@ -124,6 +128,19 @@ function StringListField({ label, items }: {label: string;items: string[];}) {
 
 }
 
+function combineObjectionFields(record: Record<string, unknown>): Record<string, unknown> {
+  if (!("commonObjections" in record) && !("suggestedResponse" in record)) return record;
+  const merged = mergeObjectionText({
+    commonObjections: typeof record.commonObjections === "string" ? record.commonObjections : undefined,
+    suggestedResponse: typeof record.suggestedResponse === "string" ? record.suggestedResponse : undefined,
+  });
+  const next = { ...record };
+  delete next.suggestedResponse;
+  if (merged) next.commonObjections = merged;
+  else delete next.commonObjections;
+  return next;
+}
+
 function ObjectBlock({
   title,
   data,
@@ -133,9 +150,22 @@ function ObjectBlock({
 
 
 }: {title: string;data: Record<string, unknown>;index?: number;}) {
-  const entries = Object.entries(data).filter(
+  const source =
+    typeof data.dayNumber === "number"
+      ? (presentItineraryDay(data as unknown as ItineraryDay) as unknown as Record<
+          string,
+          unknown
+        >)
+      : data;
+  const hotelRecord =
+    "hotelName" in source || "starCategory" in source || "notesVisibility" in source;
+  const entries = Object.entries(combineObjectionFields(source)).filter(
     ([key, value]) =>
-    key !== "id" && key !== "categoryIds" && value !== null && value !== undefined && value !== ""
+    key !== "id" &&
+    key !== "categoryIds" &&
+    !(hotelRecord && key === "nights") &&
+    !(hotelRecord && key === "starRating" && source.starCategory) &&
+    value !== null && value !== undefined && value !== ""
   );
 
   if (!entries.length) return null;
@@ -148,11 +178,36 @@ function ObjectBlock({
       </p>
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
         {entries.map(([key, value]) =>
-        <DetailField key={key} label={getFieldLabel(key)} value={value} />
+        <DetailField
+          key={key}
+          label={hotelRecord && key === "internalNotes" ? "Hotel Internal Notes" : getFieldLabel(key)}
+          value={presentHotelField(key, value, hotelRecord)}
+        />
         )}
       </dl>
     </div>);
 
+}
+
+function presentHotelField(key: string, value: unknown, hotelRecord: boolean): unknown {
+  if (!hotelRecord || typeof value !== "string") return value;
+  if (key === "notesVisibility") {
+    if (value === "client") return "Client facing";
+    if (value === "internal") return "Internally only";
+  }
+  if (key === "starCategory") {
+    if (value === "3star") return "3-star package option";
+    if (value === "4star") return "4-star package option";
+    if (value === "5star") return "5-star package option";
+  }
+  return value;
+}
+
+function hotelsSectionForDisplay(value: unknown): unknown {
+  if (value == null) return value;
+  const section = normalizeHotels(value);
+  if (!section.entries.length) return value;
+  return section;
 }
 
 function renderSectionContent(data: unknown): ReactNode {
@@ -198,7 +253,7 @@ function renderSectionContent(data: unknown): ReactNode {
   }
 
   if (typeof data === "object") {
-    const record = data as Record<string, unknown>;
+    const record = combineObjectionFields(data as Record<string, unknown>);
     const scalarEntries: [string, unknown][] = [];
     const nestedEntries: [string, unknown][] = [];
 
@@ -250,7 +305,8 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
   const [details, setDetails] = useState<PackageRecord | null>(pkg);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const summaryCardRef = useRef<HTMLDListElement | null>(null);
+  const [showBuilderFields, setShowBuilderFields] = useState(false);
+  const summaryCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!pkg) return;
@@ -258,7 +314,10 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
     queueMicrotask(() => {
       setDetails(pkg);
       setError(null);
+      setShowBuilderFields(false);
     });
+
+    if (!isWizardPackage(pkg)) return;
 
     queueMicrotask(() => {
       setLoading(true);
@@ -376,12 +435,12 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
         role="dialog"
         aria-modal="true"
         aria-labelledby="package-details-title"
-        className="relative z-10 flex w-full max-w-4xl max-h-[90vh] flex-col rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
+        className="relative z-10 flex w-full max-w-5xl max-h-[90vh] flex-col rounded-2xl border border-[#E5E7EB] bg-white shadow-xl">
         
         <div className="flex items-start justify-between gap-4 border-b border-[#E5E7EB] px-6 py-5">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#B48A2C]">
-              Package details
+              Consultant brief
             </p>
             <h2
               id="package-details-title"
@@ -390,7 +449,7 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
               {details.package_title || "Untitled package"}
             </h2>
             <p className="mt-1 text-sm text-gray-500 truncate">
-              {details.slug || `ID #${details.id}`}
+              {consultantBriefHeadline(details) || details.slug || `ID #${details.id}`}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -406,8 +465,8 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
             </Button>
             <Link
               to={editHref}
-              className="inline-flex h-9 items-center px-3 text-sm font-medium text-[#B48A2C] border border-[#B48A2C]/30 rounded-lg hover:bg-[#B48A2C]/5">
-              
+              className="inline-flex h-9 items-center px-3 text-sm font-medium text-[#B48A2C] border border-[#B48A2C]/30 rounded-lg hover:bg-[#B48A2C]/5"
+            >
               Edit package
             </Link>
             <Button
@@ -431,55 +490,37 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
             </div>
           }
 
-          <dl
-            ref={summaryCardRef}
-            className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4"
-          >
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Status</dt>
-              <dd className="mt-1 text-sm font-medium text-gray-900 capitalize">{statusLabel}</dd>
+          <div ref={summaryCardRef} className="space-y-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+              <span className="inline-flex rounded-full bg-[#F3F4F6] px-2 py-0.5 font-medium capitalize text-[#1F2A44]">
+                {statusLabel}
+              </span>
+              <span>{isWizardPackage(details) ? "Wizard" : "Legacy"} · step {details.current_step}/14</span>
+              <span>Updated {formatPackageDateTime(details.updated_at)}{details.updated_by ? ` · ${details.updated_by}` : ""}</span>
             </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Step</dt>
-              <dd className="mt-1 text-sm font-medium text-gray-900">
-                {details.current_step}/14
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Source</dt>
-              <dd className="mt-1 text-sm font-medium text-gray-900">
-                {isWizardPackage(details) ? "Wizard" : "Legacy"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Supplier</dt>
-              <dd className="mt-1 text-sm font-medium text-gray-900">
-                {details.supplier_name || "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Created</dt>
-              <dd className="mt-1 text-sm text-gray-700">{formatPackageDateTime(details.created_at)}</dd>
-              <dd className="text-xs text-gray-500">{details.created_by ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Updated</dt>
-              <dd className="mt-1 text-sm text-gray-700">{formatPackageDateTime(details.updated_at)}</dd>
-              <dd className="text-xs text-gray-500">{details.updated_by ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Package ID</dt>
-              <dd className="mt-1 text-sm text-gray-700">{details.package_id}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase">Record ID</dt>
-              <dd className="mt-1 text-sm text-gray-700">{details.id}</dd>
-            </div>
-          </dl>
 
-          <div className="space-y-5">
+            <PackageConsultantBrief pkg={details} />
+          </div>
+
+          <div className="mt-6 border-t border-[#E5E7EB] pt-4">
+            <button
+              type="button"
+              onClick={() => setShowBuilderFields((open) => !open)}
+              className="text-sm font-medium text-[#1F2A44] hover:text-[#B48A2C]"
+            >
+              {showBuilderFields ? "Hide builder fields" : "Show every builder field"}
+            </button>
+            <p className="mt-1 text-xs text-gray-400">
+              The raw step-by-step fields, including SEO, media, and review notes.
+            </p>
+          </div>
+
+          {showBuilderFields && (
+          <div className="mt-4 space-y-5">
             {PACKAGE_DETAIL_SECTIONS.map((section) => {
-              const sectionData = details[section.key];
+              const rawSection = details[section.key];
+              const sectionData =
+                section.key === "hotels" ? hotelsSectionForDisplay(rawSection) : rawSection;
               const isEmpty =
               sectionData === null ||
               sectionData === undefined ||
@@ -509,9 +550,10 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
                           isEmpty ? "text-gray-400" : "text-emerald-600"
                         }`}
                       >
-                        {isEmpty ? "Noted" : "Filled"}
+                        {isEmpty ? "Not filled" : "Filled"}
                       </span>
-                      <Link
+                      {isWizardPackage(details) ? (
+                        <Link
                           to={getPackageEditHref(details, section.step)}
                           className="inline-flex size-7 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-[#B48A2C] hover:bg-[#B48A2C]/5 hover:border-[#B48A2C]/40 transition-colors"
                           title={`Edit ${section.title}`}
@@ -519,6 +561,7 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
                         >
                           <Icon name="Pencil" size={14} />
                         </Link>
+                      ) : null}
                     </div>
                   </div>
                   <div className="p-4">{renderSectionContent(sectionData)}</div>
@@ -526,6 +569,7 @@ export default function PackageDetailsModal({ pkg, onClose }: PackageDetailsModa
 
             })}
           </div>
+          )}
         </div>
       </div>
     </div>);

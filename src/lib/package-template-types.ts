@@ -3,6 +3,7 @@ import type {
   ConsultantViewData,
   FaqItem,
   HotelEntry,
+  HotelsSection,
   InclusionsData,
   ItineraryData,
   MediaFrontendData,
@@ -62,7 +63,7 @@ export interface PackageTemplateRecord {
   media_frontend: MediaFrontendData | null;
   pricing: PricingData | null;
   itinerary: ItineraryData | null;
-  hotels: HotelEntry[] | null;
+  hotels: HotelsSection | HotelEntry[] | null;
   inclusions: InclusionsData | null;
   booking_policy: BookingPolicyData | null;
   consultant_view: ConsultantViewData | null;
@@ -91,7 +92,7 @@ export interface CreatePackageTemplateInput {
   media_frontend?: MediaFrontendData | null;
   pricing?: PricingData | null;
   itinerary?: ItineraryData | null;
-  hotels?: HotelEntry[] | null;
+  hotels?: HotelsSection | HotelEntry[] | null;
   inclusions?: InclusionsData | null;
   booking_policy?: BookingPolicyData | null;
   consultant_view?: ConsultantViewData | null;
@@ -115,7 +116,7 @@ export interface UpdatePackageTemplateInput {
   media_frontend?: MediaFrontendData | null;
   pricing?: PricingData | null;
   itinerary?: ItineraryData | null;
-  hotels?: HotelEntry[] | null;
+  hotels?: HotelsSection | HotelEntry[] | null;
   inclusions?: InclusionsData | null;
   booking_policy?: BookingPolicyData | null;
   consultant_view?: ConsultantViewData | null;

@@ -37,12 +37,23 @@ export function packageAllPackagesHref(status: PackageStatusFilter = "all"): str
   return `/packages/all?status=${encodeURIComponent(status)}`;
 }
 
-/** Marketing / frontend asset attached under Package Highlights */
+/** Marketing / frontend asset attached under banners or promotional assets */
 export interface PackageMediaAsset {
   id: string;
   url: string;
   altText?: string;
   sourceUrl?: string;
+  filename?: string;
+  /** Short caption shown with promotional assets */
+  description?: string;
+}
+
+/** One client-facing package highlight: image, alt text, and a short description. */
+export interface PackageHighlight {
+  id: string;
+  url?: string;
+  altText?: string;
+  description?: string;
   filename?: string;
 }
 
@@ -56,7 +67,9 @@ export interface MediaFrontendData {
   secondaryCta?: string;
   whatsappNumber?: string;
   whatsappLink?: string;
-  /** Package highlight images for frontend marketing */
+  /** Up to four client-facing highlights, each with an image, alt text, and short description */
+  packageHighlights?: PackageHighlight[];
+  /** @deprecated Prefer `packageHighlights`. Kept so older packages still load. */
   highlightImages?: PackageMediaAsset[];
   /** Marketing banners for package pages */
   marketingBanners?: PackageMediaAsset[];
@@ -155,11 +168,19 @@ export interface PricingDetailsBlock {
   promotions: PricingPromotion[];
 }
 
+export interface PricingTravelPeriod {
+  id: string;
+  fromDate: string;
+  toDate: string;
+}
+
 export interface BookingRange {
   id: string;
   name: string;
   fromDate: string;
   toDate: string;
+  /** Extra travel windows inside this season. The first window is mirrored on fromDate/toDate. */
+  travelPeriods?: PricingTravelPeriod[];
   blackouts: PricingBlackout[];
   pricing: PricingDetailsBlock;
 }
@@ -216,10 +237,14 @@ export interface ItineraryDay {
   title?: string;
   /** Client-facing day copy. Stored as HTML from the itinerary rich text editor. */
   description?: string;
+  /** @deprecated Activities now belong in highlights. Folded in on edit and save. */
   activitiesIncluded?: string;
   highlights?: string;
+  /** Shown to internal consultants only. Omitted from supplier and client documents. */
   internalNotes?: string;
+  /** @deprecated Included in the day description. Folded in on edit and save. */
   mobilityWarning?: string;
+  /** @deprecated Included in the day description. Folded in on edit and save. */
   supplierNotes?: string;
   dietaryNotes?: string;
   breakfast?: boolean;
@@ -233,28 +258,42 @@ export interface ItineraryDay {
   halalFoodNote?: string;
   guideIncluded?: boolean;
   imageUrl?: string | null;
+  imageAlt?: string;
 }
 
 export interface ItineraryData {
   days?: ItineraryDay[];
 }
 
+export type HotelNotesVisibility = "client" | "internal";
+
 export interface HotelEntry {
   hotelName?: string;
   city?: string;
+  /** Package option this hotel belongs to: 3-star, 4-star, or 5-star. */
+  starCategory?: HotelCategoryKey;
   starRating?: string;
   roomType?: string;
+  /** @deprecated Removed from the hotel form. Duration stays on Package Basics. */
   nights?: string;
   childPolicy?: string;
   maxOccupancy?: string;
   address?: string;
   googleMapsLink?: string;
   visibility?: string;
+  /** Who can see Hotel Internal Notes. */
+  notesVisibility?: HotelNotesVisibility;
   internalNotes?: string;
   breakfastIncluded?: boolean;
   halalBreakfast?: boolean;
   connectingRooms?: boolean;
   extraBed?: boolean;
+}
+
+export interface HotelsSection {
+  entries: HotelEntry[];
+  /** Shown with the hotel list on the client-facing website. */
+  disclaimer?: string;
 }
 
 export interface InclusionsData {
@@ -409,7 +448,7 @@ export interface PackageRecord {
   media_frontend: MediaFrontendData | null;
   pricing: PricingData | null;
   itinerary: ItineraryData | null;
-  hotels: HotelEntry[] | null;
+  hotels: HotelsSection | HotelEntry[] | null;
   inclusions: InclusionsData | null;
   booking_policy: BookingPolicyData | null;
   consultant_view: ConsultantViewData | null;
@@ -460,7 +499,7 @@ export interface UpdatePackageInput {
   media_frontend?: MediaFrontendData | null;
   pricing?: PricingData | null;
   itinerary?: ItineraryData | null;
-  hotels?: HotelEntry[] | null;
+  hotels?: HotelsSection | HotelEntry[] | null;
   inclusions?: InclusionsData | null;
   booking_policy?: BookingPolicyData | null;
   consultant_view?: ConsultantViewData | null;

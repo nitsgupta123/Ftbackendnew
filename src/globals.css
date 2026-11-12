@@ -678,3 +678,17 @@ a[class*="bg-[#B48A2C]"]:hover:not([class*="bg-[#B48A2C]/"]) {
 .pkg-editor-content .pkg-brand-gold {
   color: #b48a2c;
 }
+
+.pkg-site-prose.pkg-editor-content {
+  color: #3b4554;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.pkg-site-prose.pkg-editor-content p {
+  margin: 0 0 0.9rem;
+}
+
+.pkg-site-prose.pkg-editor-content ul.pkg-list {
+  margin: 0 0 0.9rem;
+}

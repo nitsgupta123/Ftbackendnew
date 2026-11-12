@@ -2,7 +2,6 @@ import type {
   InclusionsData,
   ItineraryData,
   MediaFrontendData,
-  PackageMediaAsset,
   PackageRecord,
   PricingData,
   PricingDetailsBlock,
@@ -47,6 +46,7 @@ export interface PackageReadiness {
 }
 
 const GALLERY_ASSET_KEYS = [
+  "packageHighlights",
   "highlightImages",
   "marketingBanners",
   "promotionalAssets",
@@ -236,9 +236,14 @@ export function isPricingComplete(
   return getPricingReadiness(pricing).complete;
 }
 
-function galleryAssets(media: MediaFrontendData | null | undefined): PackageMediaAsset[] {
+function galleryAssets(
+  media: MediaFrontendData | null | undefined
+): { url?: string | null; altText?: string | null }[] {
   if (!media) return [];
-  return GALLERY_ASSET_KEYS.flatMap((key) => media[key] ?? []);
+  return GALLERY_ASSET_KEYS.flatMap((key) => {
+    const value = media[key];
+    return Array.isArray(value) ? value : [];
+  });
 }
 
 export interface ImageReadiness {
@@ -337,7 +342,7 @@ function isHotelsComplete(hotels: PackageRecord["hotels"] | undefined): boolean 
       filled(row.city as string | undefined) ||
       filled(row.starRating as string | undefined) ||
       filled(row.roomType as string | undefined) ||
-      filled(row.nights as string | number | undefined) ||
+      filled(row.starCategory as string | undefined) ||
       valueHasDetails(hotel)
     );
   });
@@ -561,7 +566,7 @@ export function getPackageReadiness(
       owner: "Product + Ops",
       complete: hotelsComplete,
       pkg,
-      started: Boolean(pkg?.hotels?.length),
+      started: isHotelsComplete(pkg?.hotels),
     }),
     sectionCard({
       title: "Inclusions",
